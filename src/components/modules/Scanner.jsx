@@ -390,78 +390,89 @@ const Scanner = ({
       setScanStep('scan');
    };
 
-   // --- CAMERA LIFECYCLE (ZXing Only) ---
-   useEffect(() => {
-      let reader = null;
-      let mounted = true;
+  // --- CAMERA LIFECYCLE (ZXing Only) ---
+useEffect(() => {
+   let reader = null;
+   let mounted = true;
+   
+   const startCamera = async () => {
+      if (scanStep !== 'scan' || mode !== 'camera') return;
+
+      // Small delay to let UI settle
+      await new Promise(r => setTimeout(r, 300));
       
-      const startCamera = async () => {
-         if (scanStep !== 'scan' || mode !== 'camera') return;
+      if (!mounted || scanStep !== 'scan' || mode !== 'camera') return;
+      if (!videoRef.current) return;
 
-         // Small delay to let UI settle
-         await new Promise(r => setTimeout(r, 500));
+      scanActiveRef.current = true;
+
+      try {
+         const { BrowserMultiFormatReader } = await import('@zxing/browser');
          
-         if (!mounted || scanStep !== 'scan' || mode !== 'camera') return;
-         if (!videoRef.current) return;
+         reader = new BrowserMultiFormatReader();
+         zxingReaderRef.current = reader;
 
-         scanActiveRef.current = true;
-
-         try {
-            const { BrowserMultiFormatReader } = await import('@zxing/browser');
-            
-            reader = new BrowserMultiFormatReader();
-            zxingReaderRef.current = reader;
-            
-            // Time between decodes for camera stream (milliseconds)
-            const timeBetweenScans = batchMode ? 500 : 1000; 
-
-            await reader.decodeFromConstraints(
-               { video: { facingMode: { ideal: "environment" } } },
-               videoRef.current,
-               (result, error) => {
-                  // Only process if we have a result and scanner is "active" logic-wise
-                  // Note: We allow scanning even if debouncing to collect them, 
-                  // but `handleScan` will decide what to do.
-                  if (result) {
-                      const text = result.getText();
-                      handleScan(text, 'zxing');
-                  }
+         // ✅ FIXED: decoder is INSIDE startCamera, properly scoped
+         await reader.decodeFromConstraints(
+            { video: { facingMode: { ideal: "environment" } } },
+            videoRef.current,
+            (result, error) => {
+               // ✅ FIXED: Check mounted state AND scanStep
+               if (!mounted || scanStep !== 'scan') return;
+               
+               if (result) {
+                  const text = result.getText();
+                  console.log('[ZXing] Detected barcode:', text);
+                  handleScan(text, 'zxing');
                }
-            );
-            setCameraError(null);
-         } catch (err) {
-            console.error("[CameraEffect] Init Error:", err);
+            }
+         );
+         
+         setCameraError(null);
+         console.log('[Camera] Started successfully');
+      } catch (err) {
+         console.error("[Camera] Init Error:", err);
+         if (mounted) {
             setCameraError("Could not access camera. Please check permissions.");
          }
-      };
-
-      const stopCamera = () => {
-         scanActiveRef.current = false; 
-
-         if (zxingReaderRef.current) {
-            try {
-               if (typeof zxingReaderRef.current.reset === 'function') {
-                   zxingReaderRef.current.reset();
-               }
-            } catch(e) { 
-                console.warn('[CameraEffect] Error resetting reader:', e);
-            }
-            zxingReaderRef.current = null;
-         }
-         safeStopVideoTracks();
-      };
-
-      if (scanStep === 'scan' && mode === 'camera') {
-         startCamera();
-      } else {
-         stopCamera();
       }
+   };
 
-      return () => {
-         mounted = false;
-         stopCamera();
-      };
-   }, [scanStep, mode, batchMode]); 
+   const stopCamera = () => {
+      console.log('[Camera] Stopping camera...');
+      scanActiveRef.current = false;
+
+      if (zxingReaderRef.current) {
+         try {
+            if (typeof zxingReaderRef.current.reset === 'function') {
+               zxingReaderRef.current.reset();
+            }
+         } catch(e) { 
+            console.warn('[Camera] Error resetting reader:', e);
+         }
+         zxingReaderRef.current = null;
+      }
+      
+      safeStopVideoTracks();
+   };
+
+   // ✅ FIXED: Proper lifecycle management
+   if (scanStep === 'scan' && mode === 'camera') {
+      console.log('[Camera] Starting camera for scan...');
+      startCamera();
+   } else {
+      console.log('[Camera] Not in scan mode, stopping...');
+      stopCamera();
+   }
+
+   // ✅ Cleanup on unmount or when dependencies change
+   return () => {
+      console.log('[Camera] useEffect cleanup');
+      mounted = false;
+      stopCamera();
+   };
+}, [scanStep, mode, batchMode, handleScan]); // ✅ Correct dependencies
+
 
    const handleManualSubmit = (e) => {
       e.preventDefault();
