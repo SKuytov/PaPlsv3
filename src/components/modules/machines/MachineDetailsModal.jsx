@@ -19,6 +19,10 @@ import { Badge } from '@/components/ui/badge';
 const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [transactions, setTransactions] = useState([]);
+  const totalMaintenanceCost = transactions.reduce((sum, tx) => {
+  const unit = tx.unit_cost || 0;
+  return sum + Math.abs(tx.quantity) * unit;
+}, 0);
   const [loadingTx, setLoadingTx] = useState(false);
   const [stats, setStats] = useState({
     totalParts: 0,
@@ -194,7 +198,7 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
                                     <tfoot className="bg-slate-50 font-bold border-t">
                                        <tr>
                                           <td colSpan={4} className="p-3 text-right">Total Maintenance Cost:</td>
-                                          <td className="p-3 text-right text-blue-600">{formatCurrency(machine.total_cost)}</td>
+                                          <td className="p-3 text-right text-blue-600">{formatCurrency(totalMaintenanceCost)}</td>
                                        </tr>
                                     </tfoot>
                                  )}
