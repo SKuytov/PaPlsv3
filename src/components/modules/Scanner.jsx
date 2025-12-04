@@ -323,6 +323,7 @@ const Scanner = ({
             machine_id: txMachineId === 'none' ? null : txMachineId,
             transaction_type: txType, // 'usage' or 'restock'
             quantity: quantityChange,
+            unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
             performed_by: user?.id
          });
