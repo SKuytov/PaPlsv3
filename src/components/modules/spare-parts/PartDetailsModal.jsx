@@ -22,7 +22,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/utils/calculations';
-import TransactionDetailsModal from './TransactionDetailsModal';
+import TransactionDetailsModal from '@/components/modules/machines/TransactionDetailsModal';
 
 const PartDetailsModal = ({ part: initialPart, onClose, onDeleteRequest, onEditRequest }) => {
   const [part, setPart] = useState(initialPart);
