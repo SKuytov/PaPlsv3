@@ -100,7 +100,7 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
                      <Card>
                         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500">Total Maintenance Cost</CardTitle></CardHeader>
                         <CardContent>
-                           <div className="text-2xl font-bold text-slate-800">{formatCurrency(machine.total_cost || 0)}</div>
+                           <div className="text-2xl font-bold text-slate-800"> {formatCurrency(machine.total_maintenance_cost || 0)} </div>
                         </CardContent>
                      </Card>
                      <Card>
