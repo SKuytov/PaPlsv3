@@ -241,7 +241,7 @@ const Machines = () => {
                              <td className="p-4 font-mono text-slate-600">{m.machine_code}</td>
                              <td className="p-4 font-medium text-slate-800">{m.name}</td>
                              <td className="p-4 text-slate-500">{m.building?.name || '-'} / {m.warehouse?.name || '-'}</td>
-                             <td className="p-4 text-right font-bold text-slate-700">{formatCurrency(m.total_cost || 0)}</td>
+                             <td className="p-4 text-right font-bold text-slate-700">{formatCurrency(m.total_maintenance_cost || 0)} </td>
                              <td className="p-4">
                                 <span className={`px-2 py-1 rounded-full text-xs font-bold ${m.status === 'Running' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                    {m.status}
