@@ -376,7 +376,7 @@ export const dbService = {
     part:spare_parts(id, name, part_number, barcode, category, average_cost, current_quantity, unit_of_measure),
     user:users(id, full_name, email)
   `).eq('machine_id', machineId).eq('transaction_type', 'usage').order('created_at', { ascending: false }));
-}
+},
   async createMachine(machineData) { return handleRequest(supabase.from('machines').insert(machineData).select().single()); },
   async updateMachine(id, updates) { return handleRequest(supabase.from('machines').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id).select().single()); },
   async deleteMachine(id) {
