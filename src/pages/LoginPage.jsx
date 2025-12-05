@@ -7,6 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Lock, Mail } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import Link from 'next/link';
+
+// Add this to your login form:
+<Link href="/auth/forgot-password" className="text-blue-600 hover:underline text-sm">
+  Forgot password?
+</Link>
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
