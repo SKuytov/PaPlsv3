@@ -10,9 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 
 // Add this to your login form:
-<Link href="/auth/forgot-password" className="text-blue-600 hover:underline text-sm">
-  Forgot password?
-</Link>
+
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -134,9 +132,11 @@ const LoginPage = () => {
         </CardContent>
         <CardFooter className="flex flex-col space-y-4 bg-slate-50/50 border-t p-6">
            <div className="text-xs text-center text-slate-500">
-             <p className="font-semibold mb-2">Demo Credentials:</p>
+             <p className="font-semibold mb-2">Reset Password</p>
              <div className="grid grid-cols-1 gap-1">
-               <code className="bg-slate-100 px-2 py-1 rounded border">admin@hostinger.com / admin123</code>
+               <code className="bg-slate-100 px-2 py-1 rounded border"><Link href="/auth/forgot-password" className="text-blue-600 hover:underline text-sm">
+  Forgot password?
+</Link></code>
              </div>
            </div>
         </CardFooter>
