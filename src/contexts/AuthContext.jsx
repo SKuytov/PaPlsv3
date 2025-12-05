@@ -9,43 +9,53 @@ export function AuthProvider({ children }) {
   const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
       try {
+        // Get initial session
         const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user || null);
         
-        if (session?.user) {
-          // Fetch user role if needed
-          // You might need to adjust this based on your DB structure
-          const { data } = await supabase
-            .from('users')
-            .select('role:roles(id, name)')
-            .eq('id', session.user.id)
-            .single();
+        if (mounted) {
+          setUser(session?.user || null);
           
-          if (data?.role) setUserRole(data.role);
+          if (session?.user) {
+            try {
+              const { data } = await supabase
+                .from('users')
+                .select('role:roles(id, name)')
+                .eq('id', session.user.id)
+                .single();
+              
+              if (data?.role) setUserRole(data.role);
+            } catch (roleError) {
+              console.warn('Could not fetch user role:', roleError);
+            }
+          }
         }
       } catch (error) {
-        console.error('Error getting initial session:', error);
+        console.error('Error initializing auth:', error);
+        if (mounted) setUser(null);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    getInitialSession();
+    initializeAuth();
 
-    // CRITICAL: Listen for auth changes
-    // This processes the recovery token from email links automatically
+    // CRITICAL: Listen for auth state changes
+    // This is what processes recovery tokens from email links
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Auth state changed:', event);
-        console.log('📊 Session:', session?.user?.email);
+        console.log('🔄 Auth event:', event);
         
+        if (!mounted) return;
+
+        // Update user
         setUser(session?.user || null);
-        
+
+        // Fetch role if user exists
         if (session?.user) {
-          // Fetch user role
           try {
             const { data } = await supabase
               .from('users')
@@ -53,23 +63,41 @@ export function AuthProvider({ children }) {
               .eq('id', session.user.id)
               .single();
             
-            if (data?.role) setUserRole(data.role);
-          } catch (error) {
-            console.error('Error fetching user role:', error);
+            if (mounted && data?.role) {
+              setUserRole(data.role);
+            }
+          } catch (roleError) {
+            console.warn('Error fetching role:', roleError);
+            if (mounted) setUserRole(null);
           }
         } else {
-          setUserRole(null);
+          if (mounted) setUserRole(null);
         }
       }
     );
 
     return () => {
+      mounted = false;
       subscription?.unsubscribe();
     };
   }, []);
 
+  const signIn = async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, userRole }}>
+    <AuthContext.Provider value={{ user, loading, userRole, signIn }}>
       {children}
     </AuthContext.Provider>
   );
