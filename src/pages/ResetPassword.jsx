@@ -16,69 +16,29 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  // Check if user is authenticated (from recovery link)
+  // Simpler auth check - AuthCallback already verified
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log('🔍 Checking authentication status...');
+        const { data: { session } } = await supabase.auth.getSession();
         
-        // Wait a bit for Supabase to process the session
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Get session with retry logic
-        let session = null;
-        let attempts = 0;
-        const maxAttempts = 3;
-        
-        while (!session && attempts < maxAttempts) {
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
-          session = currentSession;
-          
-          if (!session) {
-            console.log(`⏳ Session not found yet, attempt ${attempts + 1}/${maxAttempts}`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          attempts++;
-        }
-        
-        if (session) {
-          console.log('✅ User authenticated, can reset password');
-          setIsAuthenticated(true);
-        } else {
-          console.log('❌ No session found - user not authenticated');
-          toast({
-            variant: 'destructive',
-            title: 'Not Authenticated',
-            description: 'Please use the recovery link from your email'
-          });
-          // Give user 2 seconds to see the toast before redirecting
-          setTimeout(() => {
-            navigate('/forgot-password', { replace: true });
-          }, 2000);
+        if (!session) {
+          console.warn('⚠️ No session in ResetPassword');
+          setIsAuthenticated(false);
+          navigate('/forgot-password', { replace: true });
         }
       } catch (error) {
-        console.error('❌ Auth check error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to verify authentication'
-        });
-        setTimeout(() => {
-          navigate('/login', { replace: true });
-        }, 2000);
-      } finally {
-        setIsChecking(false);
+        console.error('Auth check error:', error);
+        navigate('/login', { replace: true });
       }
     };
 
     checkAuth();
-  }, [navigate, toast]);
+  }, [navigate]);
 
-  // Password strength checker
   const calculatePasswordStrength = (pwd) => {
     let strength = 0;
     
@@ -128,31 +88,25 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      console.log('🔄 Updating password...');
       const { error } = await supabase.auth.updateUser({
         password: password
       });
 
-      if (error) {
-        console.error('❌ Password update error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('✅ Password updated successfully');
       toast({
         title: 'Success!',
-        description: 'Password updated successfully! Redirecting to login...'
+        description: 'Password updated! Redirecting to login...'
       });
 
-      // Sign out and redirect to login
       await supabase.auth.signOut();
       
       setTimeout(() => {
         navigate('/login', { replace: true });
-      }, 2000);
+      }, 1500);
 
     } catch (error) {
-      console.error('❌ Password reset error:', error);
+      console.error('Password reset error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -162,26 +116,6 @@ export default function ResetPassword() {
       setLoading(false);
     }
   };
-
-  // Show loading while checking auth
-  if (isChecking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="bg-blue-600 text-white rounded-t-lg">
-            <h1 className="text-2xl font-bold">Reset Password</h1>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              <p className="text-slate-600">Verifying your authentication...</p>
-              <p className="text-slate-500 text-sm">Please wait while we confirm your identity</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   if (!isAuthenticated) {
     return null;
@@ -224,7 +158,6 @@ export default function ResetPassword() {
                 </button>
               </div>
 
-              {/* Password Strength Indicator */}
               {password && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
@@ -250,7 +183,6 @@ export default function ResetPassword() {
                     />
                   </div>
 
-                  {/* Password Requirements */}
                   <div className="space-y-1 mt-2 text-xs">
                     <div className={`flex items-center gap-2 ${password.length >= 8 ? 'text-green-600' : 'text-slate-500'}`}>
                       {password.length >= 8 ? <Check size={14} /> : <X size={14} />}
@@ -292,7 +224,6 @@ export default function ResetPassword() {
                 </button>
               </div>
 
-              {/* Match Indicator */}
               {confirmPassword && (
                 <div className={`flex items-center gap-2 text-sm ${passwordsMatch ? 'text-green-600' : 'text-red-600'}`}>
                   {passwordsMatch ? <Check size={16} /> : <X size={16} />}
@@ -301,16 +232,14 @@ export default function ResetPassword() {
               )}
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               disabled={loading || !passwordValid || !passwordsMatch}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Updating Password...' : 'Update Password'}
             </Button>
 
-            {/* Cancel Button */}
             <Button
               type="button"
               variant="outline"
