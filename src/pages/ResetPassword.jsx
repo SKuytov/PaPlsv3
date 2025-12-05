@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   
   const [password, setPassword] = useState('');
@@ -16,37 +17,63 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [verifying, setVerifying] = useState(true);
+  const [hasValidToken, setHasValidToken] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  // Verify session exists
   useEffect(() => {
-    const verifySession = async () => {
+    const verifyAccess = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session?.user) {
-          console.warn('⚠️ No session found');
+        // Get token from URL
+        const accessToken = searchParams.get('access_token');
+        const type = searchParams.get('type');
+
+        console.log('🔍 Checking URL params:', { hasToken: !!accessToken, type });
+
+        if (!accessToken || type !== 'recovery') {
+          console.error('❌ No valid recovery token in URL');
           toast({
             variant: 'destructive',
-            title: 'Session Expired',
-            description: 'Please request a new recovery link'
+            title: 'Invalid Link',
+            description: 'This reset link is invalid or expired'
           });
-          
-          setTimeout(() => {
-            navigate('/forgot-password', { replace: true });
-          }, 1500);
+          setTimeout(() => navigate('/forgot-password', { replace: true }), 2000);
+          return;
+        }
+
+        // Set the session with the access token
+        console.log('🔄 Setting session from access token...');
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: accessToken, // For recovery flow, access token is enough
+        });
+
+        if (error) {
+          console.error('❌ Session error:', error);
+          throw error;
+        }
+
+        if (data.session) {
+          console.log('✅ Session established:', data.session.user.email);
+          setHasValidToken(true);
+        } else {
+          throw new Error('No session created');
         }
       } catch (error) {
-        console.error('Auth verification error:', error);
-        navigate('/login', { replace: true });
+        console.error('❌ Token verification failed:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Link Expired',
+          description: 'Please request a new password reset link'
+        });
+        setTimeout(() => navigate('/forgot-password', { replace: true }), 2000);
       } finally {
-        setIsCheckingAuth(false);
+        setVerifying(false);
       }
     };
 
-    verifySession();
-  }, [navigate, toast]);
+    verifyAccess();
+  }, [searchParams, navigate, toast]);
 
   const calculatePasswordStrength = (pwd) => {
     let strength = 0;
@@ -95,13 +122,19 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      console.log('🔄 Updating password...');
+      
+      const { error } = await supabase.auth.updateUser({ 
+        password: password 
+      });
 
       if (error) throw error;
 
+      console.log('✅ Password updated successfully');
+
       toast({
         title: 'Success!',
-        description: 'Password updated. Redirecting to login...'
+        description: 'Password updated successfully'
       });
 
       // Sign out and redirect
@@ -112,7 +145,7 @@ export default function ResetPassword() {
       }, 2000);
 
     } catch (error) {
-      console.error('Password update error:', error);
+      console.error('❌ Password update error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -123,15 +156,19 @@ export default function ResetPassword() {
     }
   };
 
-  if (isCheckingAuth) {
+  if (verifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white">Verifying session...</p>
+          <p className="text-white">Verifying reset link...</p>
         </div>
       </div>
     );
+  }
+
+  if (!hasValidToken) {
+    return null; // Will redirect
   }
 
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
@@ -141,8 +178,8 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="bg-blue-600 text-white rounded-t-lg">
-          <h1 className="text-2xl font-bold">Reset Password</h1>
-          <p className="text-blue-100 text-sm mt-2">Enter a new secure password</p>
+          <h1 className="text-2xl font-bold">Set New Password</h1>
+          <p className="text-blue-100 text-sm mt-2">Enter a strong password</p>
         </CardHeader>
 
         <CardContent className="pt-6">
@@ -249,17 +286,7 @@ export default function ResetPassword() {
               disabled={loading || !passwordValid || !passwordsMatch}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? 'Updating...' : 'Update Password'}
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/login', { replace: true })}
-              disabled={loading}
-              className="w-full"
-            >
-              Back to Login
+              {loading ? 'Updating Password...' : 'Update Password'}
             </Button>
           </form>
         </CardContent>
