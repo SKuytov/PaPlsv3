@@ -16,7 +16,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, user } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -44,14 +44,9 @@ const LoginPage = () => {
       return;
     }
 
-    setLoading(true);
-
     try {
-      const { error } = await signIn(email, password);
-      
-      if (error) {
-        throw error;
-      }
+    const { data, error } = await signIn(email, password);
+    if (error) throw error; }
 
       // Explicit navigation on successful login action
       // This acts as a fallback to the useEffect and provides immediate feedback
