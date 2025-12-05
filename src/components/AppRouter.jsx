@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginPage from '@/pages/LoginPage';
+import ForgotPassword from '@/pages/ForgotPassword';
+import AuthCallback from '@/pages/AuthCallback';
+import ResetPassword from '@/pages/ResetPassword';
 import Sidebar from '@/components/layout/Sidebar';
 import TopNavigation from '@/components/layout/TopNavigation';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -17,6 +20,8 @@ import Downtime from '@/components/modules/Downtime';
 import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import WelcomeMessage from '@/components/WelcomeMessage';
+
+
 
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
@@ -65,6 +70,15 @@ const AppRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/auth-callback" element={<AuthCallback />} />
+<Route path="/reset-password" element={
+  <PrivateRoute>
+    <ResetPassword />
+  </PrivateRoute>
+} />
+
       
       <Route path="/" element={
         <PrivateRoute>
