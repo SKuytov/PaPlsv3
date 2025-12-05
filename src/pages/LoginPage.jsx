@@ -134,7 +134,7 @@ const LoginPage = () => {
            <div className="text-xs text-center text-slate-500">
              <p className="font-semibold mb-2">Reset Password</p>
              <div className="grid grid-cols-1 gap-1">
-               <code className="bg-slate-100 px-2 py-1 rounded border"><Link href="/auth/forgot-password" className="text-blue-600 hover:underline text-sm">
+               <code className="bg-slate-100 px-2 py-1 rounded border"><Link href="/src/pages/auth/forgot-password" className="text-blue-600 hover:underline text-sm">
   Forgot password?
 </Link></code>
              </div>
