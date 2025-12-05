@@ -6,65 +6,48 @@ export default function AuthCallback() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('🔄 AuthCallback: Page loaded');
-        console.log('📍 URL:', window.location.href);
+        console.log('🔄 AuthCallback: Processing recovery link...');
 
-        // Wait for Supabase to process the hash
-        // The onAuthStateChange listener should pick it up automatically
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Wait for onAuthStateChange to process the hash
+        // This is crucial - Supabase needs time to parse the recovery token
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Check if we have a session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Check if session was created by the listener
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          console.error('❌ Session error:', sessionError);
-          throw sessionError;
-        }
-
-        console.log('Session check:', {
-          hasSession: !!session,
-          userId: session?.user?.id,
-          email: session?.user?.email
-        });
-
-        if (session && session.user) {
-          console.log('✅ Session found! User:', session.user.email);
-          setHasSession(true);
+        if (session?.user) {
+          console.log('✅ Session created! User:', session.user.email);
           setLoading(false);
           
-          // Give a moment for the session to propagate
+          // Small delay to ensure state propagates
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          console.log('🚀 Redirecting to reset password...');
+          // Redirect to reset password
           navigate('/reset-password', { replace: true });
         } else {
-          console.warn('❌ No session found');
+          console.error('❌ No session found');
           
-          // Try one more time with longer delay
+          // Try once more after longer delay
           await new Promise(resolve => setTimeout(resolve, 2000));
-          
           const { data: { session: retrySession } } = await supabase.auth.getSession();
           
-          if (retrySession && retrySession.user) {
-            console.log('✅ Session found on retry!');
-            setHasSession(true);
+          if (retrySession?.user) {
+            console.log('✅ Session found on retry');
             setLoading(false);
             await new Promise(resolve => setTimeout(resolve, 500));
             navigate('/reset-password', { replace: true });
           } else {
-            console.error('❌ Still no session after retry');
-            setError('Could not establish session. The recovery link may have expired or is invalid.');
+            setError('Recovery link invalid or expired. Please request a new one.');
             setLoading(false);
           }
         }
       } catch (err) {
         console.error('❌ AuthCallback error:', err);
-        setError(err.message || 'An unexpected error occurred');
+        setError(err.message || 'Authentication error');
         setLoading(false);
       }
     };
@@ -80,8 +63,7 @@ export default function AuthCallback() {
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600"></div>
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Verifying Your Email</h1>
-          <p className="text-slate-300">Processing your password recovery link...</p>
-          <p className="text-slate-500 text-xs mt-3">This may take a moment</p>
+          <p className="text-slate-300">Processing your recovery link...</p>
         </div>
       </div>
     );
@@ -92,29 +74,27 @@ export default function AuthCallback() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
         <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md">
           <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
-            <span className="text-2xl">❌</span>
+            <span className="text-3xl">❌</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 text-center mb-3">Link Invalid or Expired</h1>
+          <h1 className="text-2xl font-bold text-gray-900 text-center mb-3">
+            Invalid Link
+          </h1>
           <p className="text-gray-600 text-center mb-6">{error}</p>
           
           <div className="space-y-3">
             <button
               onClick={() => navigate('/forgot-password', { replace: true })}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"
             >
-              Request New Recovery Link
+              Request New Link
             </button>
             <button
               onClick={() => navigate('/login', { replace: true })}
-              className="w-full bg-gray-300 hover:bg-gray-400 text-gray-900 font-semibold py-3 px-4 rounded-lg transition duration-200"
+              className="w-full bg-gray-300 hover:bg-gray-400 text-gray-900 font-semibold py-3 px-4 rounded-lg transition"
             >
               Back to Login
             </button>
           </div>
-
-          <p className="text-gray-500 text-xs text-center mt-6 border-t pt-4">
-            Recovery links expire after 24 hours. If your link has expired, please request a new one from the login page.
-          </p>
         </div>
       </div>
     );
