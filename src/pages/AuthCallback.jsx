@@ -10,31 +10,31 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the hash from URL
-        const hash = window.location.hash;
-        
-        if (!hash) {
-          setError('No authentication data received');
+        // Let Supabase process the URL hash automatically
+        // Just check if we have a session after a small delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          setError('Failed to retrieve session');
           setLoading(false);
           return;
         }
 
-        // Wait for Supabase to process the hash
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Check if user is now authenticated
-        const { data: { session } } = await supabase.auth.getSession();
-
         if (session) {
+          console.log('✅ Session found, user authenticated');
           // Success - redirect to reset password page
-          navigate('/reset-password');
+          navigate('/reset-password', { replace: true });
         } else {
-          setError('Authentication failed');
+          console.log('❌ No session found');
+          setError('Authentication failed - no session');
+          setLoading(false);
         }
       } catch (err) {
         console.error('Auth callback error:', err);
         setError(err.message || 'Authentication error');
-      } finally {
         setLoading(false);
       }
     };
@@ -47,7 +47,8 @@ export default function AuthCallback() {
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white">Verifying authentication...</p>
+          <p className="text-white">Verifying your authentication...</p>
+          <p className="text-slate-400 text-sm mt-2">Please wait...</p>
         </div>
       </div>
     );
@@ -57,11 +58,20 @@ export default function AuthCallback() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="bg-red-50 border border-red-200 rounded-lg p-8 max-w-md">
-          <h1 className="text-2xl font-bold text-red-800 mb-4">Authentication Error</h1>
-          <p className="text-red-700 mb-6">{error}</p>
+          <h1 className="text-2xl font-bold text-red-800 mb-4">❌ Authentication Error</h1>
+          <p className="text-red-700 mb-2">{error}</p>
+          <p className="text-red-600 text-sm mb-6">
+            The recovery link may have expired. Please request a new one.
+          </p>
           <button
-            onClick={() => navigate('/login')}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+            onClick={() => navigate('/forgot-password', { replace: true })}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mb-2"
+          >
+            Try Another Email
+          </button>
+          <button
+            onClick={() => navigate('/login', { replace: true })}
+            className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded"
           >
             Back to Login
           </button>
@@ -70,12 +80,5 @@ export default function AuthCallback() {
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-        <p className="text-white">Processing authentication...</p>
-      </div>
-    </div>
-  );
+  return null;
 }
