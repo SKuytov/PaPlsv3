@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -9,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { toast } = useToast();
   
   const [password, setPassword] = useState('');
@@ -16,38 +18,46 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [isChecking, setIsChecking] = useState(true);
 
-  // Simpler auth check - AuthCallback already verified
+  // Verify user has a session
   useEffect(() => {
-    const checkAuth = async () => {
+    const verifySession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!session) {
+        if (!session || !session.user) {
           console.warn('⚠️ No session in ResetPassword');
-          setIsAuthenticated(false);
-          navigate('/forgot-password', { replace: true });
+          toast({
+            variant: 'destructive',
+            title: 'Not Authenticated',
+            description: 'Please request a new password recovery link'
+          });
+          setTimeout(() => {
+            navigate('/forgot-password', { replace: true });
+          }, 1500);
+        } else {
+          console.log('✅ Session verified:', session.user.email);
         }
       } catch (error) {
-        console.error('Auth check error:', error);
+        console.error('Error verifying session:', error);
         navigate('/login', { replace: true });
+      } finally {
+        setIsChecking(false);
       }
     };
 
-    checkAuth();
-  }, [navigate]);
+    verifySession();
+  }, [navigate, toast]);
 
   const calculatePasswordStrength = (pwd) => {
     let strength = 0;
-    
     if (pwd.length >= 8) strength += 25;
     if (pwd.length >= 12) strength += 25;
     if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength += 25;
     if (/[0-9]/.test(pwd)) strength += 12.5;
     if (/[!@#$%^&*]/.test(pwd)) strength += 12.5;
-    
     return Math.min(strength, 100);
   };
 
@@ -88,22 +98,24 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
+      console.log('🔄 Updating password...');
       const { error } = await supabase.auth.updateUser({
         password: password
       });
 
       if (error) throw error;
 
+      console.log('✅ Password updated');
       toast({
         title: 'Success!',
-        description: 'Password updated! Redirecting to login...'
+        description: 'Password updated! You will be logged out.'
       });
 
       await supabase.auth.signOut();
       
       setTimeout(() => {
         navigate('/login', { replace: true });
-      }, 1500);
+      }, 2000);
 
     } catch (error) {
       console.error('Password reset error:', error);
@@ -117,8 +129,15 @@ export default function ResetPassword() {
     }
   };
 
-  if (!isAuthenticated) {
-    return null;
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white">Verifying session...</p>
+        </div>
+      </div>
+    );
   }
 
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
@@ -135,7 +154,6 @@ export default function ResetPassword() {
         <CardContent className="pt-6">
           <form onSubmit={handleResetPassword} className="space-y-4">
             
-            {/* New Password Field */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700">
                 New Password
@@ -167,9 +185,7 @@ export default function ResetPassword() {
                       passwordStrength < 75 ? 'text-yellow-600' :
                       'text-green-600'
                     }`}>
-                      {passwordStrength < 50 ? 'Weak' :
-                       passwordStrength < 75 ? 'Fair' :
-                       'Strong'}
+                      {passwordStrength < 50 ? 'Weak' : passwordStrength < 75 ? 'Fair' : 'Strong'}
                     </span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-2">
@@ -190,7 +206,7 @@ export default function ResetPassword() {
                     </div>
                     <div className={`flex items-center gap-2 ${/[a-z]/.test(password) && /[A-Z]/.test(password) ? 'text-green-600' : 'text-slate-500'}`}>
                       {/[a-z]/.test(password) && /[A-Z]/.test(password) ? <Check size={14} /> : <X size={14} />}
-                      <span>Mix of uppercase and lowercase</span>
+                      <span>Uppercase and lowercase letters</span>
                     </div>
                     <div className={`flex items-center gap-2 ${/[0-9]/.test(password) ? 'text-green-600' : 'text-slate-500'}`}>
                       {/[0-9]/.test(password) ? <Check size={14} /> : <X size={14} />}
@@ -201,7 +217,6 @@ export default function ResetPassword() {
               )}
             </div>
 
-            {/* Confirm Password Field */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-700">
                 Confirm Password
