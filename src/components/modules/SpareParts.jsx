@@ -41,6 +41,8 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const { toast } = useToast();
+const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+const [selectedPart, setSelectedPart] = useState(null);
 
   // Fetch supplier data for all parts
   useEffect(() => {
@@ -135,6 +137,16 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
     const groups = {};
     const reorderParts = partsWithSuppliers.filter(p => selectedParts.includes(p.id));
     
+    const handleCloseDetails = () => {
+  setDetailsModalOpen(false);
+  setSelectedPart(null);
+};
+
+const handlePartClick = (part) => {
+  setSelectedPart(part);
+  setDetailsModalOpen(true);
+};
+
     reorderParts.forEach(part => {
       // Get preferred supplier or first supplier
       let preferredSupplier = part.suppliers.find(s => s.is_preferred);
