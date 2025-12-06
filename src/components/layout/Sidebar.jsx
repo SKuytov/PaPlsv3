@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import QuoteTrackingDashboard from '@/components/modules/quotes/QuoteTrackingDashboard';
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const { signOut } = useAuth();
@@ -16,6 +17,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     { to: "/scanner", icon: QrCode, label: "Scanner" },
     { to: "/parts", icon: Box, label: "Spare Parts" },
     { to: "/machines", icon: Wrench, label: "Machines" },
+    { to: "/quotes", icon: Wrench, label: "Quote Tracking" },
     { to: "/suppliers", icon: Users, label: "Suppliers" },
     { to: "/savings", icon: TrendingUp, label: "Savings Tracker" },
     { to: "/orders", icon: FileText, label: "Orders" },
@@ -46,7 +48,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
             <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-teal-500/20">
               <Box className="text-white w-5 h-5" />
             </div>
-            <span className="text-white font-bold text-xl tracking-tight">WMS Pro</span>
+            <span className="text-white font-bold text-xl tracking-tight">PartPulse v3</span>
           </div>
           {/* Close button for mobile */}
           <button 
