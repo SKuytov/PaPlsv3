@@ -227,7 +227,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
   return (
     <>
-      <Dialog open={!!initialPart} onOpenChange={(open) => !open && onClose()}>
+      <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
           
           {/* --- HEADER SECTION --- */}
