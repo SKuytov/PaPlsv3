@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
-  Download, Copy, FileText, AlertCircle, ShoppingCart, Zap
+  Download, Copy, FileText, AlertCircle, ShoppingCart, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,13 +36,12 @@ import CategoryManager from './spare-parts/CategoryManager';
 // --- REORDER MODAL COMPONENT ---
 const ReorderModal = ({ open, onOpenChange, parts }) => {
   const [selectedParts, setSelectedParts] = useState([]);
-  const [copyFormat, setCopyFormat] = useState('table'); // 'table', 'csv', 'list'
+  const [copyFormat, setCopyFormat] = useState('table');
   const [copiedPart, setCopiedPart] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
-      // Pre-select all parts needing reorder
       const needsReorder = parts.filter(p =>
         p.current_quantity <= p.reorder_point || getStockStatus(p.current_quantity, p.min_stock_level, p.reorder_point) === 'low'
       );
@@ -208,7 +207,7 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
                 Reorder Management
               </Dialog.Title>
               <Dialog.Close asChild>
-                <button className="text-slate-400 hover:text-slate-600">
+                <button className="text-slate-400 hover:text-slate-600 transition-colors">
                   <X className="h-5 w-5" />
                 </button>
               </Dialog.Close>
@@ -568,12 +567,6 @@ const SpareParts = () => {
         <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
             <h2 className="text-base sm:text-lg font-semibold text-slate-900">Controls</h2>
-            <button
-              onClick={() => setShowReorderModal(!showReorderModal)}
-              className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-            >
-              {/* Mobile toggle button if needed */}
-            </button>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
