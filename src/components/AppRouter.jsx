@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import ForgotPassword from '@/pages/ForgotPassword';
-import AuthCallback from '@/pages/AuthCallback';
 import ResetPassword from '@/pages/ResetPassword';
 import Sidebar from '@/components/layout/Sidebar';
 import TopNavigation from '@/components/layout/TopNavigation';
@@ -68,15 +67,9 @@ const AppRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-
+   
       <Route path="/forgot-password" element={<ForgotPassword />} />
-<Route path="/auth-callback" element={<AuthCallback />} />
-<Route path="/reset-password" element={
-  <PrivateRoute>
-    <ResetPassword />
-  </PrivateRoute>
-} />
-
+<Route path="/reset-password" element={<ResetPassword />} />
       
       <Route path="/" element={
         <PrivateRoute>
