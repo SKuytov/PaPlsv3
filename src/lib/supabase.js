@@ -106,6 +106,9 @@ export const authService = {
   }
 };
 
+// Backend API Base URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.VITE_API_URL || 'http://localhost:5000';
+
 export const dbService = {
   // #region User & Profile
   async getUserWithRole(userId) {
@@ -123,7 +126,7 @@ export const dbService = {
   },
   // #endregion
 
-  // #region Documents & Files
+  // #region Documents & Files - UPDATED FOR SERVER UPLOAD
   async getDocumentCategories() {
     return handleRequest(supabase.from('document_categories').select('*').order('name'));
   },
@@ -152,55 +155,73 @@ export const dbService = {
     return handleRequest(query);
   },
 
+  // NEW: Upload document to server (backend)
   async uploadDocument(file, metadata) {
     try {
-      // 1. Upload file to Storage
-      // Sanitize filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', metadata.name);
+      formData.append('description', metadata.description || '');
+      formData.append('category_id', metadata.category_id);
+      formData.append('uploaded_by', metadata.uploaded_by);
 
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
+      // Upload to backend server
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/documents/upload`, {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header - let browser set it with boundary
+      });
 
-      if (uploadError) throw uploadError;
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || `Upload failed with status ${uploadResponse.status}`);
+      }
 
-      // 2. Create DB Record
-      const { data, error: dbError } = await supabase
+      const serverData = await uploadResponse.json();
+      
+      // Create database record in Supabase
+      const { data: dbRecord, error: dbError } = await supabase
         .from('document_files')
         .insert({
           name: metadata.name,
-          description: metadata.description,
+          description: metadata.description || null,
           category_id: metadata.category_id,
-          file_path: filePath,
-          file_type: fileExt,
-          file_size: file.size,
-          uploaded_by: metadata.uploaded_by
+          file_path: serverData.data.file_path, // Store filename from server
+          file_type: serverData.data.file_type,
+          file_size: serverData.data.file_size,
+          uploaded_by: metadata.uploaded_by,
+          server_path: serverData.data.server_path // Store full server path for reference
         })
         .select()
         .single();
 
       if (dbError) {
-        // Rollback storage upload if DB fails
-        await supabase.storage.from('documents').remove([filePath]);
-        throw dbError;
+        console.error('Database Error:', dbError);
+        // Note: File is already on server, but DB record failed
+        throw new Error(`Database error: ${dbError.message}. File uploaded but not registered.`);
       }
 
-      return { data };
+      return { data: dbRecord };
     } catch (error) {
-      return { error };
+      console.error('Upload error:', error);
+      return { error: { message: error.message || 'File upload failed' } };
     }
   },
 
   async deleteDocument(id, filePath) {
     try {
-      // 1. Delete from Storage
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([filePath]);
-      
-      if (storageError) console.warn("Storage delete warning:", storageError);
+      // 1. Delete from Server
+      try {
+        const deleteResponse = await fetch(`${API_BASE_URL}/api/documents/delete/${filePath}`, {
+          method: 'DELETE'
+        });
+        
+        if (!deleteResponse.ok) {
+          console.warn(`Warning: Could not delete file from server: ${deleteResponse.statusText}`);
+        }
+      } catch (serverError) {
+        console.warn('Warning: Server deletion error:', serverError);
+      }
 
       // 2. Delete from DB
       return await handleRequest(supabase.from('document_files').delete().eq('id', id));
@@ -210,8 +231,8 @@ export const dbService = {
   },
 
   async getDocumentUrl(filePath) {
-    const { data } = supabase.storage.from('documents').getPublicUrl(filePath);
-    return data.publicUrl;
+    // Return server URL instead of Supabase URL
+    return `${API_BASE_URL}/api/documents/download/${filePath}`;
   },
   // #endregion
 
