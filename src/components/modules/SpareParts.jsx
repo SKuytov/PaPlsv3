@@ -605,73 +605,70 @@ const SpareParts = () => {
   const [parts, setParts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-const [selectedPart, setSelectedPart] = useState(null);
-  const [viewDetails, setViewDetails] = useState(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedPart, setSelectedPart] = useState(null);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
- 
- const handleCloseDetails = () => {
-  setDetailsModalOpen(false);
-  setSelectedPart(null);
-};
 
-const handlePartClick = (part) => {
-  setSelectedPart(part);
-  setDetailsModalOpen(true);
-};
-
-const handlePartDelete = async () => {
-  if (!selectedPart?.id) return;
-  if (!isGodAdmin) {
-    toast({
-      variant: "destructive",
-      title: "Unauthorized",
-      description: "Only God Admin can delete items."
-    });
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete ${selectedPart.name}? This cannot be undone.`);
-  if (!confirmed) return;
-
-  try {
-    const { error } = await dbService.deletePart(selectedPart.id);
-    if (error) throw error;
-    
-    toast({ title: "Deleted", description: "Part removed successfully" });
+  const handleCloseDetails = () => {
     setDetailsModalOpen(false);
     setSelectedPart(null);
-    loadParts();
-  } catch (err) {
-    toast({
-      variant: "destructive",
-      title: "Error",
-      description: "Could not delete part. It may be in use."
-    });
-  }
-};
+  };
 
-const handlePartEdit = (part) => {
-  if (!isGodAdmin) {
-    toast({
-      variant: "destructive",
-      title: "Unauthorized",
-      description: "Only God Admin can edit items."
-    });
-    return;
-  }
-  
-  setEditingPart(part);
-  setDetailsModalOpen(false);
-  setIsFormOpen(true);
-};
+  const handlePartClick = (part) => {
+    setSelectedPart(part);
+    setDetailsModalOpen(true);
+  };
+
+  const handlePartDelete = async () => {
+    if (!selectedPart?.id) return;
+    if (!isGodAdmin) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "Only God Admin can delete items."
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${selectedPart.name}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      const { error } = await dbService.deletePart(selectedPart.id);
+      if (error) throw error;
+      
+      toast({ title: "Deleted", description: "Part removed successfully" });
+      handleCloseDetails();
+      loadParts();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not delete part. It may be in use."
+      });
+    }
+  };
+
+  const handlePartEdit = (part) => {
+    if (!isGodAdmin) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "Only God Admin can edit items."
+      });
+      return;
+    }
+    
+    setEditingPart(part);
+    handleCloseDetails();
+    setIsFormOpen(true);
+  };
 
   const pageSize = 12;
-  const [deleteId, setDeleteId] = useState(null);
   const isGodAdmin = userRole?.name === 'God Admin';
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -757,46 +754,9 @@ const handlePartEdit = (part) => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    if (!isGodAdmin) {
-      toast({
-        variant: "destructive",
-        title: "Unauthorized",
-        description: "Only God Admin can delete items."
-      });
-      return;
-    }
-
-    try {
-      const { error } = await dbService.deletePart(deleteId);
-      if (error) throw error;
-      toast({
-        title: "Deleted",
-        description: "Part removed successfully"
-      });
-      setDeleteId(null);
-      setViewDetails(null);
-      loadParts();
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not delete part. It may be in use."
-      });
-    }
-  };
-
   const handleCreate = () => {
     if (!isGodAdmin) return;
     setEditingPart(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEdit = (part) => {
-    if (!isGodAdmin) return;
-    setEditingPart(part);
-    setViewDetails(null);
     setIsFormOpen(true);
   };
 
@@ -812,14 +772,6 @@ const handlePartEdit = (part) => {
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setPage(0);
-  };
-
-  const handleCardClick = useCallback((part) => {
-    setViewDetails(part);
-  }, []);
-
-  const handleReorderPartClick = (part) => {
-    setViewDetails(part);
   };
 
   // Count items needing reorder
@@ -946,7 +898,7 @@ const handlePartEdit = (part) => {
                   <PartCard
                     key={part.id}
                     part={part}
-                    onClick={() => handleCardClick(part)}
+                    onClick={() => handlePartClick(part)}
                   />
                 ))}
               </AnimatePresence>
@@ -982,26 +934,16 @@ const handlePartEdit = (part) => {
         )}
       </div>
 
-      {/* Dialogs */}
-
+      {/* PartDetailsModal - SINGLE INSTANCE */}
       <PartDetailsModal
-        open={detailsModalOpen}  // ✅ ADD THIS
+        open={detailsModalOpen}
         part={selectedPart}
         onClose={handleCloseDetails}
         onDeleteRequest={handlePartDelete}
         onEditRequest={handlePartEdit}
       />
 
-      <PartDetailsModal
-        part={viewDetails}
-        open={!!viewDetails}
-        onOpenChange={(open) => !open && setViewDetails(null)}
-        onEdit={() => handleEdit(viewDetails)}
-        onDelete={() => setDeleteId(viewDetails?.id)}
-        isEditable={isGodAdmin}
-      />
-
-
+      {/* PartForm */}
       {isFormOpen && (
         <PartForm
           open={isFormOpen}
@@ -1011,6 +953,7 @@ const handlePartEdit = (part) => {
         />
       )}
 
+      {/* CategoryManager */}
       {isCategoryManagerOpen && (
         <CategoryManager
           open={isCategoryManagerOpen}
@@ -1019,30 +962,12 @@ const handlePartEdit = (part) => {
         />
       )}
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Part</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this part? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Reorder Modal - WITH CORRECT SUPPLIERS TABLE SCHEMA */}
+      {/* Reorder Modal */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
-        onPartClick={handleReorderPartClick}
+        onPartClick={handlePartClick}
       />
     </>
   );
