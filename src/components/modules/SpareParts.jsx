@@ -624,6 +624,52 @@ const handlePartClick = (part) => {
   setDetailsModalOpen(true);
 };
 
+const handlePartDelete = async () => {
+  if (!selectedPart?.id) return;
+  if (!isGodAdmin) {
+    toast({
+      variant: "destructive",
+      title: "Unauthorized",
+      description: "Only God Admin can delete items."
+    });
+    return;
+  }
+
+  const confirmed = window.confirm(`Delete ${selectedPart.name}? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    const { error } = await dbService.deletePart(selectedPart.id);
+    if (error) throw error;
+    
+    toast({ title: "Deleted", description: "Part removed successfully" });
+    setDetailsModalOpen(false);
+    setSelectedPart(null);
+    loadParts();
+  } catch (err) {
+    toast({
+      variant: "destructive",
+      title: "Error",
+      description: "Could not delete part. It may be in use."
+    });
+  }
+};
+
+const handlePartEdit = (part) => {
+  if (!isGodAdmin) {
+    toast({
+      variant: "destructive",
+      title: "Unauthorized",
+      description: "Only God Admin can edit items."
+    });
+    return;
+  }
+  
+  setEditingPart(part);
+  setDetailsModalOpen(false);
+  setIsFormOpen(true);
+};
+
   const pageSize = 12;
   const [deleteId, setDeleteId] = useState(null);
   const isGodAdmin = userRole?.name === 'God Admin';
@@ -945,7 +991,7 @@ const handlePartClick = (part) => {
         onDeleteRequest={handlePartDelete}
         onEditRequest={handlePartEdit}
       />
-      
+
       <PartDetailsModal
         part={viewDetails}
         open={!!viewDetails}
