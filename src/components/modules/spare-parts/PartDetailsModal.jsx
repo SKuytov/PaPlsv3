@@ -247,13 +247,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                   </Button>
                )}
             </div>
-<PartDetailsModal
-  open={detailsModalOpen}  // ✅ ADD THIS
-  part={selectedPart}
-  onClose={handleCloseDetails}
-  onDeleteRequest={handlePartDelete}
-  onEditRequest={handlePartEdit}
-/>
+
 
             <div className="relative z-10 p-4 sm:p-6 w-full flex flex-col sm:flex-row gap-4 items-start sm:items-end">
               <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 sm:border-4 border-white shrink-0">
