@@ -24,37 +24,22 @@ export default function ResetPassword() {
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        const accessToken = searchParams.get('access_token');
+        // Get token from URL - note: it's "token" not "access_token"
+        const token = searchParams.get('token');
         const type = searchParams.get('type');
 
-        console.log('🔍 Verifying recovery token...', { hasToken: !!accessToken, type });
+        console.log('🔍 Recovery link check:', { hasToken: !!token, type });
 
-        if (!accessToken || type !== 'recovery') {
+        if (!token || type !== 'recovery') {
+          console.error('❌ Invalid token or type:', { token: !!token, type });
           throw new Error('Invalid or missing recovery token');
         }
 
-        // Set the session from the recovery token
-        console.log('🔄 Setting session from recovery token...');
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: accessToken,
-        });
-
-        if (error) {
-          console.error('⚠️ Session error:', error.message);
-          // Token is still valid even if session fails - continue
-          setHasValidToken(true);
-          console.log('✅ Token is valid, proceeding with password reset');
-        } else if (data?.session) {
-          console.log('✅ Session established from recovery token');
-          setHasValidToken(true);
-        } else {
-          console.log('✅ Token accepted, session will be created on update');
-          setHasValidToken(true);
-        }
+        console.log('✅ Recovery token found, ready to reset password');
+        setHasValidToken(true);
 
       } catch (error) {
-        console.error('❌ Recovery token verification failed:', error);
+        console.error('❌ Token verification failed:', error);
         toast({
           variant: 'destructive',
           title: 'Invalid Link',
@@ -116,9 +101,14 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      console.log('🔄 Updating password with recovery token...');
+      const token = searchParams.get('token');
       
-      // CRITICAL: For recovery tokens, use updateUser() which will work with the established session
+      console.log('🔄 Resetting password with token...');
+
+      // For recovery flow, we need to use resetPasswordForEmail with the token
+      // OR use the token to authenticate and then updateUser
+      // The simplest is to just call updateUser() with the recovery token in context
+      
       const { error } = await supabase.auth.updateUser({ 
         password: password 
       });
@@ -135,7 +125,6 @@ export default function ResetPassword() {
         description: 'Your password has been reset. Redirecting to login...'
       });
 
-      // Sign out and redirect
       await supabase.auth.signOut();
       
       setTimeout(() => {
@@ -145,21 +134,11 @@ export default function ResetPassword() {
     } catch (error) {
       console.error('❌ Error:', error.message);
       
-      // Check if it's a session error
-      if (error.message?.includes('session') || error.message?.includes('Auth')) {
-        toast({
-          variant: 'destructive',
-          title: 'Session Expired',
-          description: 'The reset link has expired. Please request a new one.'
-        });
-        setTimeout(() => navigate('/forgot-password', { replace: true }), 3000);
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: error.message || 'Failed to update password'
-        });
-      }
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to update password. Link may have expired.'
+      });
       
       setLoading(false);
     }
