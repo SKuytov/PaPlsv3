@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -228,7 +228,8 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
+  <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
+    <DialogTitle className="sr-only">{part?.name || 'Part Details'}</DialogTitle>
           
           {/* --- HEADER SECTION --- */}
           <div className="relative bg-slate-900 overflow-hidden shrink-0 min-h-[200px] sm:min-h-[192px] flex flex-col justify-end">
