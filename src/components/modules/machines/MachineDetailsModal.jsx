@@ -19,18 +19,21 @@ import TransactionDetailsModal from './TransactionDetailsModal';
 const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [transactions, setTransactions] = useState([]);
+  const [machineAssemblies, setMachineAssemblies] = useState([]); // Parts currently on machine
   const [loadingTx, setLoadingTx] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false);
   const [stats, setStats] = useState({
     totalParts: 0,
     uniqueParts: 0,
+    uniquePartsOnMachine: 0, // NEW: Actual parts currently installed
     lastMaintenance: null
   });
 
   useEffect(() => {
     if (open && machine?.id) {
       loadTransactions();
+      loadMachineAssemblies(); // NEW: Load parts currently on machine
     }
   }, [open, machine]);
 
@@ -43,12 +46,69 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
         const totalParts = data.reduce((acc, tx) => acc + Math.abs(tx.quantity), 0);
         const uniqueParts = new Set(data.map(tx => tx.part_id)).size;
         const lastMaintenance = data.length > 0 ? data[0].created_at : null;
-        setStats({ totalParts, uniqueParts, lastMaintenance });
+        setStats(prev => ({ ...prev, totalParts, uniqueParts, lastMaintenance }));
       }
     } catch (error) {
       console.error("Failed to load machine history", error);
     } finally {
       setLoadingTx(false);
+    }
+  };
+
+  // NEW: Load parts currently linked to this machine
+  const loadMachineAssemblies = async () => {
+    try {
+      // This assumes you have a table that tracks which parts are currently on a machine
+      // Options:
+      // 1. Query machine_parts (current assembly)
+      // 2. Query the latest transaction for each part (to see what's installed)
+      // 3. Use a separate machine_assembly table
+      
+      // For now, we'll calculate from transactions:
+      // Group transactions by part_id and only count the most recent state
+      const { data } = await dbService.getMachineTransactions(machine.id);
+      
+      if (data && data.length > 0) {
+        // Group by part_id and get the latest transaction for each
+        const partsMap = new Map();
+        
+        // Sort by date descending (newest first)
+        const sortedData = [...data].sort((a, b) => 
+          new Date(b.created_at) - new Date(a.created_at)
+        );
+        
+        sortedData.forEach(tx => {
+          if (!partsMap.has(tx.part_id)) {
+            // Store the most recent transaction for each part
+            partsMap.set(tx.part_id, {
+              part_id: tx.part_id,
+              part_name: tx.part?.name || 'Unknown',
+              quantity: Math.abs(tx.quantity),
+              last_date: tx.created_at,
+              type: tx.type // 'in' or 'out'
+            });
+          }
+        });
+        
+        // Filter to only parts that are "in" (installed on machine)
+        // If last transaction is 'out', it was removed
+        // If last transaction is 'in', it's currently installed
+        const currentParts = Array.from(partsMap.values()).filter(p => {
+          const lastTx = sortedData.find(tx => tx.part_id === p.part_id);
+          return lastTx?.type === 'in' || lastTx?.type === 'maintenance'; // Currently on machine
+        });
+        
+        setMachineAssemblies(currentParts);
+        setStats(prev => ({ 
+          ...prev, 
+          uniquePartsOnMachine: currentParts.length 
+        }));
+      } else {
+        setMachineAssemblies([]);
+        setStats(prev => ({ ...prev, uniquePartsOnMachine: 0 }));
+      }
+    } catch (error) {
+      console.error("Failed to load machine assemblies", error);
     }
   };
 
@@ -67,178 +127,350 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-full max-w-2xl sm:max-w-3xl lg:max-w-4xl h-screen sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-6 rounded-lg sm:rounded-2xl">
-          <DialogHeader className="pb-3 sm:pb-4 border-b">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <DialogContent className="max-w-3xl h-screen sm:h-auto sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Wrench className="h-5 w-5 text-teal-600" />
               <div>
-                <DialogTitle className="text-lg sm:text-2xl">{machine.name}</DialogTitle>
-                <p className="text-xs sm:text-sm text-slate-600 font-mono">{machine.machine_code}</p>
+                <p className="text-lg sm:text-xl font-bold">{machine.name}</p>
+                <p className="text-xs sm:text-sm text-slate-600">{machine.machine_code}</p>
               </div>
-              <Badge className="w-fit">{machine.building?.name || 'N/A'}</Badge>
-            </div>
+            </DialogTitle>
           </DialogHeader>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="overview" className="text-xs sm:text-sm">
-                <Activity className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Overview</span>
-                <span className="sm:hidden">Info</span>
-              </TabsTrigger>
-              <TabsTrigger value="costs" className="text-xs sm:text-sm">
-                <DollarSign className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Maintenance</span>
-                <span className="sm:hidden">Cost</span>
-              </TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 text-xs sm:text-sm">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="info">Info</TabsTrigger>
+              <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+              <TabsTrigger value="cost">Cost</TabsTrigger>
             </TabsList>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="flex-1 overflow-y-auto space-y-3 sm:space-y-4">
+            {/* === OVERVIEW TAB === */}
+            <TabsContent value="overview" className="space-y-4">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {/* Total Maintenance Cost */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <DollarSign className="h-4 w-4 text-teal-600" />
+                      Total Cost
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900">
+                      {formatCurrency(totalMaintenanceCost)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Parts Replaced */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <BarChart3 className="h-4 w-4 text-teal-600" />
+                      Parts Replaced
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900">
+                      {stats.totalParts}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Unique Items Ever Used */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Box className="h-4 w-4 text-teal-600" />
+                      Unique Types Used
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900">
+                      {stats.uniqueParts}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-1">Different part types</p>
+                  </CardContent>
+                </Card>
+
+                {/* NEW: Unique Items Currently On Machine */}
+                <Card className="border-2 border-teal-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Activity className="h-4 w-4 text-teal-600" />
+                      Current Parts
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-teal-600">
+                      {stats.uniquePartsOnMachine}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-1">Parts on machine now</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Last Activity */}
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base sm:text-lg">Total Maintenance Cost</CardTitle>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Calendar className="h-4 w-4 text-teal-600" />
+                    Last Activity
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl sm:text-3xl font-bold text-slate-900">
-                    {formatCurrency(totalMaintenanceCost)}
+                  <p className="text-sm sm:text-base font-semibold text-slate-900">
+                    {stats.lastMaintenance 
+                      ? new Date(stats.lastMaintenance).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                      : 'N/A'
+                    }
                   </p>
                 </CardContent>
               </Card>
 
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {/* Currently Installed Parts */}
+              {machineAssemblies.length > 0 && (
                 <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-xs sm:text-sm text-slate-600 font-medium">Parts Replaced</p>
-                    <p className="text-lg sm:text-2xl font-bold">{stats.totalParts}</p>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Wrench className="h-4 w-4 text-teal-600" />
+                      Currently Installed Parts
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {machineAssemblies.map((part, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200"
+                        >
+                          <div>
+                            <p className="text-xs sm:text-sm font-semibold text-slate-900">
+                              {part.part_name}
+                            </p>
+                            <p className="text-xs text-slate-600">
+                              Last updated: {new Date(part.last_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            Qty: {part.quantity}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-xs sm:text-sm text-slate-600 font-medium">Unique Items</p>
-                    <p className="text-lg sm:text-2xl font-bold">{stats.uniqueParts}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-xs sm:text-sm text-slate-600 font-medium">Last Activity</p>
-                    <p className="text-xs sm:text-sm font-bold">
-                      {stats.lastMaintenance ? new Date(stats.lastMaintenance).toLocaleDateString() : 'N/A'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+              )}
 
+              {/* Technical Specs */}
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base sm:text-lg">Technical Specs</CardTitle>
+                <CardHeader>
+                  <CardTitle className="text-base">Technical Specs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div>
-                      <p className="text-slate-600 font-medium text-xs">Type</p>
-                      <p className="font-semibold">{machine.type || 'N/A'}</p>
+                      <p className="text-slate-600 font-medium">Type</p>
+                      <p className="font-semibold text-slate-900">{machine.type || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-slate-600 font-medium text-xs">Manufacturer</p>
-                      <p className="font-semibold">{machine.manufacturer || 'N/A'}</p>
+                      <p className="text-slate-600 font-medium">Manufacturer</p>
+                      <p className="font-semibold text-slate-900">{machine.manufacturer || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-slate-600 font-medium text-xs">Production Rate</p>
-                      <p className="font-semibold">{machine.production_value_per_min ? `€${machine.production_value_per_min}/min` : 'N/A'}</p>
+                      <p className="text-slate-600 font-medium">Production Rate</p>
+                      <p className="font-semibold text-slate-900">
+                        {machine.production_value_per_min ? `€${machine.production_value_per_min}/min` : 'N/A'}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-slate-600 font-medium text-xs">Capacity</p>
-                      <p className="font-semibold">{machine.capacity || 'N/A'}</p>
+                      <p className="text-slate-600 font-medium">Capacity</p>
+                      <p className="font-semibold text-slate-900">{machine.capacity || 'N/A'}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* Maintenance Cost Tab */}
-            <TabsContent value="costs" className="flex-1 flex flex-col overflow-hidden">
-              <Card className="flex-1 flex flex-col overflow-hidden">
-                <CardHeader className="pb-3 border-b">
-                  <CardTitle className="text-base sm:text-lg">Cost Breakdown</CardTitle>
+            {/* === INFO TAB === */}
+            <TabsContent value="info" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Machine Information</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto p-3 sm:p-6">
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-600 font-medium mb-1">Name</p>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900">{machine.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-600 font-medium mb-1">Code</p>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900">{machine.machine_code}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-600 font-medium mb-1">Location</p>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900">
+                      {machine.building?.name} / {machine.warehouse?.name}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-600 font-medium mb-1">Status</p>
+                    <Badge className="text-xs">
+                      {machine.status || 'Unknown'}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* === MAINTENANCE TAB === */}
+            <TabsContent value="maintenance" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Maintenance History</CardTitle>
+                </CardHeader>
+                <CardContent>
                   {loadingTx ? (
                     <div className="flex justify-center py-8">
                       <LoadingSpinner />
                     </div>
                   ) : transactions.length === 0 ? (
-                    <p className="text-sm text-slate-600 text-center py-8">No maintenance records found.</p>
+                    <p className="text-xs sm:text-sm text-slate-600 text-center py-8">
+                      No maintenance records found.
+                    </p>
                   ) : (
-                    <div className="space-y-2">
-                      {transactions.map(tx => {
-                        const total = Math.abs(tx.quantity) * (tx.unit_cost || 0);
-                        return (
-                          <div
-                            key={tx.id}
-                            onClick={() => handleTransactionClick(tx)}
-                            className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors"
-                          >
-                            <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm mb-2">
-                              <div>
-                                <p className="text-slate-600 font-medium">Date</p>
-                                <p className="font-semibold">{new Date(tx.created_at).toLocaleDateString()}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-slate-600 font-medium">Total</p>
-                                <p className="font-semibold">{formatCurrency(total)}</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-xs mb-2">
-                              <div>
-                                <p className="text-slate-600">Part</p>
-                                <p className="font-semibold line-clamp-1">{tx.part?.name || 'Unknown'}</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-600">Qty</p>
-                                <p className="font-semibold">{Math.abs(tx.quantity)}</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-600">Unit Cost</p>
-                                <p className="font-semibold">{formatCurrency(tx.unit_cost)}</p>
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTransactionClick(tx);
-                              }}
-                              className="w-full text-xs h-7"
+                    <ScrollArea className="w-full h-96">
+                      <div className="space-y-2 pr-4">
+                        {transactions.map((tx, idx) => {
+                          const total = Math.abs(tx.quantity) * (tx.unit_cost || 0);
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => handleTransactionClick(tx)}
+                              className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors"
                             >
-                              View Details
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                                    {tx.part?.name || 'Unknown'}
+                                  </p>
+                                  <p className="text-xs text-slate-600">
+                                    {new Date(tx.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <Badge variant="outline" className="text-xs flex-shrink-0">
+                                  {formatCurrency(total)}
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                  <p className="text-slate-600">Qty</p>
+                                  <p className="font-semibold text-slate-900">{Math.abs(tx.quantity)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-600">Unit</p>
+                                  <p className="font-semibold text-slate-900">{formatCurrency(tx.unit_cost)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-600">Type</p>
+                                  <p className="font-semibold text-slate-900 capitalize">{tx.type}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
 
-              {transactions.length > 0 && (
-                <div className="mt-4 p-3 sm:p-4 bg-slate-100 rounded-lg">
-                  <p className="text-xs sm:text-sm text-slate-600 font-medium">Total Maintenance Cost:</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900">
-                    {formatCurrency(totalMaintenanceCost)}
-                  </p>
-                </div>
-              )}
+            {/* === COST TAB === */}
+            <TabsContent value="cost" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Cost Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingTx ? (
+                    <div className="flex justify-center py-8">
+                      <LoadingSpinner />
+                    </div>
+                  ) : transactions.length === 0 ? (
+                    <p className="text-xs sm:text-sm text-slate-600 text-center py-8">
+                      No cost records found.
+                    </p>
+                  ) : (
+                    <>
+                      <ScrollArea className="w-full h-96 mb-4">
+                        <div className="space-y-2 pr-4">
+                          {transactions.map((tx, idx) => {
+                            const total = Math.abs(tx.quantity) * (tx.unit_cost || 0);
+                            return (
+                              <div
+                                key={idx}
+                                onClick={() => handleTransactionClick(tx)}
+                                className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-400 cursor-pointer transition-colors"
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                                      {tx.part?.name || 'Unknown'}
+                                    </p>
+                                    <p className="text-xs text-slate-600">
+                                      {new Date(tx.created_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                  <div>
+                                    <p className="text-slate-600">Quantity</p>
+                                    <p className="font-semibold text-slate-900">{Math.abs(tx.quantity)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-600">Unit Cost</p>
+                                    <p className="font-semibold text-slate-900">{formatCurrency(tx.unit_cost)}</p>
+                                  </div>
+                                </div>
+                                <div className="pt-2 border-t">
+                                  <p className="text-xs text-slate-600">Total</p>
+                                  <p className="text-sm font-bold text-teal-600">{formatCurrency(total)}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+
+                      {transactions.length > 0 && (
+                        <div className="p-4 bg-teal-50 rounded-lg border border-teal-200">
+                          <p className="text-xs sm:text-sm text-slate-600 font-medium">Total Maintenance Cost</p>
+                          <p className="text-2xl sm:text-3xl font-bold text-teal-600">
+                            {formatCurrency(totalMaintenanceCost)}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
 
           {/* Footer */}
-          <div className="flex gap-2 pt-4 border-t mt-auto">
+          <div className="pt-4 border-t flex gap-2">
             <Button
-              variant="outline"
               onClick={() => onOpenChange(false)}
               className="flex-1"
+              variant="outline"
             >
               Close
             </Button>
