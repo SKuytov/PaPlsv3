@@ -1,6 +1,5 @@
 // src/components/machines/MachineCard.jsx
-// 📊 Machine Card Component - Grid View Display
-// Shows machine summary with KPIs and quick actions
+// 📊 Machine Card Component - Mobile Responsive Grid View
 
 import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -8,39 +7,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   AlertTriangle, TrendingUp, Clock, Zap, MapPin,
-  MoreVertical, Eye, Wrench, AlertCircle
+  Eye, Wrench, AlertCircle
 } from 'lucide-react';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
 
 const MachineCard = ({ machine, metrics, onViewDetails, onScheduleMaintenance }) => {
   if (!machine || !metrics) return null;
 
-  // Determine status color
   const getStatusColor = (status) => {
     switch (status) {
-      case 'down': return 'bg-red-100 text-red-800';
-      case 'maintenance': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-green-100 text-green-800';
+      case 'down': return 'bg-red-100 text-red-800 border-red-200';
+      case 'maintenance': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-green-100 text-green-800 border-green-200';
     }
   };
 
-  // Health score color
   const getHealthColor = (score) => {
     if (score >= 90) return 'text-green-600';
     if (score >= 75) return 'text-blue-600';
     if (score >= 60) return 'text-yellow-600';
     if (score >= 40) return 'text-orange-600';
     return 'text-red-600';
-  };
-
-  // Format date
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: '2-digit'
-    });
   };
 
   const daysUntilMaintenance = () => {
@@ -57,122 +44,128 @@ const MachineCard = ({ machine, metrics, onViewDetails, onScheduleMaintenance })
   const isMaintenanceSoon = maintenanceDaysLeft <= 7;
 
   return (
-    <Card className="hover:shadow-lg transition-shadow bg-white h-full flex flex-col">
+    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow">
       {/* Header with Image & Status */}
-      <div className="relative h-32 bg-gradient-to-r from-slate-200 to-slate-100 overflow-hidden">
-        <ImageWithFallback
-          src={machine.photo_url}
-          alt={machine.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute top-2 right-2 flex gap-2">
-          <Badge className={getStatusColor(metrics.status)} variant="outline">
-            {metrics.status === 'down' ? '🔴' : metrics.status === 'maintenance' ? '🟡' : '🟢'}
+      <CardHeader className="pb-2 sm:pb-3 relative">
+        {/* Image - Hidden on very small screens */}
+        <div className="hidden sm:block -mx-6 -mt-6 mb-3 h-32 sm:h-40 bg-gradient-to-br from-slate-200 to-slate-300 overflow-hidden rounded-t-lg">
+          {machine.image_url && (
+            <ImageWithFallback
+              src={machine.image_url}
+              alt={machine.name}
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+
+        {/* Status Badge */}
+        <div className="flex items-center justify-between mb-2">
+          <Badge className={`text-xs sm:text-sm font-semibold border ${getStatusColor(metrics.status)}`}>
             {metrics.status.charAt(0).toUpperCase() + metrics.status.slice(1)}
           </Badge>
+          <span className="text-lg">
+            {metrics.status === 'down' ? '🔴' : metrics.status === 'maintenance' ? '🟡' : '🟢'}
+          </span>
         </div>
-      </div>
 
-      {/* Machine Info */}
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <h3 className="font-bold text-slate-900 text-sm line-clamp-2">
-              {machine.name}
-            </h3>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">
-              {machine.machine_code}
+        {/* Machine Info */}
+        <h3 className="text-sm sm:text-base font-bold text-slate-900 line-clamp-2">
+          {machine.name}
+        </h3>
+        <p className="text-xs sm:text-sm text-slate-600 font-mono">
+          {machine.machine_code}
+        </p>
+      </CardHeader>
+
+      {/* KPI Metrics - Responsive Grid */}
+      <CardContent className="flex-1 flex flex-col gap-3 sm:gap-4">
+        {/* KPI Grid */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {/* Health Score */}
+          <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200">
+            <p className="text-xs text-slate-600 font-medium">Health</p>
+            <p className={`text-base sm:text-lg font-bold ${getHealthColor(metrics.health_score)}`}>
+              {metrics.health_score}%
+            </p>
+          </div>
+
+          {/* Availability */}
+          <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200">
+            <p className="text-xs text-slate-600 font-medium">Avail.</p>
+            <p className="text-base sm:text-lg font-bold text-blue-600">
+              {metrics.availability_percent}%
+            </p>
+          </div>
+
+          {/* OEE Score */}
+          <div className="bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200">
+            <p className="text-xs text-slate-600 font-medium">OEE</p>
+            <p className="text-base sm:text-lg font-bold text-purple-600">
+              {metrics.oee_score}%
             </p>
           </div>
         </div>
-      </CardHeader>
-
-      {/* KPI Metrics */}
-      <CardContent className="flex-1 space-y-3">
-        {/* Health Score */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-600">Health</span>
-          </div>
-          <div className={`font-bold text-sm ${getHealthColor(metrics.health_score)}`}>
-            {metrics.health_score}%
-          </div>
-        </div>
-
-        {/* Availability */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-600">Availability</span>
-          </div>
-          <span className="text-xs font-semibold">{metrics.availability_percent}%</span>
-        </div>
-
-        {/* OEE Score */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-600">OEE</span>
-          </div>
-          <span className="text-xs font-semibold">{metrics.oee_score}%</span>
-        </div>
 
         {/* Location */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-600">Zone</span>
-          </div>
-          <span className="text-xs font-semibold text-slate-700">
+        <div className="flex items-center gap-2 px-2 sm:px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+          <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-slate-600 flex-shrink-0" />
+          <span className="text-xs sm:text-sm text-slate-700">
             {metrics.location_zone || 'N/A'}
           </span>
         </div>
 
         {/* Maintenance Alert */}
         {maintenanceDaysLeft && (
-          <div className={`p-2 rounded text-xs font-medium ${
-            isMaintenanceOverdue
-              ? 'bg-red-50 text-red-700'
-              : isMaintenanceSoon
-              ? 'bg-yellow-50 text-yellow-700'
-              : 'bg-blue-50 text-blue-700'
+          <div className={`flex items-center gap-2 p-2 sm:p-3 rounded-lg border ${
+            isMaintenanceOverdue 
+              ? 'bg-red-50 border-red-200' 
+              : isMaintenanceSoon 
+              ? 'bg-yellow-50 border-yellow-200' 
+              : 'bg-blue-50 border-blue-200'
           }`}>
             {isMaintenanceOverdue ? (
-              <div className="flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                Maintenance overdue
-              </div>
+              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
             ) : (
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                Due in {maintenanceDaysLeft} days
-              </div>
+              <Clock className="h-4 w-4 text-yellow-600 flex-shrink-0" />
             )}
+            <span className={`text-xs sm:text-sm font-semibold ${
+              isMaintenanceOverdue 
+                ? 'text-red-800' 
+                : isMaintenanceSoon 
+                ? 'text-yellow-800' 
+                : 'text-blue-800'
+            }`}>
+              {isMaintenanceOverdue
+                ? 'Maintenance overdue'
+                : `Due in ${maintenanceDaysLeft} days`}
+            </span>
           </div>
         )}
-      </CardContent>
 
-      {/* Quick Actions */}
-      <div className="border-t p-3 flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 h-8"
-          onClick={() => onViewDetails(machine.id)}
-        >
-          <Eye className="w-3 h-3 mr-1" />
-          <span className="hidden sm:inline">Details</span>
-        </Button>
-        <Button
-          size="sm"
-          className="bg-blue-600 hover:bg-blue-700 h-8"
-          onClick={() => onScheduleMaintenance(machine.id)}
-        >
-          <Wrench className="w-3 h-3 mr-1" />
-          <span className="hidden sm:inline">Maintain</span>
-        </Button>
-      </div>
+        {/* Quick Actions - Full width on mobile, 2 columns on desktop */}
+        <div className="grid grid-cols-2 gap-2 mt-auto pt-2 sm:pt-4">
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => onViewDetails(machine.id)}
+            className="w-full text-xs sm:text-sm h-8 sm:h-10"
+          >
+            <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Details</span>
+            <span className="sm:hidden">View</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onScheduleMaintenance(machine.id)}
+            className="w-full text-xs sm:text-sm h-8 sm:h-10"
+          >
+            <Wrench className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Maintain</span>
+            <span className="sm:hidden">Fix</span>
+          </Button>
+        </div>
+      </CardContent>
     </Card>
   );
 };

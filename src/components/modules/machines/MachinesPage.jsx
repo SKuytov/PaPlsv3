@@ -1,6 +1,6 @@
 // src/pages/machines/index.jsx
-// 🏭 Machines Management Page - Complete Dashboard
-// Main entry point for machine management with grid, filters, and modals
+// 🏭 Machines Management Page - Mobile Responsive
+// Complete dashboard with grid, filters, modals, and factory map
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Search, Settings, Download, AlertTriangle,
-  Plus, LayoutGrid, MapPin, TrendingUp
+  Plus, LayoutGrid, MapPin, TrendingUp, Menu, X
 } from 'lucide-react';
 import { dbService } from '@/lib/supabase';
 import MachineCard from '@/components/machines/MachineCard';
@@ -44,8 +44,9 @@ const MachinesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [healthFilter, setHealthFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('grid'); // grid or map
+  const [viewMode, setViewMode] = useState('grid');
   const [selectedMachineId, setSelectedMachineId] = useState(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Modal State
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -64,20 +65,18 @@ const MachinesPage = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch machines
       const { data: machinesData, error: machinesError } = await dbService.query('machines');
       if (machinesError) throw machinesError;
       setMachines(machinesData || []);
 
-      // Fetch metrics for all machines
       const { data: metricsData, error: metricsError } = await dbService.query('machine_metrics');
       if (metricsError) throw metricsError;
       setMachineMetrics(metricsData || []);
 
-      // Fetch factory map URL from settings
       const { data: settingsData } = await dbService.query('app_settings', {
         key: 'factory_map_url'
       });
+
       if (settingsData && settingsData.length > 0) {
         setFactoryMapUrl(settingsData[0].value);
       }
@@ -86,6 +85,7 @@ const MachinesPage = () => {
         title: 'Success',
         description: `Loaded ${machinesData?.length || 0} machines`
       });
+
     } catch (err) {
       setError(err.message);
       toast({
@@ -100,7 +100,6 @@ const MachinesPage = () => {
 
   // Filter machines
   const filteredMachines = machines.filter((machine) => {
-    // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       if (
@@ -111,17 +110,14 @@ const MachinesPage = () => {
       }
     }
 
-    // Status filter
     if (statusFilter !== 'all') {
       const metrics = machineMetrics.find(m => m.machine_id === machine.id);
       if (!metrics || metrics.status !== statusFilter) return false;
     }
 
-    // Health filter
     if (healthFilter !== 'all') {
       const metrics = machineMetrics.find(m => m.machine_id === machine.id);
       if (!metrics) return false;
-
       const score = metrics.health_score;
       switch (healthFilter) {
         case 'excellent':
@@ -135,6 +131,8 @@ const MachinesPage = () => {
           break;
         case 'poor':
           if (score >= 60) return false;
+          break;
+        default:
           break;
       }
     }
@@ -150,7 +148,6 @@ const MachinesPage = () => {
   };
 
   const handleScheduleMaintenance = (machineId) => {
-    // TODO: Implement maintenance scheduling modal
     toast({
       title: 'Feature Coming Soon',
       description: 'Maintenance scheduling will be available in the next update'
@@ -182,16 +179,8 @@ const MachinesPage = () => {
 
   const generateCSV = () => {
     const headers = [
-      'Machine Name',
-      'Code',
-      'Status',
-      'Health Score',
-      'Availability %',
-      'OEE %',
-      'MTBF (h)',
-      'MTTR (h)',
-      'Last Service',
-      'Next Service'
+      'Machine Name', 'Code', 'Status', 'Health Score', 'Availability %',
+      'OEE %', 'MTBF (h)', 'MTTR (h)', 'Last Service', 'Next Service'
     ];
 
     const rows = filteredMachines.map(machine => {
@@ -232,193 +221,183 @@ const MachinesPage = () => {
       : 0
   };
 
-  if (loading) return <LoadingSpinner message="Loading machines..." />;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="min-h-screen bg-slate-50 p-2 sm:p-4 lg:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Machines</h1>
-          <p className="text-slate-600 mt-1">Manage and monitor factory equipment</p>
-        </div>
-        {isGodAdmin && (
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Machine
-          </Button>
-        )}
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Machines</h1>
+        <p className="text-xs sm:text-sm text-slate-600">Manage and monitor factory equipment</p>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-green-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Operational</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">{stats.operational}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-yellow-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-yellow-700">Maintenance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-yellow-600">{stats.maintenance}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-red-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-700">Down</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{stats.down}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-blue-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Avg Health</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-blue-600">{stats.avgHealth}%</p>
-          </CardContent>
-        </Card>
+      {/* Statistics Cards - Responsive Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
+        {[
+          { label: 'Total', value: stats.total, icon: LayoutGrid },
+          { label: 'Operational', value: stats.operational, color: 'text-green-600' },
+          { label: 'Maintenance', value: stats.maintenance, color: 'text-yellow-600' },
+          { label: 'Down', value: stats.down, color: 'text-red-600' },
+          { label: 'Avg Health', value: `${stats.avgHealth}%`, color: 'text-blue-600' }
+        ].map((stat, idx) => (
+          <Card key={idx} className="col-span-1">
+            <CardContent className="pt-4 sm:pt-6">
+              <p className="text-xs sm:text-sm text-slate-600 font-medium">{stat.label}</p>
+              <p className={`text-xl sm:text-2xl font-bold ${stat.color || 'text-slate-900'}`}>
+                {stat.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Controls & Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            {/* Search & View Controls */}
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  placeholder="Search machines..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('grid')}
-                  className="gap-2"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                  Grid
-                </Button>
-                <Button
-                  size="sm"
-                  variant={viewMode === 'map' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('map')}
-                  className="gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  Map
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExportData}
-                  className="gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </Button>
+      {error && (
+        <Card className="mb-4 border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <div>
+                <p className="font-semibold text-red-900">Error loading machines</p>
+                <p className="text-sm text-red-700">{error}</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Filter by Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="operational">Operational</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                  <SelectItem value="down">Down</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* Filters & Controls - Mobile Responsive */}
+      <Card className="mb-4 sm:mb-6">
+        <CardHeader className="pb-3 sm:pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base sm:text-lg">Filters</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              className="md:hidden"
+            >
+              {showMobileFilters ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
+          </div>
+        </CardHeader>
 
-              <Select value={healthFilter} onValueChange={setHealthFilter}>
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Filter by Health" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Health</SelectItem>
-                  <SelectItem value="excellent">Excellent (90%+)</SelectItem>
-                  <SelectItem value="good">Good (75-89%)</SelectItem>
-                  <SelectItem value="fair">Fair (60-74%)</SelectItem>
-                  <SelectItem value="poor">Poor (&lt;60%)</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <div className="text-sm text-slate-600 flex items-center">
-                Showing {filteredMachines.length} of {machines.length} machines
-              </div>
+        <CardContent className={`${showMobileFilters ? 'block' : 'hidden'} md:block space-y-3 sm:space-y-0 sm:flex sm:gap-3 sm:flex-wrap`}>
+          {/* Search Input */}
+          <div className="flex-1 min-w-full sm:min-w-[250px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search machines..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-full"
+              />
             </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex-1 min-w-full sm:min-w-[150px]">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="operational">Operational</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="down">Down</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Health Filter */}
+          <div className="flex-1 min-w-full sm:min-w-[150px]">
+            <Select value={healthFilter} onValueChange={setHealthFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Health" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Health</SelectItem>
+                <SelectItem value="excellent">Excellent (90%+)</SelectItem>
+                <SelectItem value="good">Good (75-89%)</SelectItem>
+                <SelectItem value="fair">Fair (60-74%)</SelectItem>
+                <SelectItem value="poor">Poor (&lt;60%)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* View Mode & Export */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="flex-1 sm:flex-initial"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Grid</span>
+            </Button>
+            <Button
+              variant={viewMode === 'map' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('map')}
+              className="flex-1 sm:flex-initial"
+            >
+              <MapPin className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Map</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportData}
+              className="flex-1 sm:flex-initial"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Export</span>
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Main Content - Grid or Map View */}
-      {error ? (
-        <Card className="bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-red-700">
-              <AlertTriangle className="w-5 h-5" />
-              <div>
-                <p className="font-semibold">Error loading machines</p>
-                <p className="text-sm">{error}</p>
+      {/* Main Content - Tabs */}
+      <Tabs value={viewMode} onValueChange={setViewMode} className="space-y-4">
+        {/* Grid View */}
+        {viewMode === 'grid' && (
+          <div className="space-y-4">
+            {filteredMachines.length === 0 ? (
+              <Card className="col-span-full text-center py-12">
+                <AlertTriangle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                <p className="text-slate-600 font-medium">No machines found</p>
+                <p className="text-xs sm:text-sm text-slate-500">Try adjusting your filters</p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {filteredMachines.map(machine => {
+                  const metrics = machineMetrics.find(m => m.machine_id === machine.id);
+                  return (
+                    <MachineCard
+                      key={machine.id}
+                      machine={machine}
+                      metrics={metrics}
+                      onViewDetails={handleViewDetails}
+                      onScheduleMaintenance={handleScheduleMaintenance}
+                    />
+                  );
+                })}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredMachines.length === 0 ? (
-            <Card className="col-span-full">
-              <CardContent className="pt-6 text-center">
-                <p className="text-slate-500">No machines found</p>
-              </CardContent>
-            </Card>
-          ) : (
-            filteredMachines.map((machine) => {
-              const metrics = machineMetrics.find(m => m.machine_id === machine.id);
-              return (
-                <MachineCard
-                  key={machine.id}
-                  machine={machine}
-                  metrics={metrics}
-                  onViewDetails={handleViewDetails}
-                  onScheduleMaintenance={handleScheduleMaintenance}
-                />
-              );
-            })
-          )}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="pt-6">
+            )}
+          </div>
+        )}
+
+        {/* Map View */}
+        {viewMode === 'map' && (
+          <div className="min-h-[500px] sm:min-h-[600px] rounded-lg overflow-hidden border border-slate-200">
             {factoryMapUrl ? (
               <FactoryMapViewer
                 mapImageUrl={factoryMapUrl}
@@ -428,25 +407,24 @@ const MachinesPage = () => {
                 onMachineSelect={setSelectedMachineId}
               />
             ) : (
-              <div className="text-center py-12 text-slate-500">
-                <MapPin className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p>Factory map not configured</p>
-                <p className="text-sm mt-1">Upload a factory floor plan in settings</p>
-              </div>
+              <Card className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <MapPin className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-600 font-medium">Factory map not configured</p>
+                  <p className="text-xs sm:text-sm text-slate-500">Upload a factory floor plan in settings</p>
+                </div>
+              </Card>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </Tabs>
 
-      {/* Detail Modal */}
-      {selectedMachine && (
-        <MachineDetailModal
-          open={detailModalOpen}
-          onOpenChange={setDetailModalOpen}
-          machine={selectedMachine}
-          metrics={machineMetrics.find(m => m.machine_id === selectedMachine.id)}
-        />
-      )}
+      {/* Machine Detail Modal */}
+      <MachineDetailModal
+        machine={selectedMachine}
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+      />
     </div>
   );
 };
