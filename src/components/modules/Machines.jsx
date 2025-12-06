@@ -1,7 +1,20 @@
+// src/modules/admin/Machines.jsx
+// 🏭 Machine Registry Management - Mobile Responsive
+// Create, edit, delete, and manage machines with list and map views
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Search, Plus, List, Map, Trash2, Edit, RefreshCw, Eye } from 'lucide-react';
+import { Settings, Search, Plus, List, Map, Trash2, Edit, RefreshCw, Eye, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { dbService } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -18,10 +31,14 @@ const MachineForm = ({ open, onOpenChange, editMachine, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [buildings, setBuildings] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-
   const [formData, setFormData] = useState({
-    machine_code: '', name: '', type: '', status: 'Running',
-    building_id: '', warehouse_id: '', production_value_per_min: 30
+    machine_code: '',
+    name: '',
+    type: '',
+    status: 'Running',
+    building_id: '',
+    warehouse_id: '',
+    production_value_per_min: 30
   });
 
   useEffect(() => {
@@ -39,15 +56,23 @@ const MachineForm = ({ open, onOpenChange, editMachine, onSuccess }) => {
         });
       } else {
         setFormData({
-          machine_code: '', name: '', type: '', status: 'Running',
-          building_id: '', warehouse_id: '', production_value_per_min: 30
+          machine_code: '',
+          name: '',
+          type: '',
+          status: 'Running',
+          building_id: '',
+          warehouse_id: '',
+          production_value_per_min: 30
         });
       }
     }
   }, [open, editMachine]);
 
   const loadRefs = async () => {
-    const [b, w] = await Promise.all([dbService.getBuildings(), dbService.getWarehouses()]);
+    const [b, w] = await Promise.all([
+      dbService.getBuildings(),
+      dbService.getWarehouses()
+    ]);
     setBuildings(b.data || []);
     setWarehouses(w.data || []);
   };
@@ -58,15 +83,25 @@ const MachineForm = ({ open, onOpenChange, editMachine, onSuccess }) => {
     try {
       if (editMachine) {
         await dbService.updateMachine(editMachine.id, formData);
-        toast({ title: "Updated", description: "Machine updated successfully." });
+        toast({
+          title: "Updated",
+          description: "Machine updated successfully."
+        });
       } else {
         await dbService.createMachine(formData);
-        toast({ title: "Created", description: "New machine registered." });
+        toast({
+          title: "Created",
+          description: "New machine registered."
+        });
       }
       onSuccess();
       onOpenChange(false);
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to save machine." });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save machine."
+      });
     } finally {
       setLoading(false);
     }
@@ -74,64 +109,162 @@ const MachineForm = ({ open, onOpenChange, editMachine, onSuccess }) => {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] bg-white p-6 rounded-xl shadow-xl">
-          <Dialog.Title className="text-lg font-bold mb-4">{editMachine ? 'Edit Machine' : 'Add Machine'}</Dialog.Title>
-          <form onSubmit={handleSubmit} className="space-y-4">
-             <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                   <label className="text-sm font-medium">Machine Name</label>
-                   <input required className="w-full p-2 border rounded bg-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Code</label>
-                   <input required className="w-full p-2 border rounded bg-white" value={formData.machine_code} onChange={e => setFormData({...formData, machine_code: e.target.value})} />
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Type</label>
-                   <input className="w-full p-2 border rounded bg-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} />
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Building</label>
-                   <select className="w-full p-2 border rounded bg-white" value={formData.building_id} onChange={e => setFormData({...formData, building_id: e.target.value})}>
-                      <option value="">Select...</option>
-                      {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                   </select>
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Warehouse</label>
-                   <select className="w-full p-2 border rounded bg-white" value={formData.warehouse_id} onChange={e => setFormData({...formData, warehouse_id: e.target.value})}>
-                      <option value="">Select...</option>
-                      {warehouses.filter(w => !formData.building_id || w.building_id === Number(formData.building_id)).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                   </select>
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Status</label>
-                   <select className="w-full p-2 border rounded bg-white" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                      <option value="Running">Running</option>
-                      <option value="Down">Down</option>
-                      <option value="Maintenance">Maintenance</option>
-                   </select>
-                </div>
-                <div>
-                   <label className="text-sm font-medium">Prod. Value / Min (€)</label>
-                   <input type="number" className="w-full p-2 border rounded bg-white" value={formData.production_value_per_min} onChange={e => setFormData({...formData, production_value_per_min: e.target.value})} />
-                </div>
-             </div>
-             <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Machine'}</Button>
-             </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
+      <Dialog.Content className="w-full max-w-2xl sm:max-w-3xl h-screen sm:h-auto sm:max-h-[90vh] overflow-y-auto p-3 sm:p-6 rounded-lg sm:rounded-2xl">
+        <Dialog.Header className="pb-4 border-b">
+          <Dialog.Title className="text-lg sm:text-2xl">
+            {editMachine ? 'Edit Machine' : 'Add Machine'}
+          </Dialog.Title>
+        </Dialog.Header>
+
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 py-4 sm:py-6">
+          {/* Name & Code Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Machine Name
+              </label>
+              <Input
+                placeholder="Injector A-1"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="w-full text-xs sm:text-sm h-9 sm:h-10"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Code
+              </label>
+              <Input
+                placeholder="MID-001"
+                value={formData.machine_code}
+                onChange={(e) => setFormData({ ...formData, machine_code: e.target.value })}
+                required
+                className="w-full text-xs sm:text-sm h-9 sm:h-10"
+              />
+            </div>
+          </div>
+
+          {/* Type & Status Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Type
+              </label>
+              <Input
+                placeholder="Injection Molding"
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full text-xs sm:text-sm h-9 sm:h-10"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Status
+              </label>
+              <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                <SelectTrigger className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Running">Running</SelectItem>
+                  <SelectItem value="Down">Down</SelectItem>
+                  <SelectItem value="Maintenance">Maintenance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Building & Warehouse Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Building
+              </label>
+              <Select value={formData.building_id} onValueChange={(value) => setFormData({ ...formData, building_id: value })}>
+                <SelectTrigger className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {buildings.map(b => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+                Warehouse
+              </label>
+              <Select value={formData.warehouse_id} onValueChange={(value) => setFormData({ ...formData, warehouse_id: value })}>
+                <SelectTrigger className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses
+                    .filter(w => !formData.building_id || w.building_id === Number(formData.building_id))
+                    .map(w => (
+                      <SelectItem key={w.id} value={String(w.id)}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Production Value */}
+          <div className="space-y-2">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-900">
+              Production Value / Min (€)
+            </label>
+            <Input
+              type="number"
+              placeholder="30"
+              value={formData.production_value_per_min}
+              onChange={(e) => setFormData({ ...formData, production_value_per_min: e.target.value })}
+              className="w-full text-xs sm:text-sm h-9 sm:h-10"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-6 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+              className="flex-1 text-xs sm:text-sm h-9 sm:h-10"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="flex-1 text-xs sm:text-sm h-9 sm:h-10"
+            >
+              {loading ? 'Saving...' : 'Save Machine'}
+            </Button>
+          </div>
+        </form>
+      </Dialog.Content>
     </Dialog.Root>
   );
 };
 
-MachineForm.propTypes = { open: PropTypes.bool, onOpenChange: PropTypes.func, editMachine: PropTypes.object, onSuccess: PropTypes.func };
+MachineForm.propTypes = {
+  open: PropTypes.bool,
+  onOpenChange: PropTypes.func,
+  editMachine: PropTypes.object,
+  onSuccess: PropTypes.func
+};
 
+// --- Main Machines Component ---
 const Machines = () => {
   const [viewMode, setViewMode] = useState('list');
   const [machines, setMachines] = useState([]);
@@ -139,18 +272,21 @@ const Machines = () => {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({ search: '', status: 'all' });
-  
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
   // Modal States
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [editingMachine, setEditingMachine] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-  
+
   const { toast } = useToast();
   const pageSize = 50;
 
-  useEffect(() => { loadData(); }, [page, filters]);
+  useEffect(() => {
+    loadData();
+  }, [page, filters]);
 
   const loadData = async () => {
     setLoading(true);
@@ -159,7 +295,11 @@ const Machines = () => {
       setMachines(data || []);
       setTotal(count || 0);
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to load machines" });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load machines"
+      });
     } finally {
       setLoading(false);
     }
@@ -169,10 +309,17 @@ const Machines = () => {
     if (!deleteId) return;
     try {
       await dbService.deleteMachine(deleteId);
-      toast({ title: "Deleted", description: "Machine removed" });
+      toast({
+        title: "Deleted",
+        description: "Machine removed"
+      });
       loadData();
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Delete failed" });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Delete failed"
+      });
     } finally {
       setDeleteId(null);
     }
@@ -187,7 +334,7 @@ const Machines = () => {
     setEditingMachine(machine);
     setFormOpen(true);
   };
-  
+
   const openDetails = (machine) => {
     setSelectedMachine(machine);
     setDetailsOpen(true);
@@ -195,103 +342,343 @@ const Machines = () => {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-           <h1 className="text-3xl font-bold text-slate-800">Machine Registry</h1>
-           <div className="flex gap-2">
-              <Button variant="ghost" onClick={loadData}><RefreshCw className="w-4 h-4" /></Button>
-              <div className="bg-white border rounded p-1 flex">
-                 <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-slate-100 text-teal-700' : 'text-slate-400'}`}><List className="w-4 h-4" /></button>
-                 <button onClick={() => setViewMode('map')} className={`p-2 rounded ${viewMode === 'map' ? 'bg-slate-100 text-teal-700' : 'text-slate-400'}`}><Map className="w-4 h-4" /></button>
+      <div className="min-h-screen bg-slate-50 p-2 sm:p-4 lg:p-6">
+        {/* Header */}
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Machine Registry</h1>
+          <p className="text-xs sm:text-sm text-slate-600">Create, manage, and monitor all machines</p>
+        </div>
+
+        {/* Controls Card - Responsive */}
+        <Card className="mb-4 sm:mb-6">
+          <CardHeader className="pb-3 sm:pb-4">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base sm:text-lg">Controls</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className="md:hidden"
+              >
+                {showMobileFilters ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardContent className={`${showMobileFilters ? 'block' : 'hidden'} md:block space-y-3 sm:space-y-0 sm:flex sm:gap-3 sm:flex-wrap`}>
+            {/* Search Input */}
+            <div className="flex-1 min-w-full sm:min-w-[250px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search machines..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  className="pl-9 w-full text-xs sm:text-sm h-9 sm:h-10"
+                />
               </div>
-              <Button onClick={openCreate} className="bg-teal-600 hover:bg-teal-700"><Plus className="w-4 h-4 mr-2" /> Add Machine</Button>
-           </div>
-        </div>
+            </div>
 
-        <div className="bg-white p-4 rounded-xl shadow-sm border flex gap-4">
-           <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input className="w-full pl-9 pr-4 py-2 border rounded bg-white" placeholder="Search machines..." value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} />
-           </div>
-           <select className="p-2 border rounded bg-white" value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})}>
-              <option value="all">All Status</option>
-              <option value="Running">Running</option>
-              <option value="Down">Down</option>
-           </select>
-        </div>
+            {/* Status Filter */}
+            <div className="flex-1 min-w-full sm:min-w-[150px]">
+              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                <SelectTrigger className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Running">Running</SelectItem>
+                  <SelectItem value="Down">Down</SelectItem>
+                  <SelectItem value="Maintenance">Maintenance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        {loading ? <LoadingSpinner /> : (
-           viewMode === 'list' ? (
-             <div className="bg-white rounded-xl shadow border overflow-hidden">
-                <table className="w-full text-sm text-left">
-                   <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
-                      <tr>
-                         <th className="p-4">Code</th>
-                         <th className="p-4">Name</th>
-                         <th className="p-4">Location</th>
-                         <th className="p-4 text-right">Total Maint. Cost</th>
-                         <th className="p-4">Status</th>
-                         <th className="p-4 text-right">Actions</th>
+            {/* Action Buttons */}
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm h-9 sm:h-10"
+              >
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">List</span>
+              </Button>
+              <Button
+                variant={viewMode === 'map' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('map')}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm h-9 sm:h-10"
+              >
+                <Map className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Map</span>
+              </Button>
+              <Button
+                onClick={openCreate}
+                size="sm"
+                className="flex-1 sm:flex-initial text-xs sm:text-sm h-9 sm:h-10"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Add</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner />
+          </div>
+        ) : viewMode === 'list' ? (
+          <div className="space-y-4">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-xs sm:text-sm">
+                <thead className="bg-slate-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Code</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Location</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Maint. Cost</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Status</th>
+                    <th className="px-4 py-3 text-center font-semibold text-slate-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {machines.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center text-slate-600">
+                        No machines found.
+                      </td>
+                    </tr>
+                  ) : (
+                    machines.map(m => (
+                      <tr key={m.id} className="border-b hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-slate-900">{m.machine_code}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">{m.name}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {m.building?.name || '-'} / {m.warehouse?.name || '-'}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          {formatCurrency(m.total_maintenance_cost || 0)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              m.status === 'Running'
+                                ? 'default'
+                                : m.status === 'Down'
+                                ? 'destructive'
+                                : 'secondary'
+                            }
+                            className="text-xs"
+                          >
+                            {m.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex gap-1 justify-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openDetails(m)}
+                              title="View Details"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openEdit(m)}
+                              title="Edit"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDeleteId(m.id)}
+                              title="Delete"
+                              className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
-                   </thead>
-                   <tbody className="divide-y">
-                      {machines.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No machines found.</td></tr> : 
-                        machines.map(m => (
-                          <tr key={m.id} className="hover:bg-slate-50 group">
-                             <td className="p-4 font-mono text-slate-600">{m.machine_code}</td>
-                             <td className="p-4 font-medium text-slate-800">{m.name}</td>
-                             <td className="p-4 text-slate-500">{m.building?.name || '-'} / {m.warehouse?.name || '-'}</td>
-                             <td className="p-4 text-right font-bold text-slate-700">{formatCurrency(m.total_maintenance_cost || 0)} </td>
-                             <td className="p-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${m.status === 'Running' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                   {m.status}
-                                </span>
-                             </td>
-                             <td className="p-4 text-right flex justify-end gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => openDetails(m)} title="View Details">
-                                   <Eye className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(m)} title="Edit">
-                                   <Edit className="w-4 h-4 text-slate-400 group-hover:text-teal-600" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setDeleteId(m.id)} title="Delete">
-                                   <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-red-600" />
-                                </Button>
-                             </td>
-                          </tr>
-                        ))
-                      }
-                   </tbody>
-                </table>
-                <div className="p-4 border-t bg-slate-50 flex justify-between items-center text-sm">
-                   <span>Page {page + 1}</span>
-                   <div className="flex gap-2">
-                      <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
-                      <Button variant="outline" size="sm" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
-                   </div>
-                </div>
-             </div>
-           ) : (
-             <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-dashed">Map View Placeholder</div>
-           )
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+              {machines.length === 0 ? (
+                <Card className="text-center py-8">
+                  <p className="text-slate-600 font-medium text-sm">No machines found.</p>
+                </Card>
+              ) : (
+                machines.map(m => (
+                  <Card key={m.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-sm font-bold text-slate-900">{m.name}</h3>
+                          <p className="text-xs text-slate-600 font-mono">{m.machine_code}</p>
+                        </div>
+                        <Badge
+                          variant={
+                            m.status === 'Running'
+                              ? 'default'
+                              : m.status === 'Down'
+                              ? 'destructive'
+                              : 'secondary'
+                          }
+                          className="text-xs flex-shrink-0"
+                        >
+                          {m.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-slate-600 font-medium">Location</p>
+                          <p className="text-slate-900 font-semibold">
+                            {m.building?.name || '-'} / {m.warehouse?.name || '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-600 font-medium">Maint. Cost</p>
+                          <p className="text-slate-900 font-semibold">
+                            {formatCurrency(m.total_maintenance_cost || 0)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-3 border-t">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDetails(m)}
+                          className="flex-1 text-xs h-8"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEdit(m)}
+                          className="flex-1 text-xs h-8"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setDeleteId(m.id)}
+                          className="flex-1 text-xs h-8"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+
+            {/* Pagination - Responsive */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between pt-4 border-t">
+              <p className="text-xs sm:text-sm text-slate-600 font-medium">
+                Page {page + 1} of {Math.ceil(total / pageSize) || 1} ({total} total)
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page === 0}
+                  className="text-xs h-9 sm:h-10"
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page * pageSize + machines.length >= total}
+                  className="text-xs h-9 sm:h-10"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Card className="p-8 sm:p-12 text-center">
+            <Map className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <p className="text-slate-600 font-medium">Map View Placeholder</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2">
+              Interactive map view coming soon
+            </p>
+          </Card>
         )}
 
-        <MachineForm open={formOpen} onOpenChange={setFormOpen} editMachine={editingMachine} onSuccess={loadData} />
-        
-        <MachineDetailsModal open={detailsOpen} onOpenChange={setDetailsOpen} machine={selectedMachine} />
+        {/* Dialogs */}
+        <MachineForm
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          editMachine={editingMachine}
+          onSuccess={loadData}
+        />
 
-        <AlertDialog.Root open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
-          <AlertDialog.Portal>
-            <AlertDialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-            <AlertDialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-md translate-x-[-50%] translate-y-[-50%] bg-white p-6 rounded-lg shadow-xl">
+        {selectedMachine && (
+          <MachineDetailsModal
+            machine={selectedMachine}
+            open={detailsOpen}
+            onOpenChange={setDetailsOpen}
+          />
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog.Root open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+          <AlertDialog.Content className="max-w-sm p-6 rounded-lg">
+            <AlertDialog.Header className="mb-4">
               <AlertDialog.Title className="text-lg font-bold">Confirm Delete</AlertDialog.Title>
-              <AlertDialog.Description className="my-4 text-slate-600">Permanently remove this machine? This will also remove all associated history.</AlertDialog.Description>
-              <div className="flex justify-end gap-3">
-                 <AlertDialog.Cancel asChild><Button variant="outline">Cancel</Button></AlertDialog.Cancel>
-                 <AlertDialog.Action asChild><Button variant="destructive" onClick={handleDelete}>Delete</Button></AlertDialog.Action>
-              </div>
-            </AlertDialog.Content>
-          </AlertDialog.Portal>
+            </AlertDialog.Header>
+
+            <p className="text-sm text-slate-700 mb-6">
+              Permanently remove this machine? This will also remove all associated history.
+            </p>
+
+            <div className="flex gap-2">
+              <AlertDialog.Cancel asChild>
+                <Button variant="outline" className="flex-1 text-xs sm:text-sm h-9 sm:h-10">
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  className="flex-1 text-xs sm:text-sm h-9 sm:h-10"
+                >
+                  Delete
+                </Button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
         </AlertDialog.Root>
       </div>
     </ErrorBoundary>
