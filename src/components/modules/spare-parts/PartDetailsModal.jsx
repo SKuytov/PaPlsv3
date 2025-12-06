@@ -227,7 +227,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={(newOpen) => !newOpen && onClose()}>
         <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
           
           {/* --- HEADER SECTION --- */}
@@ -247,7 +247,13 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                   </Button>
                )}
             </div>
-
+<PartDetailsModal
+  open={detailsModalOpen}  // ✅ ADD THIS
+  part={selectedPart}
+  onClose={handleCloseDetails}
+  onDeleteRequest={handlePartDelete}
+  onEditRequest={handlePartEdit}
+/>
 
             <div className="relative z-10 p-4 sm:p-6 w-full flex flex-col sm:flex-row gap-4 items-start sm:items-end">
               <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 sm:border-4 border-white shrink-0">
@@ -667,7 +673,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
 
               <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
-                 <Button variant="outline" size="lg" onClick={onClose} className="w-full sm:w-auto bg-white">
+                 <Button variant="outline" size="lg" onClick={() => handlePartClick(part)}  className="w-full sm:w-auto bg-white">
                     <X className="w-4 h-4 mr-2" /> Close Details
                  </Button>
               </div>
