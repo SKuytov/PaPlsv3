@@ -33,7 +33,7 @@ import PartDetailsModal from './spare-parts/PartDetailsModal';
 import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
 
-// --- REORDER MODAL COMPONENT (SUPPLIER GROUPED VIA JUNCTION TABLE) ---
+// --- REORDER MODAL COMPONENT (WITH CORRECT SUPPLIERS TABLE SCHEMA) ---
 const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
@@ -56,6 +56,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
       const partIds = parts.map(p => p.id);
       
       // Query the junction table with supplier details
+      // Using exact columns from suppliers table schema
       const { data, error } = await supabase
         .from('part_supplier_options')
         .select(`
@@ -64,7 +65,18 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
           unit_price,
           lead_time_days,
           is_preferred,
-          supplier:suppliers(id, name, contact_email, phone)
+          supplier:suppliers(
+            id, 
+            name, 
+            contact_person,
+            email,
+            phone,
+            address,
+            is_oem,
+            quality_score,
+            delivery_score,
+            price_stability_score
+          )
         `)
         .in('part_id', partIds);
 
@@ -411,9 +423,6 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                         return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
                       }, 0);
 
-                      // Get supplier contact info from first part
-                      const supplierInfo = supplierParts[0]?.selectedSupplier;
-
                       return (
                         <div key={supplier} className="border border-slate-200 rounded-lg overflow-hidden">
                           {/* Supplier Header */}
@@ -431,7 +440,6 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                                 <h3 className="font-bold text-slate-900 text-lg">{supplier}</h3>
                                 <p className="text-xs text-slate-600">
                                   {supplierParts.length} items • €{supplierTotal.toFixed(2)}
-                                  {supplierInfo?.contact_email && ` • ${supplierInfo.contact_email}`}
                                 </p>
                               </div>
                             </div>
@@ -960,7 +968,7 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal - WITH JUNCTION TABLE SUPPORT */}
+      {/* Reorder Modal - WITH CORRECT SUPPLIERS TABLE SCHEMA */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
