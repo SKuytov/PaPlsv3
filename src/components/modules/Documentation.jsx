@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, LayoutDashboard, Package, Wrench, Truck, ScanLine, 
   QrCode, Users, AlertTriangle, FileText, TrendingUp, Shield, 
   Smartphone, Keyboard, HelpCircle, Printer, FolderOpen, Upload, 
-  Trash2, Download, File, Search, Plus
+  Trash2, Download, File, Search, Plus, ChevronRight, Clock,
+  Zap, AlertCircle, CheckCircle, BarChart3
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area.jsx';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { dbService } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const DocSection = ({ title, icon: Icon, children }) => (
@@ -49,10 +50,26 @@ const Documentation = () => {
   const { toast } = useToast();
   const isGodAdmin = userRole?.name === 'God Admin' || userRole?.name === 'Technical Director';
 
+  // File Repository
   const [documents, setDocuments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [filters, setFilters] = useState({ search: '', category_id: 'all' });
+
+  // Catalogs
+  const [machines, setMachines] = useState([]);
+  const [selectedMachine, setSelectedMachine] = useState(null);
+  const [machineParts, setMachineParts] = useState([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  // Forms
+  const [forms, setForms] = useState([
+    { id: 1, name: 'Downtime Report Form', icon: AlertTriangle, category: 'Operations', description: 'Log machine downtime incidents' },
+    { id: 2, name: 'Part Replacement Form', icon: Wrench, category: 'Maintenance', description: 'Document part installation and removal' },
+    { id: 3, name: 'Order Request Form', icon: Truck, category: 'Procurement', description: 'Request new parts to be ordered' },
+    { id: 4, name: 'Maintenance Schedule', icon: Clock, category: 'Planning', description: 'Preventive maintenance calendar' },
+    { id: 5, name: 'Safety Checklist', icon: CheckCircle, category: 'Safety', description: 'Daily safety inspection form' },
+  ]);
 
   // Upload Modal State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -61,24 +78,56 @@ const Documentation = () => {
 
   useEffect(() => {
     if (activeTab === 'repository') {
-      loadData();
+      loadDocuments();
+    } else if (activeTab === 'catalog') {
+      loadCatalog();
     }
   }, [activeTab, filters]);
 
-  const loadData = async () => {
+  const loadDocuments = async () => {
     setLoadingDocs(true);
     try {
       const [docsRes, catsRes] = await Promise.all([
         dbService.getDocuments(filters),
         dbService.getDocumentCategories()
-      ]);
-      setDocuments(docsRes.data || []);
-      setCategories(catsRes.data || []);
+      ]).catch(err => {
+        console.warn('Document load error:', err);
+        return [{ data: [] }, { data: [] }];
+      });
+      setDocuments(docsRes?.data || []);
+      setCategories(catsRes?.data || []);
     } catch (error) {
       console.error(error);
       toast({ variant: "destructive", title: "Error", description: "Failed to load documents." });
     } finally {
       setLoadingDocs(false);
+    }
+  };
+
+  const loadCatalog = async () => {
+    setLoadingCatalog(true);
+    try {
+      const machinesRes = await dbService.getMachines({}, 0, 100);
+      setMachines(machinesRes?.data || []);
+      if (machinesRes?.data?.length > 0) {
+        setSelectedMachine(machinesRes.data[0]);
+        loadMachineParts(machinesRes.data[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading catalog:', error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to load machines." });
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
+  const loadMachineParts = async (machineId) => {
+    try {
+      const partsRes = await dbService.getSpareParts({ machine_id: machineId }, 0, 100);
+      setMachineParts(partsRes?.data || []);
+    } catch (error) {
+      console.error('Error loading machine parts:', error);
+      setMachineParts([]);
     }
   };
 
@@ -103,7 +152,7 @@ const Documentation = () => {
       toast({ title: "Success", description: "Document uploaded successfully." });
       setIsUploadOpen(false);
       setNewDoc({ name: '', description: '', category_id: '', file: null });
-      loadData();
+      loadDocuments();
     } catch (error) {
       console.error(error);
       toast({ variant: "destructive", title: "Upload Failed", description: error.message });
@@ -118,7 +167,7 @@ const Documentation = () => {
       const { error } = await dbService.deleteDocument(doc.id, doc.file_path);
       if (error) throw error;
       toast({ title: "Deleted", description: "Document removed." });
-      loadData();
+      loadDocuments();
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete document." });
     }
@@ -143,6 +192,8 @@ const Documentation = () => {
 
   const sidebarLinks = [
     { id: 'repository', label: 'File Repository', icon: FolderOpen },
+    { id: 'catalog', label: 'Spare Parts Catalog', icon: Package },
+    { id: 'forms', label: 'Forms Library', icon: FileText },
     { id: 'modules', label: 'Module Guide', icon: LayoutDashboard },
     { id: 'workflows', label: 'Step-by-Step', icon: ScanLine },
     { id: 'roles', label: 'Access & Roles', icon: Shield },
@@ -262,8 +313,145 @@ const Documentation = () => {
           </div>
         )}
 
+        {/* --- SPARE PARTS CATALOG TAB --- */}
+        {activeTab === 'catalog' && (
+          <div className="flex flex-col h-full">
+            <div className="p-6 border-b bg-slate-50/50">
+              <h1 className="text-2xl font-bold text-slate-900">Spare Parts Catalog by Machine</h1>
+              <p className="text-slate-500 mt-1">Browse compatible parts for each machine</p>
+            </div>
+
+            <div className="flex-1 overflow-hidden flex">
+              {/* Machine List */}
+              <div className="w-64 border-r overflow-y-auto bg-slate-50">
+                <div className="p-3 border-b bg-white sticky top-0 z-10">
+                  <p className="text-xs font-semibold text-slate-600 uppercase">Machines ({machines.length})</p>
+                </div>
+                {loadingCatalog ? (
+                  <div className="p-4"><LoadingSpinner size="sm" message="Loading..." /></div>
+                ) : (
+                  <div className="space-y-1 p-2">
+                    {machines.map(machine => (
+                      <button
+                        key={machine.id}
+                        onClick={() => {
+                          setSelectedMachine(machine);
+                          loadMachineParts(machine.id);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                          selectedMachine?.id === machine.id
+                            ? 'bg-teal-100 text-teal-700 font-medium'
+                            : 'text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        <div className="font-medium truncate">{machine.name}</div>
+                        <div className="text-xs opacity-75">{machine.machine_code}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Parts for Selected Machine */}
+              <div className="flex-1 flex flex-col">
+                {selectedMachine ? (
+                  <>
+                    <div className="p-4 border-b bg-white sticky top-0 z-10">
+                      <h2 className="text-lg font-bold text-slate-900">{selectedMachine.name}</h2>
+                      <p className="text-sm text-slate-500">Code: {selectedMachine.machine_code}</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      {loadingCatalog ? (
+                        <LoadingSpinner message="Loading parts..." />
+                      ) : machineParts.length === 0 ? (
+                        <div className="flex items-center justify-center h-64 text-slate-400">
+                          <div className="text-center">
+                            <Package className="w-12 h-12 mx-auto opacity-20 mb-2" />
+                            <p>No parts found for this machine</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {machineParts.map(part => (
+                            <div key={part.id} className="p-4 border rounded-lg bg-white hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <h3 className="font-bold text-slate-900">{part.name}</h3>
+                                  <p className="text-xs text-slate-500">SKU: {part.sku}</p>
+                                </div>
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  part.quantity > part.reorder_point
+                                    ? 'bg-green-100 text-green-700'
+                                    : part.quantity > part.min_quantity
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-red-100 text-red-700'
+                                }`}>
+                                  Stock: {part.quantity}
+                                </span>
+                              </div>
+                              <div className="text-sm text-slate-600 grid grid-cols-2 gap-2">
+                                <div>Category: {part.category}</div>
+                                <div>Price: €{part.unit_price?.toFixed(2) || 'N/A'}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-slate-400">
+                    <div className="text-center">
+                      <Wrench className="w-12 h-12 mx-auto opacity-20 mb-2" />
+                      <p>Select a machine to view parts</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- FORMS LIBRARY TAB --- */}
+        {activeTab === 'forms' && (
+          <div className="flex flex-col h-full">
+            <div className="p-6 border-b bg-slate-50/50">
+              <h1 className="text-2xl font-bold text-slate-900">Forms Library</h1>
+              <p className="text-slate-500 mt-1">Access templates and forms for daily operations</p>
+            </div>
+
+            <ScrollArea className="flex-1 p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl">
+                {forms.map(form => {
+                  const FormIcon = form.icon;
+                  return (
+                    <div key={form.id} className="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer group">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="p-3 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                          <FormIcon className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <Button variant="ghost" size="icon" className="text-slate-400 hover:text-teal-600">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <h3 className="font-bold text-slate-900 mb-1">{form.name}</h3>
+                      <p className="text-xs text-slate-500 mb-3">{form.description}</p>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded">{form.category}</span>
+                        <Button variant="outline" size="sm" className="text-teal-600 hover:text-teal-700">
+                          <Download className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
         {/* --- STATIC DOCUMENTATION --- */}
-        {activeTab !== 'repository' && (
+        {activeTab !== 'repository' && activeTab !== 'catalog' && activeTab !== 'forms' && (
           <div className="h-full overflow-hidden p-8">
             <ScrollArea className="h-full pr-4">
               
@@ -295,11 +483,15 @@ const Documentation = () => {
 
                   <DocSection title="Orders" icon={Truck}>
                     <p className="mb-4">Procurement workflow management. Supports a strict lifecycle:</p>
-                    <div className="flex items-center gap-2 text-sm mb-4 bg-slate-50 p-3 rounded border">
-                      <span className="px-2 py-1 bg-slate-200 rounded">Draft</span> &rarr;
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Pending Approval</span> &rarr;
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">Approved</span> &rarr;
-                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">Ordered</span> &rarr;
+                    <div className="flex items-center gap-2 text-sm mb-4 bg-slate-50 p-3 rounded border flex-wrap">
+                      <span className="px-2 py-1 bg-slate-200 rounded">Draft</span>
+                      <span>→</span>
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Pending Approval</span>
+                      <span>→</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">Approved</span>
+                      <span>→</span>
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">Ordered</span>
+                      <span>→</span>
                       <span className="px-2 py-1 bg-teal-100 text-teal-700 rounded">Received</span>
                     </div>
                   </DocSection>
@@ -314,7 +506,6 @@ const Documentation = () => {
                 </div>
               )}
 
-              {/* ... Workflows, Roles, Tips tabs preserved as before ... */}
               {activeTab === 'workflows' && (
                 <div className="space-y-8 max-w-4xl">
                    <div className="mb-8">
@@ -363,7 +554,6 @@ const Documentation = () => {
                            <li>Upload Documents</li>
                         </ul>
                      </div>
-                     {/* Other roles... */}
                   </div>
                 </div>
               )}
