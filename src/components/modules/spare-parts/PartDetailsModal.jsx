@@ -201,6 +201,20 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
     setTransactionDetailsOpen(true);
   };
 
+  // Handle close - properly close the modal
+  const handleClose = () => {
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    }
+  };
+
+  // Handle open change from Dialog component
+  const handleOpenChange = (isOpen) => {
+    if (!isOpen) {
+      handleClose();
+    }
+  };
+
 
   if (!part) return null;
 
@@ -227,7 +241,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
   <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
     <DialogTitle className="sr-only">{part?.name || 'Part Details'}</DialogTitle>
       <DialogDescription className="sr-only">Part details and information</DialogDescription>    
@@ -657,7 +671,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                                           {tx.transaction_type === 'usage' ? '-' : '+'}{Math.abs(tx.quantity)}
                                        </div>
                                     </div>
-                                 ))}
+                                 ))}     
                               </div>
                            )}
                         </CardContent>
@@ -668,7 +682,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
 
               <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
-                 <Button variant="outline" size="lg" onClick={onClose}  className="w-full sm:w-auto bg-white">
+                 <Button variant="outline" size="lg" onClick={handleClose} className="w-full sm:w-auto bg-white">
                     <X className="w-4 h-4 mr-2" /> Close Details
                  </Button>
               </div>
