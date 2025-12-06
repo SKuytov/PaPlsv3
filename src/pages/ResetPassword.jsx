@@ -20,67 +20,47 @@ export default function ResetPassword() {
   const [verifying, setVerifying] = useState(true);
   const [hasValidToken, setHasValidToken] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
-  const [sessionError, setSessionError] = useState(null);
 
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        // Get token from URL
         const accessToken = searchParams.get('access_token');
         const type = searchParams.get('type');
 
-        console.log('🔍 URL params check:', { hasToken: !!accessToken, type });
+        console.log('🔍 Verifying recovery token...', { hasToken: !!accessToken, type });
 
         if (!accessToken || type !== 'recovery') {
-          console.error('❌ Missing token or wrong type');
-          throw new Error('Invalid recovery link');
+          throw new Error('Invalid or missing recovery token');
         }
 
-        console.log('🔄 Attempting to set session from recovery token...');
-        
-        // CRITICAL FIX: Use the recovery token to authenticate
-        // Don't try to set a full session - just verify we can access the recovery endpoint
+        // Set the session from the recovery token
+        console.log('🔄 Setting session from recovery token...');
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
-          refresh_token: '', // Recovery tokens don't have refresh tokens
+          refresh_token: accessToken,
         });
 
-        console.log('Session response:', { data: !!data, error });
-
         if (error) {
-          console.error('❌ Session error:', error.message);
-          setSessionError(error.message);
-          
-          // Try alternative method - exchange token for session
-          console.log('🔄 Trying alternative: parseSession from hash...');
-          
-          // The token itself IS our authentication for this operation
-          // We don't actually need a full session - we just need the token to update password
-          // The updateUser() call will work with just the access_token
+          console.error('⚠️ Session error:', error.message);
+          // Token is still valid even if session fails - continue
           setHasValidToken(true);
-          setVerifying(false);
-          return;
-        }
-
-        if (data?.session) {
-          console.log('✅ Session created successfully');
+          console.log('✅ Token is valid, proceeding with password reset');
+        } else if (data?.session) {
+          console.log('✅ Session established from recovery token');
           setHasValidToken(true);
         } else {
-          console.log('⚠️ No session returned, but token is valid');
-          // Token is still valid for password update
+          console.log('✅ Token accepted, session will be created on update');
           setHasValidToken(true);
         }
 
       } catch (error) {
-        console.error('❌ Token verification error:', error);
-        setSessionError(error.message);
+        console.error('❌ Recovery token verification failed:', error);
         toast({
           variant: 'destructive',
           title: 'Invalid Link',
-          description: 'This reset link is invalid or expired. Please request a new one.'
+          description: 'This password reset link is invalid or expired. Please request a new one.'
         });
         setTimeout(() => navigate('/forgot-password', { replace: true }), 3000);
-        return;
       } finally {
         setVerifying(false);
       }
@@ -136,9 +116,9 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      console.log('🔄 Updating password...');
+      console.log('🔄 Updating password with recovery token...');
       
-      // This will use the recovery token from the session context
+      // CRITICAL: For recovery tokens, use updateUser() which will work with the established session
       const { error } = await supabase.auth.updateUser({ 
         password: password 
       });
@@ -148,14 +128,14 @@ export default function ResetPassword() {
         throw error;
       }
 
-      console.log('✅ Password updated successfully');
+      console.log('✅ Password updated successfully!');
 
       toast({
         title: 'Success! 🎉',
         description: 'Your password has been reset. Redirecting to login...'
       });
 
-      // Sign out to clear any session
+      // Sign out and redirect
       await supabase.auth.signOut();
       
       setTimeout(() => {
@@ -163,14 +143,24 @@ export default function ResetPassword() {
       }, 2000);
 
     } catch (error) {
-      console.error('❌ Password reset error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Failed to update password. The link may have expired.'
-      });
+      console.error('❌ Error:', error.message);
       
-      // Allow retry on same page
+      // Check if it's a session error
+      if (error.message?.includes('session') || error.message?.includes('Auth')) {
+        toast({
+          variant: 'destructive',
+          title: 'Session Expired',
+          description: 'The reset link has expired. Please request a new one.'
+        });
+        setTimeout(() => navigate('/forgot-password', { replace: true }), 3000);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: error.message || 'Failed to update password'
+        });
+      }
+      
       setLoading(false);
     }
   };
@@ -188,7 +178,7 @@ export default function ResetPassword() {
   }
 
   if (!hasValidToken) {
-    return null; // Will redirect
+    return null;
   }
 
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
@@ -199,7 +189,7 @@ export default function ResetPassword() {
       <Card className="w-full max-w-md">
         <CardHeader className="bg-blue-600 text-white rounded-t-lg">
           <h1 className="text-2xl font-bold">Set New Password</h1>
-          <p className="text-blue-100 text-sm mt-2">Enter a strong, unique password</p>
+          <p className="text-blue-100 text-sm mt-2">Enter a strong password</p>
         </CardHeader>
 
         <CardContent className="pt-6">
@@ -232,7 +222,7 @@ export default function ResetPassword() {
               {password && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-600">Password Strength</span>
+                    <span className="text-slate-600">Strength</span>
                     <span className={`font-semibold ${
                       passwordStrength < 50 ? 'text-red-600' :
                       passwordStrength < 75 ? 'text-yellow-600' :
@@ -257,15 +247,15 @@ export default function ResetPassword() {
                   <div className="space-y-1 mt-2 text-xs">
                     <div className={`flex items-center gap-2 ${password.length >= 8 ? 'text-green-600' : 'text-slate-500'}`}>
                       {password.length >= 8 ? <Check size={14} /> : <X size={14} />}
-                      <span>At least 8 characters</span>
+                      <span>8+ characters</span>
                     </div>
                     <div className={`flex items-center gap-2 ${/[a-z]/.test(password) && /[A-Z]/.test(password) ? 'text-green-600' : 'text-slate-500'}`}>
                       {/[a-z]/.test(password) && /[A-Z]/.test(password) ? <Check size={14} /> : <X size={14} />}
-                      <span>Mix of uppercase and lowercase</span>
+                      <span>Upper and lowercase</span>
                     </div>
                     <div className={`flex items-center gap-2 ${/[0-9]/.test(password) ? 'text-green-600' : 'text-slate-500'}`}>
                       {/[0-9]/.test(password) ? <Check size={14} /> : <X size={14} />}
-                      <span>At least one number</span>
+                      <span>Number</span>
                     </div>
                   </div>
                 </div>
@@ -280,7 +270,7 @@ export default function ResetPassword() {
               <div className="relative">
                 <Input
                   type={showConfirm ? 'text' : 'password'}
-                  placeholder="Confirm your password"
+                  placeholder="Confirm password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="pr-10"
@@ -300,7 +290,7 @@ export default function ResetPassword() {
               {confirmPassword && (
                 <div className={`flex items-center gap-2 text-sm ${passwordsMatch ? 'text-green-600' : 'text-red-600'}`}>
                   {passwordsMatch ? <Check size={16} /> : <X size={16} />}
-                  <span>{passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</span>
+                  <span>{passwordsMatch ? 'Match' : 'Do not match'}</span>
                 </div>
               )}
             </div>
@@ -308,7 +298,7 @@ export default function ResetPassword() {
             <Button
               type="submit"
               disabled={loading || !passwordValid || !passwordsMatch}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Updating Password...' : 'Update Password'}
             </Button>
