@@ -1,4 +1,3 @@
-
 import { supabase } from '@/lib/customSupabaseClient';
 
 // RESILIENCE: Standardized Error Class
@@ -30,9 +29,9 @@ const withTimeout = (promise, ms = 15000) => {
   return Promise.race([
     promise,
     new Promise((_, reject) => 
-      setTimeout(() => reject(new AppError('Request timed out', 'TIMEOUT')), ms)
-    )
-  ]);
+      setTimeout(() => reject(new AppError('Request timed out', 'TIMEOUT')), ms), ms)
+    ]
+  );
 };
 
 // RESILIENCE: Centralized Request Handler
@@ -455,6 +454,32 @@ export const dbService = {
       maintenance: { cost: totalDowntimeCost, minutes: totalMinutes }
     };
   },
+  
+  // NEW: Get spend breakdown by category
+  async getSpendByCategory() {
+    try {
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select('total_price, part:spare_parts(category)');
+      
+      if (!orderItems || orderItems.length === 0) {
+        return {};
+      }
+      
+      // Group by category and sum
+      const categorySpend = {};
+      orderItems.forEach(item => {
+        const category = item.part?.category || 'Uncategorized';
+        categorySpend[category] = (categorySpend[category] || 0) + (item.total_price || 0);
+      });
+      
+      return categorySpend;
+    } catch (error) {
+      console.error('Error getting spend by category:', error);
+      return {};
+    }
+  },
+  
   async getSavingsAnalysisData() {
     const { data: parts } = await supabase.from('spare_parts').select(`id, name, part_number, category, current_quantity, specifications, supplier_options:part_supplier_options(id, unit_price, lead_time_days, is_preferred, last_price_update, supplier:suppliers(id, name, is_oem, quality_score))`);
     const { data: orderItems } = await supabase.from('order_items').select(`quantity, unit_price, total_price, created_at, part_id, supplier:suppliers(id, name, is_oem)`);
