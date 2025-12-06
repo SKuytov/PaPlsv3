@@ -137,17 +137,14 @@ const LoginPage = () => {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4 bg-slate-50/50 border-t p-6">
-          <div className="text-xs text-center text-slate-500">
-            <p className="font-semibold mb-2">Demo Credentials</p>
-            <div className="grid grid-cols-1 gap-1">
-              <code className="bg-slate-100 px-2 py-1 rounded border">
-                admin@hostinger.com
-              </code>
-              <code className="bg-slate-100 px-2 py-1 rounded border">
-                admin123
-              </code>
-            </div>
-          </div>
+           <div className="text-xs text-center text-slate-500">
+             <p className="font-semibold mb-2">Reset Password</p>
+             <div className="grid grid-cols-1 gap-1">
+               <code className="bg-slate-100 px-2 py-1 rounded border"><Link to="/forgot-password" className="text-blue-600 hover:underline text-sm">
+  Forgot password?
+</Link></code>
+             </div>
+           </div>
         </CardFooter>
       </Card>
     </div>
