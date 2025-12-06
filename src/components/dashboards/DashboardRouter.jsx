@@ -5,7 +5,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 // Import all dashboard components
 import ExecutiveOverview from './ExecutiveOverview';
 import CEODashboard from './CEODashboard';
-import BuildingTechDashboard from './BuildingTechDashboard';
+import TechnicianDashboard from './TechnicianDashboard';
 import TechnicalDashboard from './TechnicalDashboard';
 
 const DashboardRouter = () => {
@@ -41,31 +41,35 @@ const DashboardRouter = () => {
       );
     }
 
-    // Executive roles - Full overview dashboards
+    // EXECUTIVE DASHBOARDS
+    // CEO, God Admin, Technical Director → Full Executive Overview
     if (['CEO', 'God Admin', 'Technical Director'].includes(userRole)) {
       return <ExecutiveOverview />;
     }
 
-    // Head Technician - Executive focused but with operations
+    // Head Technician → Executive-focused with operations metrics
     if (userRole === 'Head Technician') {
       return <CEODashboard />;
     }
 
-    // Building Technicians - Building-specific dashboard
-    if (
-      userRole.includes('Building') &&
-      userRole.includes('Technician')
-    ) {
-      return <BuildingTechDashboard />;
-    }
-
-    // Maintenance Organizer - Technical dashboard with focus on orders and inventory
+    // MAINTENANCE ORGANIZER
+    // Focus on inventory management and order coordination
     if (userRole === 'Maintenance Organizer') {
       return <TechnicalDashboard />;
     }
 
-    // Default fallback
-    return <BuildingTechDashboard />;
+    // BUILDING TECHNICIANS
+    // All variants: Building 1-5 Technician
+    // Shows machines in their assigned building and their tasks
+    if (
+      userRole.includes('Building') &&
+      userRole.includes('Technician')
+    ) {
+      return <TechnicianDashboard />;
+    }
+
+    // Default fallback for any other role
+    return <TechnicianDashboard />;
   };
 
   return renderDashboard();
