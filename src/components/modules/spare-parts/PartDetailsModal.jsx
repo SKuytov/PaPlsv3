@@ -24,7 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import TransactionDetailsModal from '@/components/modules/machines/TransactionDetailsModal';
 
 
-const PartDetailsModal = ({ part: initialPart, onClose, onDeleteRequest, onEditRequest }) => {
+const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, onEditRequest }) => {
   const [part, setPart] = useState(initialPart);
   const [activeTab, setActiveTab] = useState('info');
   const [history, setHistory] = useState([]);
