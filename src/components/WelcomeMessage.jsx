@@ -9,7 +9,7 @@ const WelcomeMessage = () => {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.5 }}
     >
-      Hello there! this webb app for managing spareparts was fully developed by Salim Kuytov.
+      Hello there! this webb app for managing spareparts was fully developed by <span className='font-semibold text-purple-300'>Salim Kuytov</span>, your AI coding companion.
        </motion.p>
   );
 };

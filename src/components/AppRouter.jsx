@@ -20,28 +20,33 @@ import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import WelcomeMessage from '@/components/WelcomeMessage';
 
-// ✅ IMPORT NEW QUOTE PAGES
-import QuotesPage from '@/pages/QuotesPage';
-
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
   const { user, loading, userRole } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
+  
   if (loading) return <LoadingScreen />;
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!user) return <Navigate to="/login" />;
+  
   return (
-    <div className="flex h-screen bg-slate-50">
-      <Sidebar mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopNavigation onMenuClick={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
-        <main className="flex-1 overflow-auto">
-          <WelcomeMessage />
-          {children}
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <Sidebar 
+        mobileOpen={mobileSidebarOpen} 
+        setMobileOpen={setMobileSidebarOpen} 
+      />
+      
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopNavigation 
+          onMenuClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          userName={user.user_metadata?.full_name || user.email?.split('@')[0]}
+          userRole={userRole?.name || 'User'}
+        />
+        
+        <main className="flex-1 overflow-auto p-4 md:p-6 relative scroll-smooth">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <WelcomeMessage />
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -49,130 +54,90 @@ const PrivateRoute = ({ children }) => {
 };
 
 const AppRouter = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  const { userRole } = useAuth();
+  
+  // Helper to determine which dashboard to show at root
+  const HomeDashboard = () => {
+    if (userRole?.name === 'God Admin') {
+      return <ExecutiveOverview />;
+    }
+    return <Dashboard />;
+  };
 
   return (
     <Routes>
-      {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
+   
       <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
+<Route path="/reset-password" element={<ResetPassword />} />
+      
+      <Route path="/" element={
+        <PrivateRoute>
+          <HomeDashboard />
+        </PrivateRoute>
+      } />
+      
+      {/* Explicit route for the executive dashboard if needed directly */}
+      <Route path="/executive" element={
+        <PrivateRoute>
+           <ExecutiveOverview />
+        </PrivateRoute>
+      } />
+      
+      <Route path="/parts" element={
+        <PrivateRoute>
+          <SpareParts />
+        </PrivateRoute>
+      } />
 
-      {/* Private Routes */}
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Dashboard />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/machines" element={
+        <PrivateRoute>
+          <Machines />
+        </PrivateRoute>
+      } />
 
-      <Route
-        path="/dashboard"
-        element={
-          <PrivateRoute>
-            <ExecutiveOverview />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/suppliers" element={
+        <PrivateRoute>
+          <Suppliers />
+        </PrivateRoute>
+      } />
 
-      <Route
-        path="/parts"
-        element={
-          <PrivateRoute>
-            <SpareParts />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/savings" element={
+        <PrivateRoute>
+          <SupplierSavings />
+        </PrivateRoute>
+      } />
 
-      <Route
-        path="/machines"
-        element={
-          <PrivateRoute>
-            <Machines />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/orders" element={
+        <PrivateRoute>
+          <Orders />
+        </PrivateRoute>
+      } />
 
-      <Route
-        path="/scanner"
-        element={
-          <PrivateRoute>
-            <Scanner />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/reports" element={
+        <PrivateRoute>
+          <Reports />
+        </PrivateRoute>
+      } />
+      
+      <Route path="/downtime" element={
+        <PrivateRoute>
+          <Downtime />
+        </PrivateRoute>
+      } />
 
-      {/* ✅ NEW QUOTES ROUTE */}
-      <Route
-        path="/quotes"
-        element={
-          <PrivateRoute>
-            <QuotesPage />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/docs" element={
+        <PrivateRoute>
+          <Documentation />
+        </PrivateRoute>
+      } />
+      
+      <Route path="/scanner" element={
+        <PrivateRoute>
+          <Scanner />
+        </PrivateRoute>
+      } />
 
-      <Route
-        path="/suppliers"
-        element={
-          <PrivateRoute>
-            <Suppliers />
-          </PrivateRoute>
-        }
-      />
-
-      <Route
-        path="/orders"
-        element={
-          <PrivateRoute>
-            <Orders />
-          </PrivateRoute>
-        }
-      />
-
-      <Route
-        path="/reports"
-        element={
-          <PrivateRoute>
-            <Reports />
-          </PrivateRoute>
-        }
-      />
-
-      <Route
-        path="/downtime"
-        element={
-          <PrivateRoute>
-            <Downtime />
-          </PrivateRoute>
-        }
-      />
-
-      <Route
-        path="/savings"
-        element={
-          <PrivateRoute>
-            <SupplierSavings />
-          </PrivateRoute>
-        }
-      />
-
-      <Route
-        path="/docs"
-        element={
-          <PrivateRoute>
-            <Documentation />
-          </PrivateRoute>
-        }
-      />
-
-      {/* Catch all - redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
