@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,7 +77,7 @@ const LoginPage = () => {
             Welcome Back
           </CardTitle>
           <CardDescription>
-            Sign in to access the Warehouse Management System
+            Sign in to access the PartPulse v3
           </CardDescription>
         </CardHeader>
 
@@ -137,16 +137,16 @@ const LoginPage = () => {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4 bg-slate-50/50 border-t p-6">
-          <div className="text-xs text-center text-slate-500">
-            <p className="font-semibold mb-2">Demo Credentials</p>
-            <div className="grid grid-cols-1 gap-1">
-              <code className="bg-slate-100 px-2 py-1 rounded border">
-                admin@hostinger.com
-              </code>
-              <code className="bg-slate-100 px-2 py-1 rounded border">
-                admin123
-              </code>
-            </div>
+          <div className="text-center text-sm">
+            <p className="text-slate-600">
+              Forgot your password?{' '}
+              <Link 
+                to="/forgot-password" 
+                className="text-teal-600 hover:text-teal-700 font-semibold transition-colors"
+              >
+                Reset it here
+              </Link>
+            </p>
           </div>
         </CardFooter>
 
