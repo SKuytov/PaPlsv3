@@ -32,9 +32,10 @@ import PartCard from './spare-parts/PartCard';
 import PartDetailsModal from './spare-parts/PartDetailsModal';
 import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
+import QuoteRequestModal from '@/components/modules/quotes/QuoteRequestModal';
 
 // --- REORDER MODAL COMPONENT (WITH CORRECT SUPPLIERS TABLE SCHEMA) ---
-const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onRequestQuote }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
@@ -510,6 +511,18 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                                             onChange={() => togglePartSelection(part.id)}
                                             className="rounded"
                                           />
+                                          <td className="p-2">
+  {/* ✅ REQUEST QUOTE BUTTON (NEW) */}
+  <Button
+    size="sm"
+    onClick={() => {
+      onRequestQuote(part, part.selectedSupplier);
+    }}
+    className="bg-blue-600 hover:bg-blue-700"
+  >
+    Request Quote
+  </Button>
+</td>
                                         </td>
                                         <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
                                         <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
@@ -611,6 +624,11 @@ const SpareParts = () => {
   const { toast } = useToast();
   const { userRole } = useAuth();
 
+// ✅ NEW STATES FOR QUOTE MODAL (NEW)
+const [showQuoteModal, setShowQuoteModal] = useState(false);
+const [selectedPartForQuote, setSelectedPartForQuote] = useState(null);
+const [selectedSupplierForQuote, setSelectedSupplierForQuote] = useState(null);
+
   const pageSize = 12;
   const [deleteId, setDeleteId] = useState(null);
   const isGodAdmin = userRole?.name === 'God Admin';
@@ -708,6 +726,13 @@ const SpareParts = () => {
       });
       return;
     }
+
+  // ✅ HANDLE REQUEST QUOTE (NEW)
+const handleRequestQuote = (part, supplier) => {
+  setSelectedPartForQuote(part);
+  setSelectedSupplierForQuote(supplier);
+  setShowQuoteModal(true);
+};
 
     try {
       const { error } = await dbService.deletePart(deleteId);
@@ -921,6 +946,21 @@ const SpareParts = () => {
             </div>
           </>
         )}
+
+        {/* ✅ QUOTE REQUEST MODAL (NEW) */}
+      <QuoteRequestModal
+        open={showQuoteModal}
+        onOpenChange={setShowQuoteModal}
+        part={selectedPartForQuote}
+        supplier={selectedSupplierForQuote}
+        onSuccess={() => {
+          toast({
+            title: "Quote Request Created!",
+            description: "Check your quote dashboard to track it"
+          });
+          setShowQuoteModal(false);
+        }}
+      />
       </div>
 
       {/* Dialogs */}
@@ -974,6 +1014,7 @@ const SpareParts = () => {
         onOpenChange={setShowReorderModal}
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
         onPartClick={handleReorderPartClick}
+        onRequestQuote={handleRequestQuote}
       />
     </>
   );
