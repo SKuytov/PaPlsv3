@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=1000";
+const FALLBACK_IMAGE = "http://skuytov.eu/f1f1f1f2/FallBack_Placeholder.png";
 
 /**
  * Image component that handles loading errors gracefully by showing a fallback.
