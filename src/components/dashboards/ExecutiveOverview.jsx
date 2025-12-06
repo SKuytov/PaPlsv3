@@ -91,9 +91,8 @@ const ExecutiveOverview = () => {
     setLoading(true);
     setError(null);
     try {
-      const [statsData, categorySpend, transactions, machineData] = await Promise.all([
+      const [statsData, transactions, machineData] = await Promise.all([
         dbService.getDashboardStats('month'),
-        dbService.getSpendByCategory(),
         dbService.getRecentTransactions(20),
         dbService.getMachines({}, 0, 1000),
       ]).catch(err => {
@@ -128,17 +127,25 @@ const ExecutiveOverview = () => {
         });
       }
 
-      // Process Category Spend
-      if (categorySpend && typeof categorySpend === 'object') {
-        const categoryData = Object.entries(categorySpend)
-          .map(([name, value]) => ({
-            name: name === 'null' ? 'Uncategorized' : name,
-            value: parseFloat(value) || 0,
-          }))
-          .sort((a, b) => b.value - a.value)
-          .filter(item => item.value > 0)
-          .slice(0, 8);
-        setChartData(prev => ({ ...prev, categorySpend: categoryData }));
+      // Process Category Spend - with proper error handling
+      try {
+        const categorySpend = await dbService.getSpendByCategory();
+        if (categorySpend && typeof categorySpend === 'object') {
+          const categoryData = Object.entries(categorySpend)
+            .map(([name, value]) => ({
+              name: name === 'null' ? 'Uncategorized' : name,
+              value: parseFloat(value) || 0,
+            }))
+            .sort((a, b) => b.value - a.value)
+            .filter(item => item.value > 0)
+            .slice(0, 8);
+          setChartData(prev => ({ ...prev, categorySpend: categoryData }));
+        } else {
+          setChartData(prev => ({ ...prev, categorySpend: [] }));
+        }
+      } catch (categoryError) {
+        console.warn('Could not load category spend data:', categoryError);
+        setChartData(prev => ({ ...prev, categorySpend: [] }));
       }
 
       // Process Top Transactions
@@ -352,12 +359,14 @@ const ExecutiveOverview = () => {
                     <div className="h-full flex items-center justify-center text-slate-500">No data available</div>
                   )}
                   {/* Center Text */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
-                    <div className="text-center">
-                      <span className="text-2xl font-bold text-slate-800">{chartData.categorySpend.length}</span>
-                      <p className="text-xs text-slate-500 uppercase">Categories</p>
+                  {chartData.categorySpend.length > 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
+                      <div className="text-center">
+                        <span className="text-2xl font-bold text-slate-800">{chartData.categorySpend.length}</span>
+                        <p className="text-xs text-slate-500 uppercase">Categories</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
