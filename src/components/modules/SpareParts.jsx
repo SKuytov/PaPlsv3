@@ -33,64 +33,141 @@ import PartDetailsModal from './spare-parts/PartDetailsModal';
 import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
 
-// --- REORDER MODAL COMPONENT (SUPPLIER GROUPED) ---
+// --- REORDER MODAL COMPONENT (SUPPLIER GROUPED VIA JUNCTION TABLE) ---
 const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
+  const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const { toast } = useToast();
 
+  // Fetch supplier data for all parts
   useEffect(() => {
-    if (open) {
-      const needsReorder = parts.filter(p =>
-        p.current_quantity <= p.reorder_point || getStockStatus(p.current_quantity, p.min_stock_level, p.reorder_point) === 'low'
-      );
-      setSelectedParts(needsReorder.map(p => p.id));
-      // Expand all supplier groups by default
-      const suppliers = {};
-      needsReorder.forEach(p => {
-        const supplierName = p.supplier_name || 'No Supplier';
-        suppliers[supplierName] = true;
-      });
-      setExpandedSuppliers(suppliers);
+    if (open && parts.length > 0) {
+      loadPartsWithSuppliers();
     }
   }, [open, parts]);
 
-  // Group parts by supplier
+  const loadPartsWithSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      // Get all part IDs
+      const partIds = parts.map(p => p.id);
+      
+      // Query the junction table with supplier details
+      const { data, error } = await supabase
+        .from('part_supplier_options')
+        .select(`
+          id,
+          part_id,
+          unit_price,
+          lead_time_days,
+          is_preferred,
+          supplier:suppliers(id, name, contact_email, phone)
+        `)
+        .in('part_id', partIds);
+
+      if (error) throw error;
+
+      // Map suppliers to parts
+      const supplierMap = {};
+      if (data) {
+        data.forEach(option => {
+          if (!supplierMap[option.part_id]) {
+            supplierMap[option.part_id] = [];
+          }
+          supplierMap[option.part_id].push({
+            ...option.supplier,
+            unit_price: option.unit_price,
+            is_preferred: option.is_preferred,
+            lead_time_days: option.lead_time_days
+          });
+        });
+      }
+
+      // Merge supplier data with parts
+      const enrichedParts = parts.map(part => ({
+        ...part,
+        suppliers: supplierMap[part.id] || []
+      }));
+
+      setPartsWithSuppliers(enrichedParts);
+
+      // Pre-select all parts
+      setSelectedParts(enrichedParts.map(p => p.id));
+
+      // Expand all supplier groups by default
+      const suppliers = {};
+      enrichedParts.forEach(p => {
+        p.suppliers.forEach(s => {
+          suppliers[s.name] = true;
+        });
+      });
+      setExpandedSuppliers(suppliers);
+
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load supplier information"
+      });
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
+  // Group parts by supplier (preferred supplier for each part)
   const groupedBySupplier = () => {
     const groups = {};
-    const reorderParts = parts.filter(p => selectedParts.includes(p.id));
+    const reorderParts = partsWithSuppliers.filter(p => selectedParts.includes(p.id));
     
-    reorderParts.forEach(p => {
-      const supplierName = p.supplier_name || 'No Supplier';
+    reorderParts.forEach(part => {
+      // Get preferred supplier or first supplier
+      let preferredSupplier = part.suppliers.find(s => s.is_preferred);
+      if (!preferredSupplier && part.suppliers.length > 0) {
+        preferredSupplier = part.suppliers[0];
+      }
+
+      const supplierName = preferredSupplier?.name || 'No Supplier';
       if (!groups[supplierName]) {
         groups[supplierName] = [];
       }
-      groups[supplierName].push(p);
+      groups[supplierName].push({
+        ...part,
+        selectedSupplier: preferredSupplier
+      });
     });
 
     return groups;
   };
 
   const getReorderParts = () => {
-    return parts.filter(p => selectedParts.includes(p.id));
+    return partsWithSuppliers.filter(p => selectedParts.includes(p.id));
   };
 
   const generateTableFormat = (supplier = null) => {
     let reorderParts = getReorderParts();
     if (supplier) {
-      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
     }
 
-    const rows = reorderParts.map(p => [
-      p.part_number || '-',
-      p.name,
-      p.category || '-',
-      p.current_quantity,
-      p.reorder_point,
-      Math.max(0, p.reorder_point - p.current_quantity),
-      p.unit_cost || '0.00'
-    ]);
+    const rows = reorderParts.map(p => {
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return [
+        p.part_number || '-',
+        p.name,
+        p.category || '-',
+        p.current_quantity,
+        p.reorder_point,
+        Math.max(0, p.reorder_point - p.current_quantity),
+        preferred?.unit_price || p.unit_cost || '0.00'
+      ];
+    });
 
     return {
       header: ['Part Number', 'Name', 'Category', 'Current Qty', 'Reorder Point', 'Qty Needed', 'Unit Cost'],
@@ -110,11 +187,15 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const generateList = (supplier = null) => {
     let reorderParts = getReorderParts();
     if (supplier) {
-      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
     }
     return reorderParts.map(p => {
       const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
-      return `${p.part_number || '-'} | ${p.name} | Qty: ${qtyNeeded} | Unit Cost: €${(p.unit_cost || 0).toFixed(2)}`;
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return `${p.part_number || '-'} | ${p.name} | Qty: ${qtyNeeded} | Unit Cost: €${(preferred?.unit_price || p.unit_cost || 0).toFixed(2)}`;
     }).join('\n');
   };
 
@@ -122,11 +203,15 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
     const { header, rows } = generateTableFormat(supplier);
     let reorderParts = getReorderParts();
     if (supplier) {
-      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
     }
     const total = reorderParts.reduce((sum, p) => {
       const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
-      return sum + (qtyNeeded * (p.unit_cost || 0));
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
     }, 0);
 
     let html = `
@@ -241,7 +326,8 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const reorderParts = getReorderParts();
   const totalEstimatedCost = reorderParts.reduce((sum, p) => {
     const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
-    return sum + (qtyNeeded * (p.unit_cost || 0));
+    const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+    return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
   }, 0);
 
   return (
@@ -262,227 +348,242 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
               </Dialog.Close>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-teal-600">{reorderParts.length}</p>
-                </CardContent>
-              </Card>
+            {loadingSuppliers ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner />
+              </div>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-teal-600">{reorderParts.length}</p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-slate-600">Total Quantity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-900">
-                    {reorderParts.reduce((sum, p) => sum + Math.max(0, p.reorder_point - p.current_quantity), 0)}
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Total Quantity</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-slate-900">
+                        {reorderParts.reduce((sum, p) => sum + Math.max(0, p.reorder_point - p.current_quantity), 0)}
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-slate-600">Suppliers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-900">
-                    {Object.keys(groupedParts).length}
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Suppliers</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-slate-900">
+                        {Object.keys(groupedParts).length}
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="border-2 border-teal-500">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-slate-600">Est. Cost</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-teal-600">€{totalEstimatedCost.toFixed(2)}</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Suppliers Grouped Items */}
-            <div className="space-y-4 mb-6">
-              {Object.entries(groupedParts).length === 0 ? (
-                <div className="text-center p-8 bg-slate-50 rounded-lg">
-                  <p className="text-slate-600">No items to reorder</p>
+                  <Card className="border-2 border-teal-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Est. Cost</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-teal-600">€{totalEstimatedCost.toFixed(2)}</p>
+                    </CardContent>
+                  </Card>
                 </div>
-              ) : (
-                Object.entries(groupedParts).map(([supplier, supplierParts]) => {
-                  const supplierTotal = supplierParts.reduce((sum, p) => {
-                    const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
-                    return sum + (qtyNeeded * (p.unit_cost || 0));
-                  }, 0);
 
-                  return (
-                    <div key={supplier} className="border border-slate-200 rounded-lg overflow-hidden">
-                      {/* Supplier Header */}
-                      <button
-                        onClick={() => toggleSupplierExpanded(supplier)}
-                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-teal-50 to-teal-50 hover:from-teal-100 hover:to-teal-100 transition-colors"
-                      >
-                        <div className="flex items-center gap-3 flex-1 text-left">
-                          {expandedSuppliers[supplier] ? (
-                            <ChevronUp className="h-5 w-5 text-teal-600" />
-                          ) : (
-                            <ChevronDown className="h-5 w-5 text-teal-600" />
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-bold text-slate-900 text-lg">{supplier}</h3>
-                            <p className="text-xs text-slate-600">{supplierParts.length} items • €{supplierTotal.toFixed(2)}</p>
-                          </div>
-                        </div>
+                {/* Suppliers Grouped Items */}
+                <div className="space-y-4 mb-6">
+                  {Object.entries(groupedParts).length === 0 ? (
+                    <div className="text-center p-8 bg-slate-50 rounded-lg">
+                      <p className="text-slate-600">No items to reorder</p>
+                    </div>
+                  ) : (
+                    Object.entries(groupedParts).map(([supplier, supplierParts]) => {
+                      const supplierTotal = supplierParts.reduce((sum, p) => {
+                        const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+                        const preferred = p.selectedSupplier;
+                        return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
+                      }, 0);
 
-                        {/* Quick Export Buttons */}
-                        <div className="flex gap-1">
+                      // Get supplier contact info from first part
+                      const supplierInfo = supplierParts[0]?.selectedSupplier;
+
+                      return (
+                        <div key={supplier} className="border border-slate-200 rounded-lg overflow-hidden">
+                          {/* Supplier Header */}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyToClipboard('list', supplier);
-                            }}
-                            className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
-                            title="Copy list"
+                            onClick={() => toggleSupplierExpanded(supplier)}
+                            className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-teal-50 to-teal-50 hover:from-teal-100 hover:to-teal-100 transition-colors"
                           >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadCSV(supplier);
-                            }}
-                            className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
-                            title="Download CSV"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </button>
+                            <div className="flex items-center gap-3 flex-1 text-left">
+                              {expandedSuppliers[supplier] ? (
+                                <ChevronUp className="h-5 w-5 text-teal-600" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5 text-teal-600" />
+                              )}
+                              <div className="flex-1">
+                                <h3 className="font-bold text-slate-900 text-lg">{supplier}</h3>
+                                <p className="text-xs text-slate-600">
+                                  {supplierParts.length} items • €{supplierTotal.toFixed(2)}
+                                  {supplierInfo?.contact_email && ` • ${supplierInfo.contact_email}`}
+                                </p>
+                              </div>
+                            </div>
 
-                      {/* Supplier Items */}
-                      {expandedSuppliers[supplier] && (
-                        <div className="max-h-96 overflow-y-auto border-t">
-                          <table className="w-full text-xs sm:text-sm">
-                            <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                <th className="px-4 py-3 text-left">
-                                  <input
-                                    type="checkbox"
-                                    checked={supplierParts.every(p => selectedParts.includes(p.id))}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setSelectedParts(prev => [...new Set([...prev, ...supplierParts.map(p => p.id)])]);
-                                      } else {
-                                        setSelectedParts(prev => prev.filter(id => !supplierParts.find(p => p.id === id)));
-                                      }
-                                    }}
-                                    className="rounded"
-                                  />
-                                </th>
-                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Part #</th>
-                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
-                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Current</th>
-                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Needed</th>
-                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Cost</th>
-                                <th className="px-4 py-3 text-center font-semibold text-slate-900">Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {supplierParts.map((part, idx) => {
-                                const qtyNeeded = Math.max(0, part.reorder_point - part.current_quantity);
-                                const totalCost = qtyNeeded * (part.unit_cost || 0);
-                                return (
-                                  <tr key={part.id} className={`border-b ${idx % 2 ? 'bg-slate-50' : 'bg-white'}`}>
-                                    <td className="px-4 py-3">
+                            {/* Quick Export Buttons */}
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyToClipboard('list', supplier);
+                                }}
+                                className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                                title="Copy list"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadCSV(supplier);
+                                }}
+                                className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                                title="Download CSV"
+                              >
+                                <Download className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </button>
+
+                          {/* Supplier Items */}
+                          {expandedSuppliers[supplier] && (
+                            <div className="max-h-96 overflow-y-auto border-t">
+                              <table className="w-full text-xs sm:text-sm">
+                                <thead className="bg-slate-50 sticky top-0">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left">
                                       <input
                                         type="checkbox"
-                                        checked={selectedParts.includes(part.id)}
-                                        onChange={() => togglePartSelection(part.id)}
+                                        checked={supplierParts.every(p => selectedParts.includes(p.id))}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedParts(prev => [...new Set([...prev, ...supplierParts.map(p => p.id)])]);
+                                          } else {
+                                            setSelectedParts(prev => prev.filter(id => !supplierParts.find(p => p.id === id)));
+                                          }
+                                        }}
                                         className="rounded"
                                       />
-                                    </td>
-                                    <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
-                                    <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
-                                    <td className="px-4 py-3">
-                                      <Badge variant={part.current_quantity <= 0 ? 'destructive' : 'secondary'}>
-                                        {part.current_quantity}
-                                      </Badge>
-                                    </td>
-                                    <td className="px-4 py-3 font-bold text-teal-600">{qtyNeeded}</td>
-                                    <td className="px-4 py-3 font-semibold text-slate-900">€{totalCost.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-center">
-                                      <button
-                                        onClick={() => onPartClick(part)}
-                                        className="p-2 text-teal-600 hover:bg-teal-50 rounded transition-colors inline-flex items-center gap-1"
-                                        title="View part details"
-                                      >
-                                        <Eye className="h-4 w-4" />
-                                        <span className="hidden sm:inline text-xs">View</span>
-                                      </button>
-                                    </td>
+                                    </th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Part #</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Current</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Needed</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Cost</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-slate-900">Action</th>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                </thead>
+                                <tbody>
+                                  {supplierParts.map((part, idx) => {
+                                    const qtyNeeded = Math.max(0, part.reorder_point - part.current_quantity);
+                                    const totalCost = qtyNeeded * (part.selectedSupplier?.unit_price || part.unit_cost || 0);
+                                    return (
+                                      <tr key={part.id} className={`border-b ${idx % 2 ? 'bg-slate-50' : 'bg-white'}`}>
+                                        <td className="px-4 py-3">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedParts.includes(part.id)}
+                                            onChange={() => togglePartSelection(part.id)}
+                                            className="rounded"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
+                                        <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
+                                        <td className="px-4 py-3">
+                                          <Badge variant={part.current_quantity <= 0 ? 'destructive' : 'secondary'}>
+                                            {part.current_quantity}
+                                          </Badge>
+                                        </td>
+                                        <td className="px-4 py-3 font-bold text-teal-600">{qtyNeeded}</td>
+                                        <td className="px-4 py-3 font-semibold text-slate-900">€{totalCost.toFixed(2)}</td>
+                                        <td className="px-4 py-3 text-center">
+                                          <button
+                                            onClick={() => onPartClick(part)}
+                                            className="p-2 text-teal-600 hover:bg-teal-50 rounded transition-colors inline-flex items-center gap-1"
+                                            title="View part details"
+                                          >
+                                            <Eye className="h-4 w-4" />
+                                            <span className="hidden sm:inline text-xs">View</span>
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Global Export Options */}
-            {Object.keys(groupedParts).length > 0 && (
-              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-900 mb-3">Export All Items</h3>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => handleCopyToClipboard('list')}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copy List
-                    {copiedPart === 'list' && <span className="text-green-600">✓</span>}
-                  </button>
-                  <button
-                    onClick={() => handleCopyToClipboard('table')}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copy Table
-                    {copiedPart === 'table' && <span className="text-green-600">✓</span>}
-                  </button>
-                  <button
-                    onClick={() => handleDownloadCSV()}
-                    className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    CSV
-                  </button>
-                  <button
-                    onClick={() => handleDownloadHTML()}
-                    className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    HTML
-                  </button>
+                      );
+                    })
+                  )}
                 </div>
-              </div>
-            )}
 
-            {/* Footer */}
-            <div className="flex gap-2 border-t pt-4">
-              <Dialog.Close asChild>
-                <Button variant="outline" className="flex-1">
-                  Close
-                </Button>
-              </Dialog.Close>
-            </div>
+                {/* Global Export Options */}
+                {Object.keys(groupedParts).length > 0 && (
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Export All Items</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleCopyToClipboard('list')}
+                        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy List
+                        {copiedPart === 'list' && <span className="text-green-600">✓</span>}
+                      </button>
+                      <button
+                        onClick={() => handleCopyToClipboard('table')}
+                        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Table
+                        {copiedPart === 'table' && <span className="text-green-600">✓</span>}
+                      </button>
+                      <button
+                        onClick={() => handleDownloadCSV()}
+                        className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => handleDownloadHTML()}
+                        className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        HTML
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="flex gap-2 border-t pt-4">
+                  <Dialog.Close asChild>
+                    <Button variant="outline" className="flex-1">
+                      Close
+                    </Button>
+                  </Dialog.Close>
+                </div>
+              </>
+            )}
           </Dialog.Content>
         </div>
       </Dialog.Portal>
@@ -859,7 +960,7 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal - SUPPLIER GROUPED */}
+      {/* Reorder Modal - WITH JUNCTION TABLE SUPPORT */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
