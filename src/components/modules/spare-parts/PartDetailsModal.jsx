@@ -667,7 +667,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
 
               <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
-                 <Button variant="outline" size="lg" onClick={() => handlePartClick(part)}  className="w-full sm:w-auto bg-white">
+                 <Button variant="outline" size="lg" onClick={onClose}  className="w-full sm:w-auto bg-white">
                     <X className="w-4 h-4 mr-2" /> Close Details
                  </Button>
               </div>
