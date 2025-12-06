@@ -41,8 +41,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const { toast } = useToast();
-const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-const [selectedPart, setSelectedPart] = useState(null);
+
 
   // Fetch supplier data for all parts
   useEffect(() => {
@@ -136,16 +135,6 @@ const [selectedPart, setSelectedPart] = useState(null);
   const groupedBySupplier = () => {
     const groups = {};
     const reorderParts = partsWithSuppliers.filter(p => selectedParts.includes(p.id));
-    
-    const handleCloseDetails = () => {
-  setDetailsModalOpen(false);
-  setSelectedPart(null);
-};
-
-const handlePartClick = (part) => {
-  setSelectedPart(part);
-  setDetailsModalOpen(true);
-};
 
     reorderParts.forEach(part => {
       // Get preferred supplier or first supplier
@@ -616,12 +605,24 @@ const SpareParts = () => {
   const [parts, setParts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+const [selectedPart, setSelectedPart] = useState(null);
   const [viewDetails, setViewDetails] = useState(null);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
+ 
+ const handleCloseDetails = () => {
+  setDetailsModalOpen(false);
+  setSelectedPart(null);
+};
+
+const handlePartClick = (part) => {
+  setSelectedPart(part);
+  setDetailsModalOpen(true);
+};
 
   const pageSize = 12;
   const [deleteId, setDeleteId] = useState(null);
@@ -936,6 +937,15 @@ const SpareParts = () => {
       </div>
 
       {/* Dialogs */}
+
+      <PartDetailsModal
+        open={detailsModalOpen}  // ✅ ADD THIS
+        part={selectedPart}
+        onClose={handleCloseDetails}
+        onDeleteRequest={handlePartDelete}
+        onEditRequest={handlePartEdit}
+      />
+      
       <PartDetailsModal
         part={viewDetails}
         open={!!viewDetails}
@@ -944,6 +954,7 @@ const SpareParts = () => {
         onDelete={() => setDeleteId(viewDetails?.id)}
         isEditable={isGodAdmin}
       />
+
 
       {isFormOpen && (
         <PartForm
