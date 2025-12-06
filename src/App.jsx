@@ -10,7 +10,7 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <Helmet>
-          <title>WMS - Warehouse Management System</title>
+          <title>PartPulse v3</title>
           <meta name="description" content="Industrial Spare Parts Management System" />
           {/* SECURITY: Content Security Policy (CSP) to prevent XSS */}
           <meta 
