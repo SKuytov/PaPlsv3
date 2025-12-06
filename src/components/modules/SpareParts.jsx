@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
-  Download, Copy, FileText, AlertCircle, ShoppingCart, X
+  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +33,11 @@ import PartDetailsModal from './spare-parts/PartDetailsModal';
 import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
 
-// --- REORDER MODAL COMPONENT ---
-const ReorderModal = ({ open, onOpenChange, parts }) => {
+// --- REORDER MODAL COMPONENT (SUPPLIER GROUPED) ---
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [selectedParts, setSelectedParts] = useState([]);
-  const [copyFormat, setCopyFormat] = useState('table');
   const [copiedPart, setCopiedPart] = useState(null);
+  const [expandedSuppliers, setExpandedSuppliers] = useState({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,15 +46,42 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
         p.current_quantity <= p.reorder_point || getStockStatus(p.current_quantity, p.min_stock_level, p.reorder_point) === 'low'
       );
       setSelectedParts(needsReorder.map(p => p.id));
+      // Expand all supplier groups by default
+      const suppliers = {};
+      needsReorder.forEach(p => {
+        const supplierName = p.supplier_name || 'No Supplier';
+        suppliers[supplierName] = true;
+      });
+      setExpandedSuppliers(suppliers);
     }
   }, [open, parts]);
+
+  // Group parts by supplier
+  const groupedBySupplier = () => {
+    const groups = {};
+    const reorderParts = parts.filter(p => selectedParts.includes(p.id));
+    
+    reorderParts.forEach(p => {
+      const supplierName = p.supplier_name || 'No Supplier';
+      if (!groups[supplierName]) {
+        groups[supplierName] = [];
+      }
+      groups[supplierName].push(p);
+    });
+
+    return groups;
+  };
 
   const getReorderParts = () => {
     return parts.filter(p => selectedParts.includes(p.id));
   };
 
-  const generateTableFormat = () => {
-    const reorderParts = getReorderParts();
+  const generateTableFormat = (supplier = null) => {
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+    }
+
     const rows = reorderParts.map(p => [
       p.part_number || '-',
       p.name,
@@ -71,8 +98,8 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     };
   };
 
-  const generateCSV = () => {
-    const { header, rows } = generateTableFormat();
+  const generateCSV = (supplier = null) => {
+    const { header, rows } = generateTableFormat(supplier);
     const csvContent = [
       header.join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -80,17 +107,24 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     return csvContent;
   };
 
-  const generateList = () => {
-    const reorderParts = getReorderParts();
+  const generateList = (supplier = null) => {
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+    }
     return reorderParts.map(p => {
       const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
       return `${p.part_number || '-'} | ${p.name} | Qty: ${qtyNeeded} | Unit Cost: €${(p.unit_cost || 0).toFixed(2)}`;
     }).join('\n');
   };
 
-  const generateHTML = () => {
-    const { header, rows } = generateTableFormat();
-    const total = getReorderParts().reduce((sum, p) => {
+  const generateHTML = (supplier = null) => {
+    const { header, rows } = generateTableFormat(supplier);
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => (p.supplier_name || 'No Supplier') === supplier);
+    }
+    const total = reorderParts.reduce((sum, p) => {
       const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
       return sum + (qtyNeeded * (p.unit_cost || 0));
     }, 0);
@@ -111,22 +145,23 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
   </tbody>
 </table>
 <p style="margin-top: 20px; font-weight: bold;">Total Estimated Cost: €${total.toFixed(2)}</p>
+<p>Supplier: ${supplier || 'All Suppliers'}</p>
 <p>Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
     `;
     return html;
   };
 
-  const handleCopyToClipboard = (format) => {
+  const handleCopyToClipboard = (format, supplier = null) => {
     let content = '';
     switch (format) {
       case 'csv':
-        content = generateCSV();
+        content = generateCSV(supplier);
         break;
       case 'list':
-        content = generateList();
+        content = generateList(supplier);
         break;
       case 'table':
-        content = generateTableFormat().rows.map(row => row.join('\t')).join('\n');
+        content = generateTableFormat(supplier).rows.map(row => row.join('\t')).join('\n');
         break;
       default:
         content = '';
@@ -135,7 +170,7 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     navigator.clipboard.writeText(content).then(() => {
       toast({
         title: "Copied!",
-        description: `${getReorderParts().length} items copied to clipboard`
+        description: `${supplier ? `${supplier} - ` : ''}Items copied to clipboard`
       });
       setCopiedPart(format);
       setTimeout(() => setCopiedPart(null), 2000);
@@ -148,11 +183,14 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     });
   };
 
-  const handleDownloadCSV = () => {
-    const csv = generateCSV();
+  const handleDownloadCSV = (supplier = null) => {
+    const csv = generateCSV(supplier);
     const element = document.createElement('a');
+    const filename = supplier 
+      ? `reorder-${supplier}-${new Date().toISOString().split('T')[0]}.csv`
+      : `reorder-list-${new Date().toISOString().split('T')[0]}.csv`;
     element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv));
-    element.setAttribute('download', `reorder-list-${new Date().toISOString().split('T')[0]}.csv`);
+    element.setAttribute('download', filename);
     element.style.display = 'none';
     document.body.appendChild(element);
     element.click();
@@ -164,12 +202,15 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     });
   };
 
-  const handleDownloadHTML = () => {
-    const html = generateHTML();
+  const handleDownloadHTML = (supplier = null) => {
+    const html = generateHTML(supplier);
     const element = document.createElement('a');
+    const filename = supplier
+      ? `reorder-${supplier}-${new Date().toISOString().split('T')[0]}.html`
+      : `reorder-list-${new Date().toISOString().split('T')[0]}.html`;
     const blob = new Blob([html], { type: 'text/html' });
     element.setAttribute('href', URL.createObjectURL(blob));
-    element.setAttribute('download', `reorder-list-${new Date().toISOString().split('T')[0]}.html`);
+    element.setAttribute('download', filename);
     element.style.display = 'none';
     document.body.appendChild(element);
     element.click();
@@ -189,6 +230,14 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
     );
   };
 
+  const toggleSupplierExpanded = (supplier) => {
+    setExpandedSuppliers(prev => ({
+      ...prev,
+      [supplier]: !prev[supplier]
+    }));
+  };
+
+  const groupedParts = groupedBySupplier();
   const reorderParts = getReorderParts();
   const totalEstimatedCost = reorderParts.reduce((sum, p) => {
     const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
@@ -214,7 +263,7 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
@@ -235,6 +284,17 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-slate-600">Suppliers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-slate-900">
+                    {Object.keys(groupedParts).length}
+                  </p>
+                </CardContent>
+              </Card>
+
               <Card className="border-2 border-teal-500">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-slate-600">Est. Cost</CardTitle>
@@ -245,134 +305,175 @@ const ReorderModal = ({ open, onOpenChange, parts }) => {
               </Card>
             </div>
 
-            {/* Export Options */}
-            <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Export & Share Options</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {/* Copy to Clipboard */}
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-600">Copy to Clipboard</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => handleCopyToClipboard('table')}
-                      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Table
-                      {copiedPart === 'table' && <span className="text-green-600">✓</span>}
-                    </button>
-                    <button
-                      onClick={() => handleCopyToClipboard('csv')}
-                      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      CSV
-                      {copiedPart === 'csv' && <span className="text-green-600">✓</span>}
-                    </button>
-                    <button
-                      onClick={() => handleCopyToClipboard('list')}
-                      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      List
-                      {copiedPart === 'list' && <span className="text-green-600">✓</span>}
-                    </button>
-                  </div>
+            {/* Suppliers Grouped Items */}
+            <div className="space-y-4 mb-6">
+              {Object.entries(groupedParts).length === 0 ? (
+                <div className="text-center p-8 bg-slate-50 rounded-lg">
+                  <p className="text-slate-600">No items to reorder</p>
                 </div>
+              ) : (
+                Object.entries(groupedParts).map(([supplier, supplierParts]) => {
+                  const supplierTotal = supplierParts.reduce((sum, p) => {
+                    const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+                    return sum + (qtyNeeded * (p.unit_cost || 0));
+                  }, 0);
 
-                {/* Download */}
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-slate-600">Download File</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={handleDownloadCSV}
-                      className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      CSV
-                    </button>
-                    <button
-                      onClick={handleDownloadHTML}
-                      className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      HTML
-                    </button>
-                  </div>
-                </div>
-              </div>
+                  return (
+                    <div key={supplier} className="border border-slate-200 rounded-lg overflow-hidden">
+                      {/* Supplier Header */}
+                      <button
+                        onClick={() => toggleSupplierExpanded(supplier)}
+                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-teal-50 to-teal-50 hover:from-teal-100 hover:to-teal-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 flex-1 text-left">
+                          {expandedSuppliers[supplier] ? (
+                            <ChevronUp className="h-5 w-5 text-teal-600" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-teal-600" />
+                          )}
+                          <div className="flex-1">
+                            <h3 className="font-bold text-slate-900 text-lg">{supplier}</h3>
+                            <p className="text-xs text-slate-600">{supplierParts.length} items • €{supplierTotal.toFixed(2)}</p>
+                          </div>
+                        </div>
+
+                        {/* Quick Export Buttons */}
+                        <div className="flex gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyToClipboard('list', supplier);
+                            }}
+                            className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                            title="Copy list"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadCSV(supplier);
+                            }}
+                            className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                            title="Download CSV"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </button>
+
+                      {/* Supplier Items */}
+                      {expandedSuppliers[supplier] && (
+                        <div className="max-h-96 overflow-y-auto border-t">
+                          <table className="w-full text-xs sm:text-sm">
+                            <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                <th className="px-4 py-3 text-left">
+                                  <input
+                                    type="checkbox"
+                                    checked={supplierParts.every(p => selectedParts.includes(p.id))}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedParts(prev => [...new Set([...prev, ...supplierParts.map(p => p.id)])]);
+                                      } else {
+                                        setSelectedParts(prev => prev.filter(id => !supplierParts.find(p => p.id === id)));
+                                      }
+                                    }}
+                                    className="rounded"
+                                  />
+                                </th>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Part #</th>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Current</th>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Needed</th>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-900">Cost</th>
+                                <th className="px-4 py-3 text-center font-semibold text-slate-900">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {supplierParts.map((part, idx) => {
+                                const qtyNeeded = Math.max(0, part.reorder_point - part.current_quantity);
+                                const totalCost = qtyNeeded * (part.unit_cost || 0);
+                                return (
+                                  <tr key={part.id} className={`border-b ${idx % 2 ? 'bg-slate-50' : 'bg-white'}`}>
+                                    <td className="px-4 py-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedParts.includes(part.id)}
+                                        onChange={() => togglePartSelection(part.id)}
+                                        className="rounded"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
+                                    <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
+                                    <td className="px-4 py-3">
+                                      <Badge variant={part.current_quantity <= 0 ? 'destructive' : 'secondary'}>
+                                        {part.current_quantity}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-4 py-3 font-bold text-teal-600">{qtyNeeded}</td>
+                                    <td className="px-4 py-3 font-semibold text-slate-900">€{totalCost.toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-center">
+                                      <button
+                                        onClick={() => onPartClick(part)}
+                                        className="p-2 text-teal-600 hover:bg-teal-50 rounded transition-colors inline-flex items-center gap-1"
+                                        title="View part details"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                        <span className="hidden sm:inline text-xs">View</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            {/* Items List */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Items to Reorder ({reorderParts.length})</h3>
-              <div className="max-h-96 overflow-y-auto border rounded-lg">
-                <table className="w-full text-xs sm:text-sm">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-left">
-                        <input
-                          type="checkbox"
-                          checked={selectedParts.length === parts.filter(p => p.current_quantity <= p.reorder_point).length}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedParts(parts.filter(p => p.current_quantity <= p.reorder_point).map(p => p.id));
-                            } else {
-                              setSelectedParts([]);
-                            }
-                          }}
-                          className="rounded"
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Part #</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Current</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Reorder Pt</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Qty Needed</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Unit Cost</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-900">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reorderParts.length === 0 ? (
-                      <tr>
-                        <td colSpan="8" className="px-4 py-8 text-center text-slate-600">
-                          No items need reordering
-                        </td>
-                      </tr>
-                    ) : (
-                      reorderParts.map((part, idx) => {
-                        const qtyNeeded = Math.max(0, part.reorder_point - part.current_quantity);
-                        const totalCost = qtyNeeded * (part.unit_cost || 0);
-                        return (
-                          <tr key={part.id} className={`border-b ${idx % 2 ? 'bg-slate-50' : 'bg-white'}`}>
-                            <td className="px-4 py-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedParts.includes(part.id)}
-                                onChange={() => togglePartSelection(part.id)}
-                                className="rounded"
-                              />
-                            </td>
-                            <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
-                            <td className="px-4 py-3">
-                              <Badge variant={part.current_quantity <= 0 ? 'destructive' : 'secondary'}>
-                                {part.current_quantity}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-slate-600">{part.reorder_point}</td>
-                            <td className="px-4 py-3 font-bold text-teal-600">{qtyNeeded}</td>
-                            <td className="px-4 py-3 text-slate-600">€{(part.unit_cost || 0).toFixed(2)}</td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">€{totalCost.toFixed(2)}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+            {/* Global Export Options */}
+            {Object.keys(groupedParts).length > 0 && (
+              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Export All Items</h3>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleCopyToClipboard('list')}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy List
+                    {copiedPart === 'list' && <span className="text-green-600">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => handleCopyToClipboard('table')}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy Table
+                    {copiedPart === 'table' && <span className="text-green-600">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => handleDownloadCSV()}
+                    className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    CSV
+                  </button>
+                  <button
+                    onClick={() => handleDownloadHTML()}
+                    className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    HTML
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Footer */}
             <div className="flex gap-2 border-t pt-4">
@@ -549,6 +650,10 @@ const SpareParts = () => {
     setViewDetails(part);
   }, []);
 
+  const handleReorderPartClick = (part) => {
+    setViewDetails(part);
+  };
+
   // Count items needing reorder
   const needsReorderCount = parts.filter(p =>
     p.current_quantity <= p.reorder_point
@@ -649,7 +754,7 @@ const SpareParts = () => {
                 {needsReorderCount} item{needsReorderCount !== 1 ? 's' : ''} need{needsReorderCount !== 1 ? '' : 's'} reordering
               </p>
               <p className="text-xs text-amber-700 mt-1">
-                Click the "Reorder" button to manage and export your reorder list
+                Click the "Reorder" button to manage and export your reorder list by supplier
               </p>
             </div>
           </div>
@@ -754,11 +859,12 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal */}
+      {/* Reorder Modal - SUPPLIER GROUPED */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
+        onPartClick={handleReorderPartClick}
       />
     </>
   );
