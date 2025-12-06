@@ -20,8 +20,6 @@ import Downtime from '@/components/modules/Downtime';
 import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import WelcomeMessage from '@/components/WelcomeMessage';
-import ResetPassword from '@/pages/ResetPassword';
-
 
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
