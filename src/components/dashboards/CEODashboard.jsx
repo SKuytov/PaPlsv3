@@ -59,18 +59,26 @@ const CEODashboard = () => {
         pendingOrders: dashboardStats.finance?.orderCount || 0,
       });
 
-      // Fetch category data for pie chart
-      const categoryData = await dbService.getSpendByCategory();
-      if (categoryData) {
-        const processedCats = Object.entries(categoryData)
-          .map(([name, value]) => ({
-            name: name === 'null' ? 'Uncategorized' : name,
-            value: parseFloat(value) || 0
-          }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 6);
+      // Fetch category data for pie chart - with error handling
+      try {
+        const categoryData = await dbService.getSpendByCategory();
+        if (categoryData && typeof categoryData === 'object' && Object.keys(categoryData).length > 0) {
+          const processedCats = Object.entries(categoryData)
+            .map(([name, value]) => ({
+              name: name === 'null' ? 'Uncategorized' : name,
+              value: parseFloat(value) || 0
+            }))
+            .filter(item => item.value > 0)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 6);
 
-        setChartData({ categoryBreakdown: processedCats });
+          setChartData({ categoryBreakdown: processedCats });
+        } else {
+          setChartData({ categoryBreakdown: [] });
+        }
+      } catch (categoryError) {
+        console.warn('Could not load category data:', categoryError);
+        setChartData({ categoryBreakdown: [] });
       }
 
       setLastUpdated(new Date());
@@ -271,7 +279,7 @@ const CEODashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-slate-500">No category data available</div>
+                <div className="h-full flex items-center justify-center text-slate-500">No category data available yet</div>
               )}
             </div>
           </CardContent>
