@@ -223,7 +223,7 @@ export const dbService = {
 
   // Purchase Orders
   async generatePONumber() {
-    const date = new Date().toISOString().split('T').replace(/-/g, '');
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const random = Math.random().toString(36).substr(2, 6).toUpperCase();
     return `PO-${date}-${random}`;
   },
