@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
+import { Search, Plus, AlertCircle, Loader2, Check, Scan } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
+import BarcodeScanner from './BarcodeScanner';
 
 /**
  * SearchablePartSelector Component
- * Allows searching for existing parts or creating new ones inline
- * NOW: Loads preferred_supplier data for smart matching
+ * Enhanced to search by: name, SKU, barcode, part_number
+ * Integrated with QR/barcode scanner for fast item addition
  */
 const SearchablePartSelector = ({ 
   value, 
   onChange, 
   supplierFilter = null,
-  showCategoryInfo = true 
+  showCategoryInfo = true,
+  onScanComplete = null
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -20,20 +22,21 @@ const SearchablePartSelector = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [newPart, setNewPart] = useState({ name: '', sku: '', category: '' });
   const [creating, setCreating] = useState(false);
   const { user } = useAuth();
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // Fetch parts on mount - NOW INCLUDES preferred_supplier data
+  // Fetch parts on mount - NOW INCLUDES barcode and part_number
   useEffect(() => {
     const loadParts = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Load parts with their preferred supplier info
+        // Load parts with their preferred supplier and all searchable fields
         const { data, error: err } = await supabase
           .from('spare_parts')
           .select(`
@@ -61,7 +64,7 @@ const SearchablePartSelector = ({
     loadParts();
   }, [supplierFilter]);
 
-  // Filter parts based on search query - NO USEMEMO
+  // Enhanced filter - searches by name, SKU, barcode, and part_number
   const filterParts = () => {
     try {
       if (!Array.isArray(parts)) {
@@ -78,6 +81,8 @@ const SearchablePartSelector = ({
         return (
           (part.name && part.name.toLowerCase().includes(query)) ||
           (part.sku && part.sku.toLowerCase().includes(query)) ||
+          (part.barcode && part.barcode.toLowerCase().includes(query)) ||
+          (part.part_number && part.part_number.toLowerCase().includes(query)) ||
           (part.category && part.category.toLowerCase().includes(query)) ||
           (part.description && part.description.toLowerCase().includes(query))
         );
@@ -100,6 +105,32 @@ const SearchablePartSelector = ({
     setIsOpen(false);
     setSearchQuery('');
     setShowCreateForm(false);
+  };
+
+  // Handle barcode/QR scan
+  const handleScan = async (scannedData) => {
+    const scanValue = scannedData.value.toLowerCase();
+    
+    // Search for part by barcode, part_number, or SKU
+    const matchedPart = parts.find(p => 
+      (p.barcode && p.barcode.toLowerCase() === scanValue) ||
+      (p.part_number && p.part_number.toLowerCase() === scanValue) ||
+      (p.sku && p.sku.toLowerCase() === scanValue)
+    );
+
+    if (matchedPart) {
+      // Found matching part by scan
+      handleSelectPart(matchedPart);
+      if (onScanComplete) {
+        onScanComplete(matchedPart);
+      }
+      setShowScanner(false);
+    } else {
+      // No match found
+      setError(`No part found with barcode/QR: ${scanValue}`);
+      setTimeout(() => setError(null), 3000);
+      setShowScanner(false);
+    }
   };
 
   // Handle creation of new part
@@ -159,38 +190,57 @@ const SearchablePartSelector = ({
 
   return (
     <div className="w-full space-y-2" ref={dropdownRef}>
-      {/* Main Input */}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
+      {/* Main Input with Scanner Button */}
       <div className="relative">
-        <div
-          className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg bg-white hover:border-slate-400 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition-all"
-          onClick={() => !isOpen && setIsOpen(true)}
-        >
-          <Search className="w-4 h-4 text-slate-400" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder={displayName}
-            value={inputValue}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setIsOpen(true);
-            }}
-            onFocus={() => setIsOpen(true)}
-            className="flex-1 bg-transparent outline-none text-sm text-slate-900"
-          />
-          {selectedPart && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-                setSearchQuery('');
+        <div className="flex gap-2">
+          <div
+            className="flex-1 flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg bg-white hover:border-slate-400 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition-all"
+            onClick={() => !isOpen && setIsOpen(true)}
+          >
+            <Search className="w-4 h-4 text-slate-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder={displayName}
+              value={inputValue}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsOpen(true);
               }}
-              className="text-slate-400 hover:text-slate-600"
-              type="button"
-            >
-              ×
-            </button>
-          )}
+              onFocus={() => setIsOpen(true)}
+              className="flex-1 bg-transparent outline-none text-sm text-slate-900"
+            />
+            {selectedPart && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(null);
+                  setSearchQuery('');
+                }}
+                className="text-slate-400 hover:text-slate-600"
+                type="button"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {/* Scanner Button */}
+          <button
+            onClick={() => setShowScanner(true)}
+            className="px-3 py-2 bg-teal-100 hover:bg-teal-200 border border-teal-300 rounded-lg text-teal-700 font-semibold transition-colors flex items-center gap-2"
+            title="Scan barcode or QR code"
+            type="button"
+          >
+            <Scan className="w-4 h-4" />
+            <span className="hidden sm:inline">Scan</span>
+          </button>
         </div>
 
         {/* Dropdown Menu */}
@@ -209,6 +259,13 @@ const SearchablePartSelector = ({
               <div className="p-4 flex items-start gap-2 bg-red-50 border-b border-red-200">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                 <span className="text-sm text-red-600">{error}</span>
+              </div>
+            )}
+
+            {/* Search Hint */}
+            {searchQuery && (
+              <div className="p-3 bg-blue-50 border-b border-blue-200 text-xs text-blue-700">
+                🔍 Searching by: Name, SKU, Barcode, Part Number
               </div>
             )}
 
@@ -239,10 +296,20 @@ const SearchablePartSelector = ({
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             {part.sku && (
                               <span className="text-xs text-slate-500">
                                 SKU: {part.sku}
+                              </span>
+                            )}
+                            {part.barcode && (
+                              <span className="text-xs text-slate-500">
+                                📦 {part.barcode}
+                              </span>
+                            )}
+                            {part.part_number && (
+                              <span className="text-xs text-slate-500">
+                                # {part.part_number}
                               </span>
                             )}
                             {part.category && showCategoryInfo && (
@@ -381,11 +448,19 @@ const SearchablePartSelector = ({
             : 'bg-slate-50 border-slate-200'
         }`}>
           <p className="text-sm font-medium text-slate-900">{selectedPart.name}</p>
-          {selectedPart.sku && (
-            <p className="text-xs text-slate-600 mt-1">SKU: {selectedPart.sku}</p>
-          )}
+          <div className="flex flex-wrap gap-2 mt-1">
+            {selectedPart.sku && (
+              <p className="text-xs text-slate-600">SKU: {selectedPart.sku}</p>
+            )}
+            {selectedPart.barcode && (
+              <p className="text-xs text-slate-600">📦 {selectedPart.barcode}</p>
+            )}
+            {selectedPart.part_number && (
+              <p className="text-xs text-slate-600">#{selectedPart.part_number}</p>
+            )}
+          </div>
           {selectedPart.category && (
-            <p className="text-xs text-slate-600">Category: {selectedPart.category}</p>
+            <p className="text-xs text-slate-600 mt-1">Category: {selectedPart.category}</p>
           )}
           {selectedPart.preferred_supplier && (
             <div className="mt-2 pt-2 border-t border-teal-200">
