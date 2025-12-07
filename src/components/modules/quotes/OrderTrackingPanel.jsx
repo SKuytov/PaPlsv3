@@ -1,5 +1,12 @@
+import React, { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Clock, CheckCircle, Truck, Package, AlertCircle, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import * as Dialog from '@radix-ui/react-dialog';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const OrderTrackingPanel = () => {
   const [orders, setOrders] = useState([]);
