@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 /**
  * SearchablePartSelector Component
  * Allows searching for existing parts or creating new ones inline
- * FIXED: Removed useMemo to prevent React #310 errors
+ * NOW: Loads preferred_supplier data for smart matching
  */
 const SearchablePartSelector = ({ 
   value, 
@@ -26,16 +26,25 @@ const SearchablePartSelector = ({
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // Fetch parts on mount and when supplier filter changes
+  // Fetch parts on mount - NOW INCLUDES preferred_supplier data
   useEffect(() => {
     const loadParts = async () => {
       try {
         setLoading(true);
         setError(null);
         
+        // Load parts with their preferred supplier info
         const { data, error: err } = await supabase
           .from('spare_parts')
-          .select('*')
+          .select(`
+            *,
+            preferred_supplier:preferred_supplier_id(
+              id,
+              name,
+              email,
+              phone
+            )
+          `)
           .order('name', { ascending: true });
         
         if (err) throw err;
@@ -208,18 +217,28 @@ const SearchablePartSelector = ({
               <div className="border-b border-slate-200">
                 {filteredParts.map((part) => {
                   if (!part?.id) return null;
+                  const hasPreferredSupplier = part.preferred_supplier && part.preferred_supplier.id;
                   return (
                     <button
                       key={part.id}
                       onClick={() => handleSelectPart(part)}
-                      className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                      className={`w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors ${
+                        hasPreferredSupplier ? 'bg-gradient-to-r from-white to-teal-50/50' : ''
+                      }`}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <p className="font-medium text-sm text-slate-900">
-                            {part.name || 'Unknown'}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm text-slate-900">
+                              {part.name || 'Unknown'}
+                            </p>
+                            {hasPreferredSupplier && (
+                              <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded font-semibold">
+                                ⭐ {part.preferred_supplier.name}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             {part.sku && (
                               <span className="text-xs text-slate-500">
@@ -232,6 +251,11 @@ const SearchablePartSelector = ({
                               </span>
                             )}
                           </div>
+                          {hasPreferredSupplier && (
+                            <p className="text-xs text-teal-600 mt-1 font-medium">
+                              📧 {part.preferred_supplier.email}
+                            </p>
+                          )}
                         </div>
                         {selectedPart?.id === part.id && (
                           <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
@@ -349,15 +373,26 @@ const SearchablePartSelector = ({
         )}
       </div>
 
-      {/* Selected Part Display */}
+      {/* Selected Part Display - WITH Preferred Supplier */}
       {selectedPart && !isOpen && (
-        <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
-          <p className="text-sm font-medium text-teal-900">{selectedPart.name}</p>
+        <div className={`p-3 rounded-lg border ${
+          selectedPart.preferred_supplier
+            ? 'bg-teal-50 border-teal-200'
+            : 'bg-slate-50 border-slate-200'
+        }`}>
+          <p className="text-sm font-medium text-slate-900">{selectedPart.name}</p>
           {selectedPart.sku && (
-            <p className="text-xs text-teal-700 mt-1">SKU: {selectedPart.sku}</p>
+            <p className="text-xs text-slate-600 mt-1">SKU: {selectedPart.sku}</p>
           )}
           {selectedPart.category && (
-            <p className="text-xs text-teal-700">Category: {selectedPart.category}</p>
+            <p className="text-xs text-slate-600">Category: {selectedPart.category}</p>
+          )}
+          {selectedPart.preferred_supplier && (
+            <div className="mt-2 pt-2 border-t border-teal-200">
+              <p className="text-xs font-semibold text-teal-700">Preferred Supplier:</p>
+              <p className="text-sm text-teal-600 font-medium">{selectedPart.preferred_supplier.name}</p>
+              <p className="text-xs text-teal-600">📧 {selectedPart.preferred_supplier.email}</p>
+            </div>
           )}
         </div>
       )}
