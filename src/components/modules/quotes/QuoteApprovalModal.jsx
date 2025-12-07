@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import FileUploadManager from './FileUploadManager';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +14,7 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState('');
   const [action, setAction] = useState(null); // 'approve', 'reject', or 'create_po'
+  const [approvalAttachments, setApprovalAttachments] = useState([]);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -33,6 +35,19 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
 
       // If we approved it, mark it as approved
       await dbService.approveQuote(approval.id, notes, user.id);
+
+      // Store approval attachments if any
+      if (approvalAttachments.length > 0) {
+        // Store attachment metadata with quote
+        await dbService.updateQuote(quote.id, {
+          approval_attachments: approvalAttachments.map(a => ({ 
+            name: a.name, 
+            size: a.file?.size,
+            type: a.file?.type,
+            uploadedAt: new Date().toISOString()
+          }))
+        });
+      }
 
       toast({
         title: 'Quote Approved!',
@@ -156,10 +171,12 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
                     <AlertCircle className={`h-5 w-5 flex-shrink-0 ${
                       needsCEO ? 'text-red-600' : 'text-blue-600'
                     }`} />
-                    <p className={`text-sm ${needsCEO ? 'text-red-700' : 'text-blue-700'}`}>
+                    <p className={`text-sm ${
+                      needsCEO ? 'text-red-700' : 'text-blue-700'
+                    }`}>
                       {needsCEO
                         ? '⚠️ Requires CEO approval (exceeds €3,000)'
-                        : '✓ Tech Director approval sufficient'
+                        : '✓️ Tech Director approval sufficient'
                       }
                     </p>
                   </div>
@@ -169,6 +186,7 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
               {/* Action Selection */}
               {!action ? (
                 <div className="space-y-4">
+                  {/* Comments */}
                   <div>
                     <label className="text-sm font-semibold text-slate-900 block mb-2">
                       Comments (Optional)
@@ -178,6 +196,18 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Add any notes about this quote..."
                       className="resize-none h-20"
+                    />
+                  </div>
+
+                  {/* Supplier Quote PDF Upload */}
+                  <div>
+                    <label className="text-sm font-semibold text-slate-900 block mb-2">
+                      Supplier Quote PDF (Optional)
+                    </label>
+                    <FileUploadManager 
+                      onFilesSelected={(files) => setApprovalAttachments(files)}
+                      maxFiles={1}
+                      maxSizePerFile={20}
                     />
                   </div>
 
@@ -209,6 +239,18 @@ const QuoteApprovalModal = ({ open, onOpenChange, quote, onApprovalComplete }) =
                   <p className="text-sm text-green-700">
                     Quote will be marked approved and ready for PO creation.
                   </p>
+                  {approvalAttachments.length > 0 && (
+                    <div className="bg-white p-3 rounded border border-green-200">
+                      <p className="text-xs font-semibold text-green-700 mb-2">Attached Files:</p>
+                      <div className="space-y-1">
+                        {approvalAttachments.map((att, idx) => (
+                          <div key={idx} className="text-sm text-green-700">
+                            📄 {att.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
