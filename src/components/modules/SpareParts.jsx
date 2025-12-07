@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReorderQuoteOrders from './quotes/ReorderQuoteOrders';
 import { AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
@@ -26,7 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import * as Dialog from '@radix-ui/react-dialog';
-import ReorderQuoteOrders from './quotes/ReorderQuoteOrders';
+
 // Imported Components
 import PartCard from './spare-parts/PartCard';
 import PartDetailsModal from './spare-parts/PartDetailsModal';
@@ -833,43 +834,50 @@ const SpareParts = () => {
               <option value="critical">Critical</option>
             </select>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              {isGodAdmin && (
-                <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Part
-                </Button>
-              )}
+{/* Action Buttons */}
+<div className="flex gap-2">
+  {isGodAdmin && (
+    <>
+      <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
+        <Plus className="h-4 w-4 mr-1" />
+        Add Part
+      </Button>
+      <Button
+        onClick={() => setShowReorderOrders(true)}
+        className="bg-teal-600 hover:bg-teal-700"
+      >
+        <FileText className="h-4 w-4 mr-2" />
+        <span className="hidden sm:inline">Quote Request</span>
+      </Button>
+    </>
+  )}
 
-              {/* Reorder Button with Badge */}
-              <button
-                onClick={() => setShowReorderModal(true)}
-                className="bg-teal-600 hover:bg-teal-700"
-            >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                    Reorder
-                <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Reorder</span>
-                {needsReorderCount > 0 && (
-                  <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
-                )}
+  {/* Reorder Button with Badge */}
+  <button
+    onClick={() => setShowReorderModal(true)}
+    className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs sm:text-sm"
+  >
+    <RotateCcw className="h-4 w-4" />
+    <span className="hidden sm:inline">Reorder</span>
+    {needsReorderCount > 0 && (
+      <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
+    )}
+  </button>
 
-                <ReorderQuoteOrders
+  <Button
+    onClick={resetFilters}
+    variant="outline"
+    size="sm"
+    className="text-xs sm:text-sm"
+  >
+    <RotateCcw className="h-4 w-4" />
+  </Button>
+
+  <ReorderQuoteOrders
   open={showReorderOrders}
   onOpenChange={setShowReorderOrders}
 />
-              </button>
-
-              <Button
-                onClick={resetFilters}
-                variant="outline"
-                size="sm"
-                className="text-xs sm:text-sm"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            </div>
+</div>
           </div>
         </div>
 
