@@ -11,15 +11,6 @@ import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import QuoteDistribution from './QuoteDistribution';
 
-/**
- * EnhancedQuoteCreationFlow - Professional Quote Request Creation
- * Features:
- * - SMART Supplier Auto-Loading from preferred_supplier
- * - Item-level supplier selection
- * - Free text entry for custom items
- * - Complete workflow tracking
- * - Email Distribution with 3 methods (Auto-Send, Outlook, Preview & Copy)
- */
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(null);
@@ -42,10 +33,9 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     paymentTerms: 'Net 30',
     specialRequirements: '',
   });
-  const [createdQuotes, setCreatedQuotes] = useState([]);
+  const [createdQuote, setCreatedQuote] = useState(null);
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [showDistribution, setShowDistribution] = useState(false);
-  const [distributionQuote, setDistributionQuote] = useState(null);
 
   // Load all suppliers on mount
   useEffect(() => {
@@ -63,21 +53,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     loadSuppliers();
   }, []);
 
-  /**
-   * ENHANCED: Smart Supplier Auto-Loading
-   * 
-   * Logic:
-   * 1. Check if part has preferred_supplier object loaded
-   * 2. If yes, auto-load that supplier
-   * 3. Show toast confirmation
-   * 4. User can override if needed
-   * 
-   * This is WAY smarter because:
-   * - No database ID matching needed
-   * - The part object already has the full supplier data
-   * - Visual indicator in part selector (star badge)
-   * - Toast feedback for user confirmation
-   */
   const handlePartSelected = (part) => {
     setCurrentItem(prev => ({
       ...prev,
@@ -86,9 +61,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
       customPartName: ''
     }));
 
-    // SMART LOGIC: Check if part has preferred_supplier object with data
     if (part?.preferred_supplier && part.preferred_supplier.id) {
-      // Part has a preferred supplier - auto-load it!
       setCurrentItem(prev => ({
         ...prev,
         part,
@@ -97,14 +70,12 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
         customPartName: ''
       }));
 
-      // Show confirmation toast
       toast({
         title: '⭐ Smart Match Found!',
         description: `Supplier "${part.preferred_supplier.name}" is preferred for this part. You can change it if needed.`,
         duration: 3000
       });
     } else {
-      // No preferred supplier - clear supplier field, user must select
       setCurrentItem(prev => ({
         ...prev,
         part,
@@ -148,7 +119,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 <p className="text-sm text-slate-600">Add items one by one with smart supplier matching</p>
                 <p className="text-xs text-slate-500 mt-3">✓ Smart supplier auto-load</p>
                 <p className="text-xs text-slate-500">✓ Custom items supported</p>
-                <p className="text-xs text-slate-500">✓ Per-item supplier control</p>
+                <p className="text-xs text-slate-500">✓ Multiple items in ONE quote</p>
               </button>
 
               {/* Bulk Mode */}
@@ -165,9 +136,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Bulk Import</h3>
                 <p className="text-sm text-slate-600">Coming Soon</p>
-                <p className="text-xs text-slate-500 mt-3">✓ Paste from Excel</p>
-                <p className="text-xs text-slate-500">✓ Auto-parse format</p>
-                <p className="text-xs text-slate-500">✓ 50+ items at once</p>
               </button>
 
               {/* Template Mode */}
@@ -184,9 +152,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Use Template</h3>
                 <p className="text-sm text-slate-600">Coming Soon</p>
-                <p className="text-xs text-slate-500 mt-3">✓ Pre-filled items</p>
-                <p className="text-xs text-slate-500">✓ Saved suppliers</p>
-                <p className="text-xs text-slate-500">✓ Quick customize</p>
               </button>
             </div>
 
@@ -202,8 +167,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               <div className="flex gap-3">
                 <Users className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">1-Click Quotes</p>
-                  <p className="text-xs text-slate-600">Usually done in under 2 minutes</p>
+                  <p className="font-semibold text-slate-900 text-sm">One Quote</p>
+                  <p className="text-xs text-slate-600">All items in a single quote request</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -222,7 +187,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Creation Step
   if (step === 2 && mode === 'manual') {
-    // Collect unique suppliers from items
     const itemSuppliers = [...new Set(items.filter(i => i.supplier?.id).map(i => i.supplier.id))]
       .map(id => allSuppliers.find(s => s.id === id))
       .filter(Boolean);
@@ -233,7 +197,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-teal-50 to-teal-100">
             <div>
               <CardTitle className="text-2xl">Create Quote Request</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items with Smart Supplier Matching</p>
+              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items (all items go into ONE quote)</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -243,18 +207,10 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           <CardContent className="p-6 space-y-6">
             {/* Summary Bar */}
             {items.length > 0 && (
-              <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-teal-900">{items.length} items added</p>
-                  <p className="text-sm text-teal-700">{itemSuppliers.length} unique supplier{itemSuppliers.length !== 1 ? 's' : ''}</p>
-                </div>
-                <div className="text-right space-y-0.5">
-                  {itemSuppliers.map(s => (
-                    <p key={s.id} className="text-xs text-teal-700 font-medium">
-                      ✓ {s.name}
-                    </p>
-                  ))}
-                </div>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="font-semibold text-blue-900">📋 Quote Summary</p>
+                <p className="text-sm text-blue-700 mt-1">This quote will contain {items.length} item{items.length !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-blue-600 mt-2">✓ All items will be sent together in ONE quote request</p>
               </div>
             )}
 
@@ -277,7 +233,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                           : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
                       }`}
                     >
-                      📦 Existing Part (Smart Match)
+                      📦 Existing Part
                     </button>
                     <button
                       onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null, supplier: null })}
@@ -300,9 +256,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                           value={currentItem.part}
                           onChange={handlePartSelected}
                         />
-                        {currentItem.part && !currentItem.part?.preferred_supplier && (
-                          <p className="text-xs text-amber-600 mt-2">⚠️ This part has no preferred supplier set. You'll need to select one below.</p>
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -317,7 +270,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </div>
                   )}
 
-                  {/* Supplier Selection - Shows status based on auto-load */}
+                  {/* Supplier Selection */}
                   {(currentItem.part || currentItem.customPartName) && (
                     <div>
                       <label className="text-sm font-semibold block mb-2">
@@ -338,9 +291,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         value={currentItem.supplier}
                         onChange={(supplier) => setCurrentItem({ ...currentItem, supplier })}
                       />
-                      {!currentItem.supplier && currentItem.part?.preferred_supplier && (
-                        <p className="text-xs text-teal-600 mt-2 font-medium">💡 Tip: Reload the part to auto-load the preferred supplier</p>
-                      )}
                     </div>
                   )}
 
@@ -409,7 +359,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             {/* Items List */}
             {items.length > 0 && (
               <div className="space-y-2 border-t pt-4">
-                <h3 className="font-bold text-slate-900">Items ({items.length})</h3>
+                <h3 className="font-bold text-slate-900">Items in Quote ({items.length})</h3>
                 {items.map((item, idx) => (
                   <div key={idx} className="p-4 bg-white border border-slate-200 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-colors">
                     <div className="flex items-start justify-between gap-4">
@@ -424,9 +374,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         {item.supplier && (
                           <p className="text-sm text-teal-600 font-medium flex items-center gap-1">
                             👤 {item.supplier.name}
-                            {item.part?.preferred_supplier?.id === item.supplier.id && (
-                              <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold">⭐ Preferred</span>
-                            )}
                           </p>
                         )}
                         {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
@@ -522,16 +469,13 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Review Step
   if (step === 3) {
-    const uniqueSuppliers = [...new Map(items.map(item => [item.supplier?.id, item.supplier])).values()];
-    const totalQuotes = items.length * uniqueSuppliers.length;
-
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
         <Card className="w-full max-w-4xl my-4">
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-green-50 to-green-100">
             <div>
-              <CardTitle className="text-2xl">Review & Send Quotes</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 3 of 3: Confirm before sending</p>
+              <CardTitle className="text-2xl">Review & Send Quote</CardTitle>
+              <p className="text-sm text-slate-600 mt-1">Step 3 of 3: Confirm and send to suppliers</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -540,23 +484,17 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
           <CardContent className="p-6 space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <Card className="bg-slate-50">
                 <CardContent className="pt-4">
-                  <p className="text-xs text-slate-600 font-semibold uppercase">Items</p>
+                  <p className="text-xs text-slate-600 font-semibold uppercase">Items in Quote</p>
                   <p className="text-2xl font-bold text-slate-900 mt-1">{items.length}</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-teal-50">
-                <CardContent className="pt-4">
-                  <p className="text-xs text-teal-700 font-semibold uppercase">Suppliers</p>
-                  <p className="text-2xl font-bold text-teal-600 mt-1">{uniqueSuppliers.length}</p>
                 </CardContent>
               </Card>
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
-                  <p className="text-xs text-blue-700 font-semibold uppercase">Quotes</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">{totalQuotes}</p>
+                  <p className="text-xs text-blue-700 font-semibold uppercase">Quote Records</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">1</p>
                 </CardContent>
               </Card>
             </div>
@@ -578,21 +516,10 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               </div>
             </div>
 
-            {/* Suppliers */}
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3">Suppliers Receiving Quotes ({uniqueSuppliers.length})</h4>
-              <div className="space-y-2">
-                {uniqueSuppliers.map(supplier => {
-                  const itemsForSupplier = items.filter(i => i.supplier?.id === supplier.id);
-                  return (
-                    <div key={supplier.id} className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
-                      <p className="font-semibold text-slate-900">{supplier.name}</p>
-                      <p className="text-xs text-slate-600">{itemsForSupplier.length} item{itemsForSupplier.length !== 1 ? 's' : ''}</p>
-                      <p className="text-xs text-teal-700 mt-1">📧 {supplier.email}</p>
-                    </div>
-                  );
-                })}
-              </div>
+            {/* Quote Summary */}
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="font-semibold text-green-900">✓ One Quote Request</p>
+              <p className="text-sm text-green-700 mt-1">All {items.length} items will be sent in a single quote request</p>
             </div>
 
             {/* Navigation */}
@@ -604,59 +531,52 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 onClick={async () => {
                   setLoading(true);
                   try {
-                    const quoteIds = [];
-                    const quotesBySupplier = {};
+                    // Create ONE quote with all items
+                    const quoteId = `QR-${Date.now().toString(36).toUpperCase()}`;
+                    
+                    const { data, error } = await supabase
+                      .from('quote_requests')
+                      .insert({
+                        quote_id: quoteId,
+                        items: items.map(i => ({
+                          part_id: i.isCustom ? null : (i.part?.id || null),
+                          part_name: i.isCustom ? i.customPartName : i.part?.name,
+                          quantity: parseInt(i.quantity),
+                          notes: i.notes || '',
+                          is_custom: i.isCustom
+                        })),
+                        total_items: items.length,
+                        estimated_total: 0,
+                        status: 'pending',
+                        created_by: user?.id || null,
+                        project_name: quoteMetadata.projectName || null,
+                        delivery_date: quoteMetadata.deliveryDate || null,
+                        request_notes: quoteMetadata.specialRequirements || null
+                      })
+                      .select();
 
-                    // Group items by supplier
-                    items.forEach(item => {
-                      const supplierId = item.supplier.id;
-                      if (!quotesBySupplier[supplierId]) {
-                        quotesBySupplier[supplierId] = { supplier: item.supplier, items: [] };
-                      }
-                      quotesBySupplier[supplierId].items.push(item);
-                    });
-
-                    // Create one quote per supplier
-                    for (const [supplierId, data] of Object.entries(quotesBySupplier)) {
-                      const { data: created, error } = await supabase
-                        .from('quote_requests')
-                        .insert({
-                          quote_id: `QR-${Date.now().toString(36).toUpperCase()}-${supplierId.slice(0, 4).toUpperCase()}`,
-                          supplier_id: supplierId,
-                          items: data.items.map(i => ({
-                            part_id: i.isCustom ? null : i.part?.id,
-                            part_name: i.isCustom ? i.customPartName : i.part?.name,
-                            quantity: parseInt(i.quantity),
-                            notes: i.notes,
-                            is_custom: i.isCustom
-                          })),
-                          total_items: data.items.length,
-                          estimated_total: 0,
-                          status: 'pending',
-                          created_by: user.id,
-                          project_name: quoteMetadata.projectName || null,
-                          delivery_date: quoteMetadata.deliveryDate || null,
-                          request_notes: quoteMetadata.specialRequirements || null
-                        })
-                        .select();
-
-                      if (error) throw error;
-                      quoteIds.push(created[0]);
+                    if (error) {
+                      console.error('Database error:', error);
+                      throw error;
                     }
 
-                    setCreatedQuotes(quoteIds);
-                    setDistributionQuote(quoteIds[0]);
-                    setShowDistribution(true);
-                    setStep(4);
-                    toast({
-                      title: '✅ Quotes Created',
-                      description: `${quoteIds.length} quote(s) created successfully`
-                    });
+                    if (data && data[0]) {
+                      setCreatedQuote(data[0]);
+                      setShowDistribution(true);
+                      setStep(4);
+                      toast({
+                        title: '✅ Quote Created',
+                        description: `Quote #${quoteId} created successfully`
+                      });
+                    } else {
+                      throw new Error('No data returned from insert');
+                    }
                   } catch (error) {
+                    console.error('Error creating quote:', error);
                     toast({
                       variant: 'destructive',
                       title: 'Error',
-                      description: error.message
+                      description: error.message || 'Failed to create quote'
                     });
                   } finally {
                     setLoading(false);
@@ -673,7 +593,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Create Quotes ({totalQuotes})
+                    Create & Send Quote
                   </>
                 )}
               </Button>
@@ -688,72 +608,76 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   if (step === 4) {
     return (
       <>
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl">
-            <CardContent className="p-12 text-center space-y-6">
-              <div className="flex justify-center">
-                <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="h-12 w-12 text-green-600" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900">Quotes Created Successfully!</h3>
-                <p className="text-slate-600 mt-2">
-                  {createdQuotes.length} quote{createdQuotes.length !== 1 ? 's' : ''} created and ready to send
-                </p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg text-left max-h-40 overflow-y-auto space-y-2">
-                {createdQuotes.map((quote, idx) => (
-                  <div key={idx} className="font-mono text-sm text-slate-700">
-                    <span className="font-bold">{quote.quote_id}</span>
-                    <span className="text-xs text-slate-500 ml-2">→ {quote.supplier_id}</span>
+        {!showDistribution && (
+          <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+            <Card className="w-full max-w-2xl">
+              <CardContent className="p-12 text-center space-y-6">
+                <div className="flex justify-center">
+                  <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-12 w-12 text-green-600" />
                   </div>
-                ))}
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={onClose}
-                >
-                  Close
-                </Button>
-                <Button
-                  className="flex-1 bg-teal-600 hover:bg-teal-700"
-                  onClick={() => {
-                    setDistributionQuote(createdQuotes[0]);
-                    setShowDistribution(true);
-                  }}
-                >
-                  📧 Send Quotes
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Quote Created Successfully!</h3>
+                  <p className="text-slate-600 mt-2">Quote #{createdQuote?.quote_id}</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg text-left space-y-2">
+                  <p className="text-sm font-semibold text-slate-900">Items: {items.length}</p>
+                  {items.slice(0, 3).map((item, idx) => (
+                    <p key={idx} className="text-xs text-slate-600">• {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity})</p>
+                  ))}
+                  {items.length > 3 && <p className="text-xs text-slate-600">... and {items.length - 3} more item(s)</p>}
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={onClose}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    className="flex-1 bg-teal-600 hover:bg-teal-700"
+                    onClick={() => {
+                      setShowDistribution(true);
+                    }}
+                  >
+                    📧 Send Quote
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Distribution Modal */}
-        {showDistribution && distributionQuote && (
-          <QuoteDistribution
-            quoteRequest={{
-              id: distributionQuote.quote_id,
-              items: distributionQuote.items,
-              project: distributionQuote.project_name,
-              delivery_date: distributionQuote.delivery_date,
-              payment_terms: quoteMetadata.paymentTerms,
-              special_notes: distributionQuote.request_notes,
-              created_by: user?.email || 'Procurement Team',
-              created_at: distributionQuote.created_at
-            }}
-            onClose={() => setShowDistribution(false)}
-            onSent={(data) => {
-              toast({
-                title: `✅ Quote sent via ${data.method}!`,
-                description: `Quote #${distributionQuote.quote_id} sent successfully`
-              });
-              setShowDistribution(false);
-            }}
-          />
+        {showDistribution && createdQuote && (
+          <div className="z-50">
+            <QuoteDistribution
+              quoteRequest={{
+                id: createdQuote.quote_id,
+                items: items,
+                project: createdQuote.project_name,
+                delivery_date: createdQuote.delivery_date,
+                payment_terms: quoteMetadata.paymentTerms,
+                special_notes: createdQuote.request_notes,
+                created_by: user?.email || 'Procurement Team',
+                created_at: createdQuote.created_at
+              }}
+              onClose={() => {
+                setShowDistribution(false);
+                onClose();
+              }}
+              onSent={(data) => {
+                toast({
+                  title: `✅ Quote sent via ${data.method}!`,
+                  description: `Quote #${createdQuote.quote_id} sent successfully`
+                });
+                setShowDistribution(false);
+                onClose();
+              }}
+            />
+          </div>
         )}
       </>
     );
