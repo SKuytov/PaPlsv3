@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Loader2, CheckCircle, AlertCircle, Send, Copy, Edit2, Trash2, Eye, FileText, BarChart3, Clock, DollarSign, Users, Zap, Download } from 'lucide-react';
+import { Plus, X, Loader2, CheckCircle, AlertCircle, Send, Trash2, Edit2, Clock, Users, Zap, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,21 +13,18 @@ import SearchableSupplierSelector from './SearchableSupplierSelector';
 /**
  * EnhancedQuoteCreationFlow - Professional Quote Request Creation
  * Features:
- * - Multi-supplier quote requests
- * - Smart supplier auto-loading from part
- * - Free text entry for new items
- * - Template-based quick creation
- * - Real-time pricing analytics
+ * - Item-level supplier selection (clean UX)
+ * - Free text entry for custom items
+ * - Smart supplier detection for parts with preferred_supplier
  * - Complete workflow tracking
  */
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
-  const [step, setStep] = useState(1); // 1: Select Mode, 2: Create, 3: Review, 4: Send
-  const [mode, setMode] = useState(null); // 'manual', 'bulk', 'template'
-  const [suppliers, setSuppliers] = useState([]);
-  const [selectedSuppliers, setSelectedSuppliers] = useState([]);
+  const [step, setStep] = useState(1); // 1: Mode, 2: Items, 3: Review, 4: Success
+  const [mode, setMode] = useState(null);
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState({ 
     part: null, 
+    supplier: null,
     quantity: '', 
     notes: '',
     isCustom: false,
@@ -44,8 +41,9 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     specialRequirements: '',
   });
   const [createdQuotes, setCreatedQuotes] = useState([]);
+  const [allSuppliers, setAllSuppliers] = useState([]);
 
-  // Load suppliers on mount
+  // Load all suppliers on mount
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
@@ -53,7 +51,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           .from('suppliers')
           .select('*')
           .order('name', { ascending: true });
-        if (!error && data) setSuppliers(data);
+        if (!error && data) setAllSuppliers(data);
       } catch (err) {
         console.error('Error loading suppliers:', err);
       }
@@ -61,26 +59,40 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     loadSuppliers();
   }, []);
 
-  // When part is selected, auto-load linked supplier
+  // When part is selected, check if it has a preferred supplier
   const handlePartSelected = (part) => {
-    setCurrentItem({
+    setCurrentItem(prev => ({
+      ...prev,
       part,
-      quantity: '',
-      notes: '',
       isCustom: false,
       customPartName: ''
-    });
+    }));
 
-    // If part has a linked supplier, auto-select it
-    if (part?.supplier_id) {
-      const linkedSupplier = suppliers.find(s => s.id === part.supplier_id);
-      if (linkedSupplier && !selectedSuppliers.find(s => s.id === linkedSupplier.id)) {
-        setSelectedSuppliers(prev => [...prev, linkedSupplier]);
+    // If part has preferred_supplier_id, auto-load that supplier
+    if (part?.preferred_supplier_id) {
+      const preferredSupplier = allSuppliers.find(s => s.id === part.preferred_supplier_id);
+      if (preferredSupplier) {
+        setCurrentItem(prev => ({
+          ...prev,
+          part,
+          supplier: preferredSupplier,
+          isCustom: false,
+          customPartName: ''
+        }));
         toast({
-          title: '✅ Auto-Selected Supplier',
-          description: `${linkedSupplier.name} was automatically selected for this part.`
+          title: '✅ Preferred Supplier Loaded',
+          description: `${preferredSupplier.name} is set as the supplier for this part.`,
+          duration: 2000
         });
       }
+    } else {
+      setCurrentItem(prev => ({
+        ...prev,
+        part,
+        supplier: null,
+        isCustom: false,
+        customPartName: ''
+      }));
     }
   };
 
@@ -114,10 +126,10 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <Zap className="h-6 w-6 text-teal-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Quick Create</h3>
-                <p className="text-sm text-slate-600">Add items one by one with full control</p>
-                <p className="text-xs text-slate-500 mt-3">✓ Multiple suppliers</p>
+                <p className="text-sm text-slate-600">Add items one by one with supplier selection</p>
+                <p className="text-xs text-slate-500 mt-3">✓ Select supplier per item</p>
                 <p className="text-xs text-slate-500">✓ Custom items</p>
-                <p className="text-xs text-slate-500">✓ Rich metadata</p>
+                <p className="text-xs text-slate-500">✓ Auto-load preferred suppliers</p>
               </button>
 
               {/* Bulk Mode */}
@@ -126,13 +138,14 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   setMode('bulk');
                   setStep(2);
                 }}
-                className="p-6 border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition-all text-left group"
+                className="p-6 border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition-all text-left group opacity-50 cursor-not-allowed"
+                disabled
               >
                 <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                  <FileText className="h-6 w-6 text-blue-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Bulk Import</h3>
-                <p className="text-sm text-slate-600">Paste CSV or spreadsheet data</p>
+                <p className="text-sm text-slate-600">Coming Soon</p>
                 <p className="text-xs text-slate-500 mt-3">✓ Paste from Excel</p>
                 <p className="text-xs text-slate-500">✓ Auto-parse format</p>
                 <p className="text-xs text-slate-500">✓ 50+ items at once</p>
@@ -144,13 +157,14 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   setMode('template');
                   setStep(2);
                 }}
-                className="p-6 border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl transition-all text-left group"
+                className="p-6 border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl transition-all text-left group opacity-50 cursor-not-allowed"
+                disabled
               >
                 <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
                   <FileText className="h-6 w-6 text-purple-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Use Template</h3>
-                <p className="text-sm text-slate-600">Save time with your frequently ordered items</p>
+                <p className="text-sm text-slate-600">Coming Soon</p>
                 <p className="text-xs text-slate-500 mt-3">✓ Pre-filled items</p>
                 <p className="text-xs text-slate-500">✓ Saved suppliers</p>
                 <p className="text-xs text-slate-500">✓ Quick customize</p>
@@ -167,17 +181,17 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 </div>
               </div>
               <div className="flex gap-3">
-                <DollarSign className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <Users className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">Smart Suppliers</p>
-                  <p className="text-xs text-slate-600">Auto-load from part linked supplier</p>
+                  <p className="text-xs text-slate-600">One supplier per item, auto-loaded</p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <Users className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <Zap className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">Multi-Supplier</p>
-                  <p className="text-xs text-slate-600">Request from multiple at once</p>
+                  <p className="font-semibold text-slate-900 text-sm">Intuitive Flow</p>
+                  <p className="text-xs text-slate-600">Clean, step-by-step process</p>
                 </div>
               </div>
             </div>
@@ -187,15 +201,20 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     );
   }
 
-  // Creation Step (Manual Mode)
+  // Creation Step
   if (step === 2 && mode === 'manual') {
+    // Collect unique suppliers from items
+    const itemSuppliers = [...new Set(items.filter(i => i.supplier?.id).map(i => i.supplier.id))]
+      .map(id => allSuppliers.find(s => s.id === id))
+      .filter(Boolean);
+
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
         <Card className="w-full max-w-5xl my-4">
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-teal-50 to-teal-100">
             <div>
               <CardTitle className="text-2xl">Create Quote Request</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items & Suppliers</p>
+              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items with Suppliers</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -203,68 +222,34 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           </CardHeader>
 
           <CardContent className="p-6 space-y-6">
-            {/* Suppliers Section */}
+            {/* Summary Bar */}
+            {items.length > 0 && (
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-teal-900">{items.length} items added</p>
+                  <p className="text-sm text-teal-700">{itemSuppliers.length} unique supplier{itemSuppliers.length !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="text-right">
+                  {itemSuppliers.map(s => (
+                    <p key={s.id} className="text-xs text-teal-700">{s.name}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add Item Form */}
             <div className="space-y-3">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Users className="h-5 w-5 text-teal-600" />
-                Select Suppliers ({selectedSuppliers.length})
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {suppliers.slice(0, 10).map(supplier => (
-                  <button
-                    key={supplier.id}
-                    onClick={() => {
-                      setSelectedSuppliers(prev =>
-                        prev.find(s => s.id === supplier.id)
-                          ? prev.filter(s => s.id !== supplier.id)
-                          : [...prev, supplier]
-                      );
-                    }}
-                    className={`p-3 border-2 rounded-lg transition-all text-left ${
-                      selectedSuppliers.find(s => s.id === supplier.id)
-                        ? 'border-teal-500 bg-teal-50'
-                        : 'border-slate-200 hover:border-teal-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`h-5 w-5 rounded border-2 flex items-center justify-center ${
-                        selectedSuppliers.find(s => s.id === supplier.id)
-                          ? 'border-teal-500 bg-teal-500'
-                          : 'border-slate-300'
-                      }`}>
-                        {selectedSuppliers.find(s => s.id === supplier.id) && (
-                          <CheckCircle className="h-4 w-4 text-white" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-slate-900 text-sm">{supplier.name}</p>
-                        <p className="text-xs text-slate-500">{supplier.email}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {selectedSuppliers.length === 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                  ⚠️ Select at least one supplier to continue
-                </div>
-              )}
-            </div>
-
-            {/* Items Section */}
-            <div className="space-y-3 border-t pt-6">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
                 <Plus className="h-5 w-5 text-teal-600" />
-                Quote Items ({items.length})
+                Add Quote Item
               </h3>
 
-              {/* Add Item Form */}
               <Card className="bg-slate-50 border-slate-200">
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-4 space-y-4">
                   {/* Toggle: Existing Part or Custom */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setCurrentItem({ ...currentItem, isCustom: false, customPartName: '' })}
+                      onClick={() => setCurrentItem({ ...currentItem, isCustom: false, customPartName: '', part: null, supplier: null })}
                       className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
                         !currentItem.isCustom
                           ? 'bg-teal-600 text-white'
@@ -274,7 +259,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       📦 Existing Part
                     </button>
                     <button
-                      onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null })}
+                      onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null, supplier: null })}
                       className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
                         currentItem.isCustom
                           ? 'bg-purple-600 text-white'
@@ -285,18 +270,50 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </button>
                   </div>
 
-                  {/* Existing Part Mode */}
-                  {!currentItem.isCustom && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Item Input Section */}
+                  {!currentItem.isCustom ? (
+                    <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-semibold block mb-1">Part *</label>
+                        <label className="text-sm font-semibold block mb-2">Part *</label>
                         <SearchablePartSelector
                           value={currentItem.part}
                           onChange={handlePartSelected}
                         />
                       </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">Item Description *</label>
+                      <Input
+                        type="text"
+                        value={currentItem.customPartName}
+                        onChange={(e) => setCurrentItem({ ...currentItem, customPartName: e.target.value })}
+                        placeholder="e.g., Custom Bracket, Installation Service, Tech Support"
+                      />
+                    </div>
+                  )}
+
+                  {/* Supplier Selection - Only show if part/item selected */}
+                  {(currentItem.part || currentItem.customPartName) && (
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">
+                        Supplier *
+                        {currentItem.supplier && (
+                          <span className="text-xs font-normal text-teal-600 ml-2">({currentItem.supplier.name})</span>
+                        )}
+                      </label>
+                      <SearchableSupplierSelector
+                        value={currentItem.supplier}
+                        onChange={(supplier) => setCurrentItem({ ...currentItem, supplier })}
+                      />
+                    </div>
+                  )}
+
+                  {/* Quantity */}
+                  {(currentItem.part || currentItem.customPartName) && (
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-sm font-semibold block mb-1">Quantity *</label>
+                        <label className="text-sm font-semibold block mb-2">Quantity *</label>
                         <Input
                           type="number"
                           min="1"
@@ -308,8 +325,16 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       <div className="flex flex-col justify-end">
                         <button
                           onClick={() => {
-                            if (!currentItem.part || !currentItem.quantity) {
-                              toast({ variant: 'destructive', title: 'Missing fields', description: 'Part and quantity required' });
+                            if (!currentItem.part && !currentItem.customPartName) {
+                              toast({ variant: 'destructive', title: 'Missing item' });
+                              return;
+                            }
+                            if (!currentItem.supplier) {
+                              toast({ variant: 'destructive', title: 'Missing supplier' });
+                              return;
+                            }
+                            if (!currentItem.quantity) {
+                              toast({ variant: 'destructive', title: 'Missing quantity' });
                               return;
                             }
                             if (editingIndex !== null) {
@@ -320,87 +345,51 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                             } else {
                               setItems([...items, currentItem]);
                             }
-                            setCurrentItem({ part: null, quantity: '', notes: '', isCustom: false, customPartName: '' });
+                            setCurrentItem({ part: null, supplier: null, quantity: '', notes: '', isCustom: false, customPartName: '' });
                           }}
-                          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors text-sm"
+                          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors text-sm h-10"
                         >
-                          {editingIndex !== null ? 'Update Item' : 'Add Item'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Custom Part Mode */}
-                  {currentItem.isCustom && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-sm font-semibold block mb-1">Item Name *</label>
-                        <Input
-                          type="text"
-                          value={currentItem.customPartName}
-                          onChange={(e) => setCurrentItem({ ...currentItem, customPartName: e.target.value })}
-                          placeholder="e.g., Custom Bracket, Service Hours"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-semibold block mb-1">Quantity *</label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={currentItem.quantity}
-                          onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
-                          placeholder="5"
-                        />
-                      </div>
-                      <div className="flex flex-col justify-end">
-                        <button
-                          onClick={() => {
-                            if (!currentItem.customPartName || !currentItem.quantity) {
-                              toast({ variant: 'destructive', title: 'Missing fields', description: 'Item name and quantity required' });
-                              return;
-                            }
-                            if (editingIndex !== null) {
-                              const newItems = [...items];
-                              newItems[editingIndex] = currentItem;
-                              setItems(newItems);
-                              setEditingIndex(null);
-                            } else {
-                              setItems([...items, currentItem]);
-                            }
-                            setCurrentItem({ part: null, quantity: '', notes: '', isCustom: false, customPartName: '' });
-                          }}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors text-sm"
-                        >
-                          {editingIndex !== null ? 'Update Item' : 'Add Item'}
+                          {editingIndex !== null ? 'Update' : 'Add Item'}
                         </button>
                       </div>
                     </div>
                   )}
 
                   {/* Notes */}
-                  <div>
-                    <label className="text-sm font-semibold block mb-1">Notes (Optional)</label>
-                    <Input
-                      type="text"
-                      value={currentItem.notes}
-                      onChange={(e) => setCurrentItem({ ...currentItem, notes: e.target.value })}
-                      placeholder="e.g., Specific model, color, certifications"
-                    />
-                  </div>
+                  {(currentItem.part || currentItem.customPartName) && (
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">Notes (Optional)</label>
+                      <Input
+                        type="text"
+                        value={currentItem.notes}
+                        onChange={(e) => setCurrentItem({ ...currentItem, notes: e.target.value })}
+                        placeholder="Special requirements, certifications, etc."
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+            </div>
 
-              {/* Items List */}
-              {items.length > 0 && (
-                <div className="space-y-2">
-                  {items.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-white border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="flex-1">
-                        <p className="font-semibold text-slate-900">
-                          {item.isCustom ? item.customPartName : item.part?.name}
-                        </p>
-                        <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
-                        {item.notes && <p className="text-xs text-amber-600 mt-1">📝 {item.notes}</p>}
+            {/* Items List */}
+            {items.length > 0 && (
+              <div className="space-y-2 border-t pt-4">
+                <h3 className="font-bold text-slate-900">Items ({items.length})</h3>
+                {items.map((item, idx) => (
+                  <div key={idx} className="p-4 bg-white border border-slate-200 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">
+                            {item.isCustom ? item.customPartName : item.part?.name}
+                          </p>
+                          {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
+                        </div>
+                        <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
+                        {item.supplier && (
+                          <p className="text-sm text-teal-600 font-medium">👤 {item.supplier.name}</p>
+                        )}
+                        {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -408,25 +397,27 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                             setCurrentItem(item);
                             setEditingIndex(idx);
                           }}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Metadata Section */}
-            <div className="space-y-3 border-t pt-6">
+            <div className="space-y-3 border-t pt-4">
               <h3 className="font-bold text-slate-900">Quote Details (Optional)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -471,13 +462,13 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             </div>
 
             {/* Navigation */}
-            <div className="flex gap-3 pt-6 border-t">
+            <div className="flex gap-3 pt-4 border-t">
               <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
                 Back
               </Button>
               <Button
                 onClick={() => setStep(3)}
-                disabled={items.length === 0 || selectedSuppliers.length === 0}
+                disabled={items.length === 0}
                 className="flex-1 bg-teal-600 hover:bg-teal-700"
               >
                 Review & Send
@@ -491,13 +482,16 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Review Step
   if (step === 3) {
+    const uniqueSuppliers = [...new Map(items.map(item => [item.supplier?.id, item.supplier])).values()];
+    const totalQuotes = items.length * uniqueSuppliers.length;
+
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
         <Card className="w-full max-w-4xl my-4">
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-green-50 to-green-100">
             <div>
               <CardTitle className="text-2xl">Review & Send Quotes</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 3 of 3: Confirm details before sending</p>
+              <p className="text-sm text-slate-600 mt-1">Step 3 of 3: Confirm before sending</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -516,49 +510,53 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               <Card className="bg-teal-50">
                 <CardContent className="pt-4">
                   <p className="text-xs text-teal-700 font-semibold uppercase">Suppliers</p>
-                  <p className="text-2xl font-bold text-teal-600 mt-1">{selectedSuppliers.length}</p>
+                  <p className="text-2xl font-bold text-teal-600 mt-1">{uniqueSuppliers.length}</p>
                 </CardContent>
               </Card>
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <p className="text-xs text-blue-700 font-semibold uppercase">Quotes</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">{items.length * selectedSuppliers.length}</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{totalQuotes}</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Items to be quoted */}
+            {/* Items */}
             <div>
-              <h4 className="font-bold text-slate-900 mb-3">Items ({items.length})</h4>
+              <h4 className="font-bold text-slate-900 mb-3">Items to be Quoted ({items.length})</h4>
               <div className="space-y-2">
                 {items.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {item.isCustom ? item.customPartName : item.part?.name}
-                      </p>
-                      <p className="text-xs text-slate-500">Qty: {item.quantity}</p>
+                  <div key={idx} className="p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-900">{item.isCustom ? item.customPartName : item.part?.name}</p>
+                        <p className="text-xs text-slate-600">Qty: {item.quantity} • Supplier: {item.supplier?.name}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Suppliers to receive quotes */}
+            {/* Suppliers */}
             <div>
-              <h4 className="font-bold text-slate-900 mb-3">Sending to Suppliers ({selectedSuppliers.length})</h4>
+              <h4 className="font-bold text-slate-900 mb-3">Suppliers Receiving Quotes ({uniqueSuppliers.length})</h4>
               <div className="space-y-2">
-                {selectedSuppliers.map(supplier => (
-                  <div key={supplier.id} className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
-                    <p className="font-semibold text-slate-900">{supplier.name}</p>
-                    <p className="text-xs text-slate-600">{supplier.email}</p>
-                  </div>
-                ))}
+                {uniqueSuppliers.map(supplier => {
+                  const itemsForSupplier = items.filter(i => i.supplier?.id === supplier.id);
+                  return (
+                    <div key={supplier.id} className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                      <p className="font-semibold text-slate-900">{supplier.name}</p>
+                      <p className="text-xs text-slate-600">{itemsForSupplier.length} item{itemsForSupplier.length !== 1 ? 's' : ''}</p>
+                      <p className="text-xs text-teal-700 mt-1">📧 {supplier.email}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Navigation */}
-            <div className="flex gap-3 pt-6 border-t">
+            <div className="flex gap-3 pt-4 border-t">
               <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>
                 Back
               </Button>
@@ -567,20 +565,32 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   setLoading(true);
                   try {
                     const quoteIds = [];
-                    for (const supplier of selectedSuppliers) {
-                      const { data, error } = await supabase
+                    const quotesBySupplier = {};
+
+                    // Group items by supplier
+                    items.forEach(item => {
+                      const supplierId = item.supplier.id;
+                      if (!quotesBySupplier[supplierId]) {
+                        quotesBySupplier[supplierId] = { supplier: item.supplier, items: [] };
+                      }
+                      quotesBySupplier[supplierId].items.push(item);
+                    });
+
+                    // Create one quote per supplier
+                    for (const [supplierId, data] of Object.entries(quotesBySupplier)) {
+                      const { data: created, error } = await supabase
                         .from('quote_requests')
                         .insert({
-                          quote_id: `QR-${Date.now().toString(36).toUpperCase()}`,
-                          supplier_id: supplier.id,
-                          items: items.map(i => ({
+                          quote_id: `QR-${Date.now().toString(36).toUpperCase()}-${supplierId.slice(0, 4).toUpperCase()}`,
+                          supplier_id: supplierId,
+                          items: data.items.map(i => ({
                             part_id: i.isCustom ? null : i.part?.id,
                             part_name: i.isCustom ? i.customPartName : i.part?.name,
                             quantity: parseInt(i.quantity),
                             notes: i.notes,
                             is_custom: i.isCustom
                           })),
-                          total_items: items.length,
+                          total_items: data.items.length,
                           estimated_total: 0,
                           status: 'pending',
                           created_by: user.id,
@@ -591,7 +601,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         .select();
 
                       if (error) throw error;
-                      quoteIds.push(data[0]);
+                      quoteIds.push(created[0]);
                     }
 
                     setCreatedQuotes(quoteIds);
@@ -621,7 +631,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Create & Send Quotes
+                    Create Quotes ({totalQuotes})
                   </>
                 )}
               </Button>
@@ -644,28 +654,16 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               </div>
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-slate-900">Quotes Sent Successfully!</h3>
+              <h3 className="text-2xl font-bold text-slate-900">Quotes Created Successfully!</h3>
               <p className="text-slate-600 mt-2">
-                {createdQuotes.length} quote request{createdQuotes.length !== 1 ? 's' : ''} sent to {selectedSuppliers.length} supplier{selectedSuppliers.length !== 1 ? 's' : ''}
+                {createdQuotes.length} quote{createdQuotes.length !== 1 ? 's' : ''} created and ready for tracking
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-slate-600">Items per Quote</p>
-                <p className="text-2xl font-bold text-slate-900">{items.length}</p>
-              </div>
-              <div className="p-3 bg-teal-50 rounded-lg">
-                <p className="text-teal-700">Total Quotes</p>
-                <p className="text-2xl font-bold text-teal-600">{createdQuotes.length}</p>
-              </div>
-            </div>
-            <p className="text-sm text-slate-600">
-              Track status in the Quote Dashboard using the Quote IDs below:
-            </p>
-            <div className="space-y-2 p-4 bg-slate-50 rounded-lg text-left max-h-40 overflow-y-auto">
+            <div className="p-4 bg-slate-50 rounded-lg text-left max-h-40 overflow-y-auto space-y-2">
               {createdQuotes.map((quote, idx) => (
-                <div key={idx} className="font-mono text-xs text-slate-700">
-                  {quote.quote_id}
+                <div key={idx} className="font-mono text-sm text-slate-700">
+                  <span className="font-bold">{quote.quote_id}</span>
+                  <span className="text-xs text-slate-500 ml-2">→ {quote.supplier_id}</span>
                 </div>
               ))}
             </div>
