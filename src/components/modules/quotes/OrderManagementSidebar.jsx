@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package, FileText, CheckCircle, Truck, Plus, Filter, Search } from 'lucide-react';
-import { dbService } from '../../../utils/dbService';
+import { supabase } from '@/lib/customSupabaseClient';
 import ManualQuoteRequestModal from './ManualQuoteRequestModal';
 import QuoteApprovalPanel from './QuoteApprovalPanel';
 import OrderTrackingPanel from './OrderTrackingPanel';
@@ -25,10 +25,14 @@ const OrderManagementSidebar = () => {
   const fetchQuoteRequests = async () => {
     try {
       setLoading(true);
-      const response = await dbService.get('/api/quote-requests', {
-        params: { limit: 100, sort: '-created_at' },
-      });
-      setQuoteRequests(response.data || []);
+      const { data, error } = await supabase
+        .from('quote_requests')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setQuoteRequests(data || []);
     } catch (err) {
       console.error('Error fetching quote requests:', err);
     } finally {
@@ -39,10 +43,14 @@ const OrderManagementSidebar = () => {
   // Fetch pending approvals
   const fetchPendingApprovals = async () => {
     try {
-      const response = await dbService.get('/api/quote-requests', {
-        params: { status: 'pending_approval', limit: 100 },
-      });
-      setPendingApprovals(response.data || []);
+      const { data, error } = await supabase
+        .from('quote_requests')
+        .select('*')
+        .eq('status', 'pending_approval')
+        .limit(100);
+
+      if (error) throw error;
+      setPendingApprovals(data || []);
     } catch (err) {
       console.error('Error fetching pending approvals:', err);
     }
@@ -51,10 +59,14 @@ const OrderManagementSidebar = () => {
   // Fetch purchase orders
   const fetchPurchaseOrders = async () => {
     try {
-      const response = await dbService.get('/api/purchase-orders', {
-        params: { limit: 100, sort: '-created_at' },
-      });
-      setPurchaseOrders(response.data || []);
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setPurchaseOrders(data || []);
     } catch (err) {
       console.error('Error fetching purchase orders:', err);
     }
@@ -283,8 +295,8 @@ const OrderManagementSidebar = () => {
       {/* New Quote Request Modal */}
       {showNewQuoteModal && (
         <ManualQuoteRequestModal
-          isOpen={showNewQuoteModal}
-          onClose={() => setShowNewQuoteModal(false)}
+          open={showNewQuoteModal}
+          onOpenChange={() => setShowNewQuoteModal(false)}
           onSuccess={() => {
             setShowNewQuoteModal(false);
             fetchQuoteRequests();
