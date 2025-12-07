@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { dbService } from '@/lib/supabase';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -68,8 +67,21 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: partsData } = await dbService.getSpareParts({}, 0, 500);
-      const { data: suppliersData } = await dbService.getSuppliers();
+      // Fetch parts
+      const { data: partsData, error: partsError } = await supabase
+        .from('spare_parts')
+        .select('*')
+        .limit(500);
+      
+      if (partsError) throw partsError;
+
+      // Fetch suppliers
+      const { data: suppliersData, error: suppliersError } = await supabase
+        .from('suppliers')
+        .select('*');
+      
+      if (suppliersError) throw suppliersError;
+
       setParts(partsData || []);
       setFilteredParts(partsData || []);
       setSuppliers(suppliersData || []);
@@ -92,7 +104,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     if (searchValue.length > 0) {
       const filtered = parts.filter(p =>
         p.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
-        p.part_number?.toLowerCase().includes(searchValue.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(searchValue.toLowerCase()) ||
         p.category?.toLowerCase().includes(searchValue.toLowerCase())
       );
       setFilteredParts(filtered);
@@ -116,7 +128,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const handleSupplierChange = (supplierId) => {
     setFormData({ ...formData, supplier_id: supplierId });
     const supplier = suppliers.find(s => s.id === supplierId);
-    setSelectedSupplier(supplier);
+    setSelectedSupplier(supplier || null);
   };
 
   const handleNext = () => {
@@ -254,11 +266,11 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-slate-600">Current Stock</p>
-                          <p className="font-bold text-lg text-slate-900">{selectedPart.current_quantity}</p>
+                          <p className="font-bold text-lg text-slate-900">{selectedPart.current_quantity || 0}</p>
                         </div>
                         <div>
                           <p className="text-slate-600">Reorder Point</p>
-                          <p className="font-bold text-lg text-slate-900">{selectedPart.reorder_point}</p>
+                          <p className="font-bold text-lg text-slate-900">{selectedPart.reorder_point || 0}</p>
                         </div>
                         <div>
                           <p className="text-slate-600">Category</p>
@@ -440,7 +452,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Part</p>
                         <p className="text-lg font-bold text-slate-900 mt-1">{selectedPart.name}</p>
-                        <p className="text-sm text-slate-600">#{selectedPart.part_number}</p>
+                        <p className="text-sm text-slate-600">#{selectedPart.sku || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
