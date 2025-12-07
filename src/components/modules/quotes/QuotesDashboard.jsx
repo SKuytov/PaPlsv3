@@ -3,6 +3,9 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import QuoteResponseModal from './QuoteResponseModal';
 import QuoteComparisonMatrix from './QuoteComparisonMatrix';
+import PurchaseOrderIntegration from './PurchaseOrderIntegration';
+import DeliveryIntegration from './DeliveryIntegration';
+import ApprovalCommentsIntegration from './ApprovalCommentsIntegration';
 import {
   Search,
   Filter,
@@ -24,6 +27,8 @@ import {
   User,
   Package,
   Trophy,
+  FileCheck,
+  Truck,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,6 +41,9 @@ const QuotesDashboard = () => {
   const [selectedQuote, setSelectedQuote] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
+  const [poModalOpen, setPoModalOpen] = useState(false);
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -120,6 +128,9 @@ const QuotesDashboard = () => {
     responded: quotes.filter(q => q.status === 'responded').length,
     approved: quotes.filter(q => q.status === 'approved').length,
     ordered: quotes.filter(q => q.status === 'ordered').length,
+    received: quotes.filter(q => q.status === 'received').length,
+    posSent: quotes.filter(q => q.po_status === 'sent').length,
+    delivered: quotes.filter(q => q.delivery_status === 'delivered').length,
     totalValue: quotes.reduce((sum, q) => sum + (parseFloat(q.estimated_total) || 0), 0),
     overdue: quotes.filter(q => {
       if (q.status !== 'pending' && q.status !== 'responded') return false;
@@ -134,6 +145,7 @@ const QuotesDashboard = () => {
       responded: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: '📧 Response Received' },
       approved: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', label: '✅ Approved' },
       ordered: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', label: '📦 Ordered' },
+      received: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: '✔️ Received' },
       rejected: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', label: '❌ Rejected' },
     };
     const style = statuses[status] || statuses.pending;
@@ -192,51 +204,65 @@ const QuotesDashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">📊 Quotes Dashboard</h1>
-          <p className="text-slate-600 mt-2">Track all quote requests, responses, and orders</p>
+          <p className="text-slate-600 mt-2">Track all quote requests, responses, orders, and deliveries</p>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-slate-600 font-semibold uppercase">Total Quotes</p>
-            <p className="text-2xl font-bold text-slate-900 mt-2">{kpis.total}</p>
+          <CardContent className="p-3">
+            <p className="text-xs text-slate-600 font-semibold uppercase">Total</p>
+            <p className="text-xl font-bold text-slate-900 mt-1">{kpis.total}</p>
           </CardContent>
         </Card>
 
         <Card className="border-yellow-200 bg-yellow-50/50">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-yellow-700 font-semibold uppercase">Pending</p>
-            <p className="text-2xl font-bold text-yellow-700 mt-2">{kpis.pending}</p>
+            <p className="text-xl font-bold text-yellow-700 mt-1">{kpis.pending}</p>
           </CardContent>
         </Card>
 
         <Card className="border-blue-200 bg-blue-50/50">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-blue-700 font-semibold uppercase">Responded</p>
-            <p className="text-2xl font-bold text-blue-700 mt-2">{kpis.responded}</p>
+            <p className="text-xl font-bold text-blue-700 mt-1">{kpis.responded}</p>
           </CardContent>
         </Card>
 
         <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-green-700 font-semibold uppercase">Approved</p>
-            <p className="text-2xl font-bold text-green-700 mt-2">{kpis.approved}</p>
+            <p className="text-xl font-bold text-green-700 mt-1">{kpis.approved}</p>
           </CardContent>
         </Card>
 
         <Card className="border-purple-200 bg-purple-50/50">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-purple-700 font-semibold uppercase">Ordered</p>
-            <p className="text-2xl font-bold text-purple-700 mt-2">{kpis.ordered}</p>
+            <p className="text-xl font-bold text-purple-700 mt-1">{kpis.ordered}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-emerald-200 bg-emerald-50/50">
+          <CardContent className="p-3">
+            <p className="text-xs text-emerald-700 font-semibold uppercase">Received</p>
+            <p className="text-xl font-bold text-emerald-700 mt-1">{kpis.received}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-indigo-200 bg-indigo-50/50">
+          <CardContent className="p-3">
+            <p className="text-xs text-indigo-700 font-semibold uppercase">POs Sent</p>
+            <p className="text-xl font-bold text-indigo-700 mt-1">{kpis.posSent}</p>
           </CardContent>
         </Card>
 
         <Card className="border-red-200 bg-red-50/50">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-red-700 font-semibold uppercase">⚠️ Overdue</p>
-            <p className="text-2xl font-bold text-red-700 mt-2">{kpis.overdue}</p>
+            <p className="text-xl font-bold text-red-700 mt-1">{kpis.overdue}</p>
           </CardContent>
         </Card>
       </div>
@@ -287,6 +313,7 @@ const QuotesDashboard = () => {
                 <option value="responded">📧 Response Received</option>
                 <option value="approved">✅ Approved</option>
                 <option value="ordered">📦 Ordered</option>
+                <option value="received">✔️ Received</option>
                 <option value="rejected">❌ Rejected</option>
               </select>
             </div>
@@ -422,7 +449,8 @@ const QuotesDashboard = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {/* Record Response */}
                             {quote.status === 'pending' && (
                               <button
                                 onClick={() => {
@@ -435,6 +463,8 @@ const QuotesDashboard = () => {
                                 <MessageSquare className="h-4 w-4" />
                               </button>
                             )}
+
+                            {/* Compare Quotes */}
                             {quote.status === 'responded' && canCompare(quote) && (
                               <button
                                 onClick={() => handleOpenComparison(quote)}
@@ -444,6 +474,50 @@ const QuotesDashboard = () => {
                                 <Trophy className="h-4 w-4" />
                               </button>
                             )}
+
+                            {/* Approve Quote */}
+                            {quote.status === 'responded' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedQuote(quote);
+                                  setApprovalModalOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-green-100 transition-colors text-green-600 hover:text-green-700"
+                                title="Approve quote with comments"
+                              >
+                                <FileCheck className="h-4 w-4" />
+                              </button>
+                            )}
+
+                            {/* Create PO */}
+                            {quote.status === 'approved' && !quote.po_number && (
+                              <button
+                                onClick={() => {
+                                  setSelectedQuote(quote);
+                                  setPoModalOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-indigo-100 transition-colors text-indigo-600 hover:text-indigo-700"
+                                title="Create Purchase Order"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </button>
+                            )}
+
+                            {/* Receive Goods */}
+                            {quote.status === 'ordered' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedQuote(quote);
+                                  setDeliveryModalOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-green-100 transition-colors text-green-600 hover:text-green-700"
+                                title="Confirm goods receipt"
+                              >
+                                <Package className="h-4 w-4" />
+                              </button>
+                            )}
+
+                            {/* View Details */}
                             <button
                               onClick={() => setSelectedQuote(quote)}
                               className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-slate-200 transition-colors text-slate-600 hover:text-slate-900"
@@ -464,7 +538,7 @@ const QuotesDashboard = () => {
       </Card>
 
       {/* Quote Details Modal */}
-      {selectedQuote && !responseModalOpen && !comparisonModalOpen && (
+      {selectedQuote && !responseModalOpen && !comparisonModalOpen && !poModalOpen && !deliveryModalOpen && !approvalModalOpen && (
         <QuoteDetailsModal
           quote={selectedQuote}
           onClose={() => setSelectedQuote(null)}
@@ -495,6 +569,42 @@ const QuotesDashboard = () => {
             setSelectedQuote(null);
           }}
           onWinnerSelected={fetchQuotes}
+        />
+      )}
+
+      {/* PO Integration Modal */}
+      {selectedQuote && poModalOpen && (
+        <PurchaseOrderIntegration
+          quote={selectedQuote}
+          onClose={() => {
+            setPoModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          onSuccess={fetchQuotes}
+        />
+      )}
+
+      {/* Delivery Integration Modal */}
+      {selectedQuote && deliveryModalOpen && (
+        <DeliveryIntegration
+          quote={selectedQuote}
+          onClose={() => {
+            setDeliveryModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          onSuccess={fetchQuotes}
+        />
+      )}
+
+      {/* Approval Comments Modal */}
+      {selectedQuote && approvalModalOpen && (
+        <ApprovalCommentsIntegration
+          quote={selectedQuote}
+          onClose={() => {
+            setApprovalModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          onSuccess={fetchQuotes}
         />
       )}
     </div>
@@ -539,8 +649,8 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const hasResponse = quote.supplier_response;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
+      <Card className="w-full max-w-2xl my-4">
         <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
           <div>
             <CardTitle className="text-xl">Quote Details</CardTitle>
@@ -613,6 +723,20 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
             <p className="text-2xl font-bold text-teal-600">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</p>
           </div>
 
+          {/* Approval Info if exists */}
+          {quote.approval_comments && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+              <h4 className="font-bold text-green-900 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Approval
+              </h4>
+              <p className="text-sm text-green-800"><strong>Comments:</strong> {quote.approval_comments}</p>
+              {quote.approval_date && (
+                <p className="text-xs text-green-700">Approved on {new Date(quote.approval_date).toLocaleDateString()}</p>
+              )}
+            </div>
+          )}
+
           {/* Response Info if exists */}
           {hasResponse && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
@@ -640,6 +764,32 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
             </div>
           )}
 
+          {/* PO Info if exists */}
+          {quote.po_number && (
+            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2">
+              <h4 className="font-bold text-indigo-900 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Purchase Order
+              </h4>
+              <p className="text-sm text-indigo-800"><strong>PO Number:</strong> {quote.po_number}</p>
+              <p className="text-xs text-indigo-700">Status: {quote.po_status || 'Draft'}</p>
+            </div>
+          )}
+
+          {/* Delivery Info if exists */}
+          {quote.delivery_status && quote.delivery_status !== 'pending' && (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
+              <h4 className="font-bold text-emerald-900 flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Delivery
+              </h4>
+              <p className="text-sm text-emerald-800"><strong>Status:</strong> {quote.delivery_status}</p>
+              {quote.actual_delivery_date && (
+                <p className="text-xs text-emerald-700">Received on {new Date(quote.actual_delivery_date).toLocaleDateString()}</p>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           {quote.request_notes && (
             <div>
@@ -650,35 +800,26 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
             </div>
           )}
 
-          {/* Delivery Date */}
-          {quote.delivery_date && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs text-blue-700 font-semibold uppercase">Requested Delivery</p>
-              <p className="text-sm font-bold text-blue-900 mt-1">
-                {new Date(quote.delivery_date).toLocaleDateString()}
-              </p>
-            </div>
-          )}
-
           {/* Status Update */}
-          <div className="space-y-3 pt-4 border-t">
-            <h4 className="font-bold text-slate-900">Update Status</h4>
-            <select
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              <option value="pending">⏳ Pending</option>
-              <option value="responded">📧 Response Received</option>
-              <option value="approved">✅ Approved</option>
-              <option value="ordered">📦 Ordered</option>
-              <option value="rejected">❌ Rejected</option>
-            </select>
-            <div className="flex gap-2">
+          {quote.status !== 'received' && (
+            <div className="space-y-3 pt-4 border-t">
+              <h4 className="font-bold text-slate-900">Update Status</h4>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="pending">⏳ Pending</option>
+                <option value="responded">📧 Response Received</option>
+                <option value="approved">✅ Approved</option>
+                <option value="ordered">📦 Ordered</option>
+                <option value="received">✔️ Received</option>
+                <option value="rejected">❌ Rejected</option>
+              </select>
               <Button
                 onClick={handleStatusUpdate}
                 disabled={updating || newStatus === quote.status}
-                className="flex-1 bg-teal-600 hover:bg-teal-700"
+                className="w-full bg-teal-600 hover:bg-teal-700"
               >
                 {updating ? (
                   <>
@@ -689,17 +830,8 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                   'Update Status'
                 )}
               </Button>
-              {quote.status === 'pending' && (
-                <Button
-                  onClick={onRecordResponse}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Record Response
-                </Button>
-              )}
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
