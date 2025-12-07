@@ -13,13 +13,13 @@ import SearchableSupplierSelector from './SearchableSupplierSelector';
 /**
  * EnhancedQuoteCreationFlow - Professional Quote Request Creation
  * Features:
- * - Item-level supplier selection (clean UX)
+ * - SMART Supplier Auto-Loading from preferred_supplier
+ * - Item-level supplier selection
  * - Free text entry for custom items
- * - Smart supplier detection for parts with preferred_supplier
  * - Complete workflow tracking
  */
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
-  const [step, setStep] = useState(1); // 1: Mode, 2: Items, 3: Review, 4: Success
+  const [step, setStep] = useState(1);
   const [mode, setMode] = useState(null);
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState({ 
@@ -59,7 +59,21 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     loadSuppliers();
   }, []);
 
-  // When part is selected, check if it has a preferred supplier
+  /**
+   * ENHANCED: Smart Supplier Auto-Loading
+   * 
+   * Logic:
+   * 1. Check if part has preferred_supplier object loaded
+   * 2. If yes, auto-load that supplier
+   * 3. Show toast confirmation
+   * 4. User can override if needed
+   * 
+   * This is WAY smarter because:
+   * - No database ID matching needed
+   * - The part object already has the full supplier data
+   * - Visual indicator in part selector (star badge)
+   * - Toast feedback for user confirmation
+   */
   const handlePartSelected = (part) => {
     setCurrentItem(prev => ({
       ...prev,
@@ -68,24 +82,25 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
       customPartName: ''
     }));
 
-    // If part has preferred_supplier_id, auto-load that supplier
-    if (part?.preferred_supplier_id) {
-      const preferredSupplier = allSuppliers.find(s => s.id === part.preferred_supplier_id);
-      if (preferredSupplier) {
-        setCurrentItem(prev => ({
-          ...prev,
-          part,
-          supplier: preferredSupplier,
-          isCustom: false,
-          customPartName: ''
-        }));
-        toast({
-          title: '✅ Preferred Supplier Loaded',
-          description: `${preferredSupplier.name} is set as the supplier for this part.`,
-          duration: 2000
-        });
-      }
+    // SMART LOGIC: Check if part has preferred_supplier object with data
+    if (part?.preferred_supplier && part.preferred_supplier.id) {
+      // Part has a preferred supplier - auto-load it!
+      setCurrentItem(prev => ({
+        ...prev,
+        part,
+        supplier: part.preferred_supplier,
+        isCustom: false,
+        customPartName: ''
+      }));
+
+      // Show confirmation toast
+      toast({
+        title: '⭐ Smart Match Found!',
+        description: `Supplier "${part.preferred_supplier.name}" is preferred for this part. You can change it if needed.`,
+        duration: 3000
+      });
     } else {
+      // No preferred supplier - clear supplier field, user must select
       setCurrentItem(prev => ({
         ...prev,
         part,
@@ -126,10 +141,10 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <Zap className="h-6 w-6 text-teal-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Quick Create</h3>
-                <p className="text-sm text-slate-600">Add items one by one with supplier selection</p>
-                <p className="text-xs text-slate-500 mt-3">✓ Select supplier per item</p>
-                <p className="text-xs text-slate-500">✓ Custom items</p>
-                <p className="text-xs text-slate-500">✓ Auto-load preferred suppliers</p>
+                <p className="text-sm text-slate-600">Add items one by one with smart supplier matching</p>
+                <p className="text-xs text-slate-500 mt-3">✓ Smart supplier auto-load</p>
+                <p className="text-xs text-slate-500">✓ Custom items supported</p>
+                <p className="text-xs text-slate-500">✓ Per-item supplier control</p>
               </button>
 
               {/* Bulk Mode */}
@@ -176,22 +191,22 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               <div className="flex gap-3">
                 <Clock className="h-5 w-5 text-teal-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">Fast Creation</p>
-                  <p className="text-xs text-slate-600">Most quotes in under 2 minutes</p>
+                  <p className="font-semibold text-slate-900 text-sm">Smart Matching</p>
+                  <p className="text-xs text-slate-600">Auto-loads preferred suppliers instantly</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <Users className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">Smart Suppliers</p>
-                  <p className="text-xs text-slate-600">One supplier per item, auto-loaded</p>
+                  <p className="font-semibold text-slate-900 text-sm">1-Click Quotes</p>
+                  <p className="text-xs text-slate-600">Usually done in under 2 minutes</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <Zap className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">Intuitive Flow</p>
-                  <p className="text-xs text-slate-600">Clean, step-by-step process</p>
+                  <p className="font-semibold text-slate-900 text-sm">Total Control</p>
+                  <p className="text-xs text-slate-600">Can override any auto-selected supplier</p>
                 </div>
               </div>
             </div>
@@ -214,7 +229,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-teal-50 to-teal-100">
             <div>
               <CardTitle className="text-2xl">Create Quote Request</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items with Suppliers</p>
+              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items with Smart Supplier Matching</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -229,9 +244,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <p className="font-semibold text-teal-900">{items.length} items added</p>
                   <p className="text-sm text-teal-700">{itemSuppliers.length} unique supplier{itemSuppliers.length !== 1 ? 's' : ''}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right space-y-0.5">
                   {itemSuppliers.map(s => (
-                    <p key={s.id} className="text-xs text-teal-700">{s.name}</p>
+                    <p key={s.id} className="text-xs text-teal-700 font-medium">
+                      ✓ {s.name}
+                    </p>
                   ))}
                 </div>
               </div>
@@ -256,7 +273,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                           : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
                       }`}
                     >
-                      📦 Existing Part
+                      📦 Existing Part (Smart Match)
                     </button>
                     <button
                       onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null, supplier: null })}
@@ -274,11 +291,14 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   {!currentItem.isCustom ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-semibold block mb-2">Part *</label>
+                        <label className="text-sm font-semibold block mb-2">Part * (with Smart Supplier Detection)</label>
                         <SearchablePartSelector
                           value={currentItem.part}
                           onChange={handlePartSelected}
                         />
+                        {currentItem.part && !currentItem.part?.preferred_supplier && (
+                          <p className="text-xs text-amber-600 mt-2">⚠️ This part has no preferred supplier set. You'll need to select one below.</p>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -293,19 +313,30 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </div>
                   )}
 
-                  {/* Supplier Selection - Only show if part/item selected */}
+                  {/* Supplier Selection - Shows status based on auto-load */}
                   {(currentItem.part || currentItem.customPartName) && (
                     <div>
                       <label className="text-sm font-semibold block mb-2">
                         Supplier *
                         {currentItem.supplier && (
-                          <span className="text-xs font-normal text-teal-600 ml-2">({currentItem.supplier.name})</span>
+                          <span className={`text-xs font-normal ml-2 px-2 py-0.5 rounded ${
+                            currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
+                              ? 'bg-teal-100 text-teal-700 font-semibold'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
+                              ? '⭐ Auto-Loaded'
+                              : '✓ Selected'}
+                          </span>
                         )}
                       </label>
                       <SearchableSupplierSelector
                         value={currentItem.supplier}
                         onChange={(supplier) => setCurrentItem({ ...currentItem, supplier })}
                       />
+                      {!currentItem.supplier && currentItem.part?.preferred_supplier && (
+                        <p className="text-xs text-teal-600 mt-2 font-medium">💡 Tip: Reload the part to auto-load the preferred supplier</p>
+                      )}
                     </div>
                   )}
 
@@ -387,7 +418,12 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         </div>
                         <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
                         {item.supplier && (
-                          <p className="text-sm text-teal-600 font-medium">👤 {item.supplier.name}</p>
+                          <p className="text-sm text-teal-600 font-medium flex items-center gap-1">
+                            👤 {item.supplier.name}
+                            {item.part?.preferred_supplier?.id === item.supplier.id && (
+                              <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold">⭐ Preferred</span>
+                            )}
+                          </p>
                         )}
                         {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
                       </div>
