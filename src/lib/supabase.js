@@ -124,6 +124,16 @@ export const dbService = {
   async getRoles() {
     return handleRequest(supabase.from('roles').select('id, name, description, permissions').order('name'));
   },
+  
+  // Notifications (stub for compatibility)
+  async getNotifications(userId) {
+    // Placeholder for future notification system
+    return { data: [], error: null };
+  },
+  async getNotificationCount(userId) {
+    return { data: 0, error: null };
+  },
+  
 // #region Quote Management & Approvals - NEW
   async getQuoteRequests(status = null) {
     let query = supabase.from('quote_requests').select(`
