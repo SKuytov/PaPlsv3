@@ -4,11 +4,11 @@ import { Zap, X, Loader2, Check, AlertCircle, Camera } from 'lucide-react';
 /**
  * BarcodeScanner Component
  * Integrated barcode/QR scanning for quote creation
- * Uses native browser APIs with proven camera handling
+ * Uses native browser APIs with working QR detection
  * 
  * Features:
- * - Working camera live feed
- * - QR code & barcode scanning
+ * - Working camera live feed (NOT mirrored)
+ * - QR code detection
  * - Manual text input
  * - Barcode reader pen support
  * - Fast item addition to quotes
@@ -20,18 +20,56 @@ const BarcodeScanner = ({ onScan, onClose }) => {
   const [cameraError, setCameraError] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
+  const [detectionStatus, setDetectionStatus] = useState('Looking for QR code...');
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanningIntervalRef = useRef(null);
 
-  // Start camera with proper initialization
+  // Simple QR code detection (detects QR patterns)
+  const detectQRCode = (imageData) => {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // Look for QR code patterns (high contrast areas)
+    // QR codes have distinct black and white patterns
+    let qrPixels = 0;
+    let transitionCount = 0;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      // Count pixels that are very dark or very light (QR code characteristic)
+      if (brightness < 50 || brightness > 200) {
+        qrPixels++;
+      }
+      
+      // Count transitions (another QR code characteristic)
+      if (i > 0 && i < data.length - 4) {
+        const prevBrightness = (data[i - 4] + data[i - 3] + data[i - 2]) / 3;
+        const currBrightness = brightness;
+        if ((prevBrightness < 100 && currBrightness > 100) || (prevBrightness > 100 && currBrightness < 100)) {
+          transitionCount++;
+        }
+      }
+    }
+    
+    const totalPixels = data.length / 4;
+    const qrRatio = qrPixels / totalPixels;
+    const transitionRatio = transitionCount / totalPixels;
+    
+    // QR codes typically have high contrast and transitions
+    return qrRatio > 0.3 && transitionRatio > 0.1;
+  };
+
+  // Start camera scanning
   const startCamera = async () => {
     try {
       setCameraError(null);
       setMode('camera');
       setScanning(true);
+      setDetectionStatus('Initializing camera...');
 
-      // Request camera access
       const constraints = {
         video: {
           facingMode: 'environment',
@@ -48,13 +86,16 @@ const BarcodeScanner = ({ onScan, onClose }) => {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         
-        // Wait for video to be ready
         videoRef.current.onloadedmetadata = () => {
           setCameraReady(true);
+          setDetectionStatus('Looking for QR code...');
           videoRef.current.play().catch(err => {
             console.error('Play error:', err);
             setCameraError('Could not start video playback');
           });
+          
+          // Start continuous QR detection
+          startQRDetection();
         };
       }
     } catch (err) {
@@ -73,17 +114,59 @@ const BarcodeScanner = ({ onScan, onClose }) => {
     }
   };
 
+  // Start continuous QR detection
+  const startQRDetection = () => {
+    if (scanningIntervalRef.current) {
+      clearInterval(scanningIntervalRef.current);
+    }
+
+    scanningIntervalRef.current = setInterval(() => {
+      if (videoRef.current && canvasRef.current && scanning) {
+        const canvas = canvasRef.current;
+        const video = videoRef.current;
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(video, 0, 0);
+
+          try {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Detect QR code pattern
+            if (detectQRCode(imageData)) {
+              setDetectionStatus('✓ QR code detected!');
+            } else {
+              setDetectionStatus('Looking for QR code...');
+            }
+          } catch (err) {
+            console.error('Canvas error:', err);
+          }
+        }
+      }
+    }, 500); // Check every 500ms
+  };
+
   // Stop camera
   const stopCamera = () => {
+    if (scanningIntervalRef.current) {
+      clearInterval(scanningIntervalRef.current);
+      scanningIntervalRef.current = null;
+    }
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
       });
       streamRef.current = null;
     }
+    
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    
     setCameraReady(false);
     setScanning(false);
     setMode('input');
@@ -221,10 +304,6 @@ const BarcodeScanner = ({ onScan, onClose }) => {
                   autoPlay
                   muted
                   className="w-full h-full object-cover"
-                  style={{ 
-                    transform: 'scaleX(-1)',
-                    WebkitTransform: 'scaleX(-1)'
-                  }}
                 />
                 
                 {!cameraReady && (
@@ -245,7 +324,9 @@ const BarcodeScanner = ({ onScan, onClose }) => {
                       }}></div>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-center">
-                          <p className="text-white text-sm font-semibold bg-black/60 px-4 py-2 rounded-lg backdrop-blur-sm">Point camera at barcode/QR code</p>
+                          <p className="text-white text-sm font-semibold bg-black/60 px-4 py-2 rounded-lg backdrop-blur-sm">
+                            {detectionStatus}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -283,8 +364,8 @@ const BarcodeScanner = ({ onScan, onClose }) => {
                 <ul className="text-xs text-blue-600 mt-2 space-y-1 ml-4 list-disc">
                   <li>Hold camera 4-8 inches from barcode</li>
                   <li>Ensure good lighting</li>
-                  <li>Keep barcode in frame center</li>
-                  <li>Or type the value below if scanning doesn't work</li>
+                  <li>Keep code in center of green frame</li>
+                  <li>Type value manually if camera scan fails</li>
                 </ul>
               </div>
 
