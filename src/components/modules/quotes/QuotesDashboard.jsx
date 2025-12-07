@@ -6,6 +6,7 @@ import QuoteComparisonMatrix from './QuoteComparisonMatrix';
 import PurchaseOrderIntegration from './PurchaseOrderIntegration';
 import DeliveryIntegration from './DeliveryIntegration';
 import ApprovalCommentsIntegration from './ApprovalCommentsIntegration';
+import EnhancedQuoteCreationFlow from './EnhancedQuoteCreationFlow';
 import {
   Search,
   Filter,
@@ -29,6 +30,7 @@ import {
   Trophy,
   FileCheck,
   Truck,
+  Plus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,6 +46,7 @@ const QuotesDashboard = () => {
   const [poModalOpen, setPoModalOpen] = useState(false);
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [createQuoteOpen, setCreateQuoteOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -206,6 +209,13 @@ const QuotesDashboard = () => {
           <h1 className="text-3xl font-bold text-slate-900">📊 Quotes Dashboard</h1>
           <p className="text-slate-600 mt-2">Track all quote requests, responses, orders, and deliveries</p>
         </div>
+        <Button
+          onClick={() => setCreateQuoteOpen(true)}
+          className="bg-teal-600 hover:bg-teal-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create Quote Request
+        </Button>
       </div>
 
       {/* KPI Cards */}
@@ -604,6 +614,14 @@ const QuotesDashboard = () => {
             setApprovalModalOpen(false);
             setSelectedQuote(null);
           }}
+          onSuccess={fetchQuotes}
+        />
+      )}
+
+      {/* Create Quote Modal */}
+      {createQuoteOpen && (
+        <EnhancedQuoteCreationFlow
+          onClose={() => setCreateQuoteOpen(false)}
           onSuccess={fetchQuotes}
         />
       )}
