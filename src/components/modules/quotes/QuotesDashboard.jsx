@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import QuoteResponseModal from './QuoteResponseModal';
+import QuoteComparisonMatrix from './QuoteComparisonMatrix';
 import {
   Search,
   Filter,
@@ -22,6 +23,7 @@ import {
   DollarSign,
   User,
   Package,
+  Trophy,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -33,6 +35,7 @@ const QuotesDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedQuote, setSelectedQuote] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -149,6 +152,38 @@ const QuotesDashboard = () => {
   const isOverdue = (quote) => {
     const days = getDaysSinceSent(quote.created_at);
     return (quote.status === 'pending' || quote.status === 'responded') && days > 7;
+  };
+
+  // Find quotes with same items for comparison
+  const canCompare = (quote) => {
+    if (quote.status !== 'responded') return false;
+    // Can compare if there are other responded quotes for same items
+    return quotes.some(q => 
+      q.id !== quote.id && 
+      q.status === 'responded' && 
+      q.total_items === quote.total_items
+    );
+  };
+
+  const handleOpenComparison = (quote) => {
+    // Get all responded quotes that can be compared
+    const comparableQuotes = quotes.filter(q => 
+      q.status === 'responded' && 
+      q.total_items === quote.total_items &&
+      q.supplier_response
+    );
+    
+    if (comparableQuotes.length < 2) {
+      toast({
+        variant: 'destructive',
+        title: 'Not Enough Quotes',
+        description: 'Need at least 2 responded quotes to compare'
+      });
+      return;
+    }
+
+    setSelectedQuote({ ...quote, comparableQuotes });
+    setComparisonModalOpen(true);
   };
 
   return (
@@ -400,6 +435,15 @@ const QuotesDashboard = () => {
                                 <MessageSquare className="h-4 w-4" />
                               </button>
                             )}
+                            {quote.status === 'responded' && canCompare(quote) && (
+                              <button
+                                onClick={() => handleOpenComparison(quote)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-purple-100 transition-colors text-purple-600 hover:text-purple-700"
+                                title="Compare with other quotes"
+                              >
+                                <Trophy className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => setSelectedQuote(quote)}
                               className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-slate-200 transition-colors text-slate-600 hover:text-slate-900"
@@ -420,7 +464,7 @@ const QuotesDashboard = () => {
       </Card>
 
       {/* Quote Details Modal */}
-      {selectedQuote && !responseModalOpen && (
+      {selectedQuote && !responseModalOpen && !comparisonModalOpen && (
         <QuoteDetailsModal
           quote={selectedQuote}
           onClose={() => setSelectedQuote(null)}
@@ -439,6 +483,18 @@ const QuotesDashboard = () => {
             setSelectedQuote(null);
           }}
           onSuccess={fetchQuotes}
+        />
+      )}
+
+      {/* Comparison Modal */}
+      {selectedQuote && comparisonModalOpen && (
+        <QuoteComparisonMatrix
+          quotes={selectedQuote.comparableQuotes || []}
+          onClose={() => {
+            setComparisonModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          onWinnerSelected={fetchQuotes}
         />
       )}
     </div>
