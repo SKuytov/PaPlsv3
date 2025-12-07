@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, AlertCircle, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 
@@ -34,6 +34,7 @@ const SearchableSupplierSelector = ({
       } catch (err) {
         setError('Failed to load suppliers');
         console.error('Error loading suppliers:', err);
+        setSuppliers([]);
       } finally {
         setLoading(false);
       }
@@ -42,25 +43,38 @@ const SearchableSupplierSelector = ({
     loadSuppliers();
   }, []);
 
-  // Filter suppliers based on search query
+  // Filter suppliers based on search query - stable memoization
   const filteredSuppliers = useMemo(() => {
-    if (!searchQuery.trim()) return suppliers;
+    try {
+      if (!Array.isArray(suppliers)) {
+        return [];
+      }
+      
+      if (!searchQuery || !searchQuery.trim()) {
+        return suppliers;
+      }
 
-    const query = searchQuery.toLowerCase();
-    return suppliers.filter(
-      (supplier) =>
-        supplier.name?.toLowerCase().includes(query) ||
-        supplier.email?.toLowerCase().includes(query) ||
-        supplier.phone?.toLowerCase().includes(query)
-    );
+      const query = searchQuery.toLowerCase();
+      return suppliers.filter((supplier) => {
+        if (!supplier) return false;
+        return (
+          (supplier.name && supplier.name.toLowerCase().includes(query)) ||
+          (supplier.email && supplier.email.toLowerCase().includes(query)) ||
+          (supplier.phone && supplier.phone.toLowerCase().includes(query))
+        );
+      });
+    } catch (err) {
+      console.error('Filter error:', err);
+      return suppliers || [];
+    }
   }, [suppliers, searchQuery]);
 
-  // Handle selection of supplier
-  const handleSelectSupplier = (supplier) => {
+  // Handle selection of supplier with stable callback
+  const handleSelectSupplier = useCallback((supplier) => {
     onChange(supplier);
     setIsOpen(false);
     setSearchQuery('');
-  };
+  }, [onChange]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -75,6 +89,8 @@ const SearchableSupplierSelector = ({
   }, []);
 
   const selectedSupplier = value;
+  const displayName = selectedSupplier?.name ? String(selectedSupplier.name) : 'Search suppliers...';
+  const inputValue = isOpen ? searchQuery : (selectedSupplier?.name ? String(selectedSupplier.name) : '');
 
   return (
     <div className="w-full space-y-2" ref={dropdownRef}>
@@ -88,8 +104,8 @@ const SearchableSupplierSelector = ({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder={selectedSupplier ? selectedSupplier.name : 'Search suppliers...'}
-            value={isOpen ? searchQuery : selectedSupplier?.name || ''}
+            placeholder={displayName}
+            value={inputValue}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setIsOpen(true);
@@ -105,6 +121,7 @@ const SearchableSupplierSelector = ({
                 setSearchQuery('');
               }}
               className="text-slate-400 hover:text-slate-600"
+              type="button"
             >
               ×
             </button>
@@ -131,57 +148,61 @@ const SearchableSupplierSelector = ({
             )}
 
             {/* Suppliers List */}
-            {!loading && filteredSuppliers.length > 0 && (
+            {!loading && Array.isArray(filteredSuppliers) && filteredSuppliers.length > 0 && (
               <div className="border-b border-slate-200">
-                {filteredSuppliers.map((supplier) => (
-                  <button
-                    key={supplier.id}
-                    onClick={() => handleSelectSupplier(supplier)}
-                    className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm text-slate-900">
-                          {supplier.name}
-                        </p>
-                        <div className="flex flex-col gap-1 mt-1">
-                          {supplier.email && (
-                            <span className="text-xs text-slate-500">
-                              📧 {supplier.email}
-                            </span>
-                          )}
-                          {supplier.phone && (
-                            <span className="text-xs text-slate-500">
-                              📞 {supplier.phone}
-                            </span>
-                          )}
-                        </div>
-                        {(supplier.quality_score || supplier.delivery_score) && (
-                          <div className="flex items-center gap-3 mt-2">
-                            {supplier.quality_score && (
-                              <span className="text-xs font-medium px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
-                                Quality: ⭐ {supplier.quality_score}
+                {filteredSuppliers.map((supplier) => {
+                  if (!supplier?.id) return null;
+                  return (
+                    <button
+                      key={supplier.id}
+                      onClick={() => handleSelectSupplier(supplier)}
+                      className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm text-slate-900">
+                            {supplier.name || 'Unknown'}
+                          </p>
+                          <div className="flex flex-col gap-1 mt-1">
+                            {supplier.email && (
+                              <span className="text-xs text-slate-500">
+                                📧 {supplier.email}
                               </span>
                             )}
-                            {supplier.delivery_score && (
-                              <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                                Delivery: ⭐ {supplier.delivery_score}
+                            {supplier.phone && (
+                              <span className="text-xs text-slate-500">
+                                📞 {supplier.phone}
                               </span>
                             )}
                           </div>
+                          {(supplier.quality_score || supplier.delivery_score) && (
+                            <div className="flex items-center gap-3 mt-2">
+                              {supplier.quality_score && (
+                                <span className="text-xs font-medium px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+                                  Quality: ⭐ {supplier.quality_score}
+                                </span>
+                              )}
+                              {supplier.delivery_score && (
+                                <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                                  Delivery: ⭐ {supplier.delivery_score}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {selectedSupplier?.id === supplier.id && (
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                         )}
                       </div>
-                      {selectedSupplier?.id === supplier.id && (
-                        <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {/* No Results Message */}
-            {!loading && filteredSuppliers.length === 0 && (
+            {!loading && (!Array.isArray(filteredSuppliers) || filteredSuppliers.length === 0) && !error && (
               <div className="p-4 text-center text-sm text-slate-500">
                 No suppliers found
               </div>
