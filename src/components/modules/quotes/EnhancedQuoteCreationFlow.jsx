@@ -36,6 +36,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [createdQuote, setCreatedQuote] = useState(null);
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [showDistribution, setShowDistribution] = useState(false);
+  const [distributionData, setDistributionData] = useState(null);
 
   // Load all suppliers on mount
   useEffect(() => {
@@ -531,20 +532,30 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 onClick={async () => {
                   setLoading(true);
                   try {
+                    console.log('=== CREATING QUOTE ===' );
+                    console.log('Items:', items);
+                    console.log('Metadata:', quoteMetadata);
+                    
                     // Create ONE quote with all items
                     const quoteId = `QR-${Date.now().toString(36).toUpperCase()}`;
+                    console.log('Quote ID:', quoteId);
+                    
+                    // Map items correctly for database
+                    const itemsForDB = items.map(i => ({
+                      part_id: i.isCustom ? null : (i.part?.id || null),
+                      part_name: i.isCustom ? i.customPartName : i.part?.name,
+                      quantity: parseInt(i.quantity),
+                      notes: i.notes || '',
+                      is_custom: i.isCustom
+                    }));
+                    
+                    console.log('Items for DB:', itemsForDB);
                     
                     const { data, error } = await supabase
                       .from('quote_requests')
                       .insert({
                         quote_id: quoteId,
-                        items: items.map(i => ({
-                          part_id: i.isCustom ? null : (i.part?.id || null),
-                          part_name: i.isCustom ? i.customPartName : i.part?.name,
-                          quantity: parseInt(i.quantity),
-                          notes: i.notes || '',
-                          is_custom: i.isCustom
-                        })),
+                        items: itemsForDB,
                         total_items: items.length,
                         estimated_total: 0,
                         status: 'pending',
@@ -555,27 +566,54 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       })
                       .select();
 
+                    console.log('Database response error:', error);
+                    console.log('Database response data:', data);
+
                     if (error) {
                       console.error('Database error:', error);
-                      throw error;
+                      throw new Error(error.message);
                     }
 
-                    if (data && data[0]) {
-                      setCreatedQuote(data[0]);
+                    if (data && data.length > 0) {
+                      const quote = data[0];
+                      console.log('Quote created successfully:', quote);
+                      
+                      // Prepare distribution data
+                      const distData = {
+                        id: quote.quote_id,
+                        items: items.map(i => ({
+                          part_name: i.isCustom ? i.customPartName : i.part?.name,
+                          quantity: i.quantity,
+                          notes: i.notes || '',
+                          is_custom: i.isCustom
+                        })),
+                        project: quote.project_name,
+                        delivery_date: quote.delivery_date,
+                        payment_terms: quoteMetadata.paymentTerms,
+                        special_notes: quote.request_notes,
+                        created_by: user?.email || 'Procurement Team',
+                        created_at: quote.created_at
+                      };
+                      
+                      console.log('Distribution data:', distData);
+                      
+                      setCreatedQuote(quote);
+                      setDistributionData(distData);
                       setShowDistribution(true);
                       setStep(4);
+                      
                       toast({
                         title: '✅ Quote Created',
                         description: `Quote #${quoteId} created successfully`
                       });
                     } else {
-                      throw new Error('No data returned from insert');
+                      throw new Error('No quote returned from database');
                     }
                   } catch (error) {
                     console.error('Error creating quote:', error);
                     toast({
                       variant: 'destructive',
-                      title: 'Error',
+                      title: 'Error Creating Quote',
                       description: error.message || 'Failed to create quote'
                     });
                   } finally {
@@ -606,6 +644,9 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Success Step with Distribution
   if (step === 4) {
+    console.log('STEP 4 - showDistribution:', showDistribution);
+    console.log('STEP 4 - distributionData:', distributionData);
+    
     return (
       <>
         {!showDistribution && (
@@ -639,6 +680,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <Button
                     className="flex-1 bg-teal-600 hover:bg-teal-700"
                     onClick={() => {
+                      console.log('Clicked Send Quote button');
                       setShowDistribution(true);
                     }}
                   >
@@ -650,34 +692,25 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           </div>
         )}
 
-        {/* Distribution Modal */}
-        {showDistribution && createdQuote && (
-          <div className="z-50">
-            <QuoteDistribution
-              quoteRequest={{
-                id: createdQuote.quote_id,
-                items: items,
-                project: createdQuote.project_name,
-                delivery_date: createdQuote.delivery_date,
-                payment_terms: quoteMetadata.paymentTerms,
-                special_notes: createdQuote.request_notes,
-                created_by: user?.email || 'Procurement Team',
-                created_at: createdQuote.created_at
-              }}
-              onClose={() => {
-                setShowDistribution(false);
-                onClose();
-              }}
-              onSent={(data) => {
-                toast({
-                  title: `✅ Quote sent via ${data.method}!`,
-                  description: `Quote #${createdQuote.quote_id} sent successfully`
-                });
-                setShowDistribution(false);
-                onClose();
-              }}
-            />
-          </div>
+        {/* Distribution Modal - ALWAYS render if showDistribution is true */}
+        {showDistribution && distributionData && (
+          <QuoteDistribution
+            quoteRequest={distributionData}
+            onClose={() => {
+              console.log('Distribution modal closed');
+              setShowDistribution(false);
+              onClose();
+            }}
+            onSent={(data) => {
+              console.log('Quote sent via:', data);
+              toast({
+                title: `✅ Quote sent via ${data.method}!`,
+                description: `Quote #${createdQuote?.quote_id} sent successfully`
+              });
+              setShowDistribution(false);
+              onClose();
+            }}
+          />
         )}
       </>
     );
