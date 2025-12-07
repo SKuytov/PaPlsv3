@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
+import QuoteDistribution from './QuoteDistribution';
 
 /**
  * EnhancedQuoteCreationFlow - Professional Quote Request Creation
@@ -17,6 +18,7 @@ import SearchableSupplierSelector from './SearchableSupplierSelector';
  * - Item-level supplier selection
  * - Free text entry for custom items
  * - Complete workflow tracking
+ * - Email Distribution with 3 methods (Auto-Send, Outlook, Preview & Copy)
  */
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [step, setStep] = useState(1);
@@ -42,6 +44,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   });
   const [createdQuotes, setCreatedQuotes] = useState([]);
   const [allSuppliers, setAllSuppliers] = useState([]);
+  const [showDistribution, setShowDistribution] = useState(false);
+  const [distributionQuote, setDistributionQuote] = useState(null);
 
   // Load all suppliers on mount
   useEffect(() => {
@@ -641,6 +645,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     }
 
                     setCreatedQuotes(quoteIds);
+                    setDistributionQuote(quoteIds[0]);
+                    setShowDistribution(true);
                     setStep(4);
                     toast({
                       title: '✅ Quotes Created',
@@ -678,52 +684,78 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     );
   }
 
-  // Success Step
+  // Success Step with Distribution
   if (step === 4) {
     return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
-          <CardContent className="p-12 text-center space-y-6">
-            <div className="flex justify-center">
-              <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-12 w-12 text-green-600" />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900">Quotes Created Successfully!</h3>
-              <p className="text-slate-600 mt-2">
-                {createdQuotes.length} quote{createdQuotes.length !== 1 ? 's' : ''} created and ready for tracking
-              </p>
-            </div>
-            <div className="p-4 bg-slate-50 rounded-lg text-left max-h-40 overflow-y-auto space-y-2">
-              {createdQuotes.map((quote, idx) => (
-                <div key={idx} className="font-mono text-sm text-slate-700">
-                  <span className="font-bold">{quote.quote_id}</span>
-                  <span className="text-xs text-slate-500 ml-2">→ {quote.supplier_id}</span>
+      <>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl">
+            <CardContent className="p-12 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-12 w-12 text-green-600" />
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={onClose}
-              >
-                Close
-              </Button>
-              <Button
-                className="flex-1 bg-teal-600 hover:bg-teal-700"
-                onClick={() => {
-                  onSuccess?.();
-                  onClose();
-                }}
-              >
-                Go to Dashboard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">Quotes Created Successfully!</h3>
+                <p className="text-slate-600 mt-2">
+                  {createdQuotes.length} quote{createdQuotes.length !== 1 ? 's' : ''} created and ready to send
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-lg text-left max-h-40 overflow-y-auto space-y-2">
+                {createdQuotes.map((quote, idx) => (
+                  <div key={idx} className="font-mono text-sm text-slate-700">
+                    <span className="font-bold">{quote.quote_id}</span>
+                    <span className="text-xs text-slate-500 ml-2">→ {quote.supplier_id}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={onClose}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="flex-1 bg-teal-600 hover:bg-teal-700"
+                  onClick={() => {
+                    setDistributionQuote(createdQuotes[0]);
+                    setShowDistribution(true);
+                  }}
+                >
+                  📧 Send Quotes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Distribution Modal */}
+        {showDistribution && distributionQuote && (
+          <QuoteDistribution
+            quoteRequest={{
+              id: distributionQuote.quote_id,
+              items: distributionQuote.items,
+              project: distributionQuote.project_name,
+              delivery_date: distributionQuote.delivery_date,
+              payment_terms: quoteMetadata.paymentTerms,
+              special_notes: distributionQuote.request_notes,
+              created_by: user?.email || 'Procurement Team',
+              created_at: distributionQuote.created_at
+            }}
+            onClose={() => setShowDistribution(false)}
+            onSent={(data) => {
+              toast({
+                title: `✅ Quote sent via ${data.method}!`,
+                description: `Quote #${distributionQuote.quote_id} sent successfully`
+              });
+              setShowDistribution(false);
+            }}
+          />
+        )}
+      </>
     );
   }
 };
