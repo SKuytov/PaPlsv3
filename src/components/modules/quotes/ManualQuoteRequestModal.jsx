@@ -3,7 +3,7 @@ import FileUploadManager from './FileUploadManager';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import EmailTemplateGenerator from './EmailTemplateGenerator';
-import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2 } from 'lucide-react';
+import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2, Send, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [submitting, setSubmitting] = useState(false);
   const [createdQuote, setCreatedQuote] = useState(null);
   const [attachments, setAttachments] = useState([]);
+  const [quoteId, setQuoteId] = useState('');
+  const [sendMethod, setSendMethod] = useState('system'); // system, outlook, copy
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -33,10 +35,24 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [selectedPart, setSelectedPart] = useState(null);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
+  // Generate unique quote ID on mount
+  useEffect(() => {
+    const generateQuoteId = () => {
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+      return `QR-${timestamp}-${random}`;
+    };
+    setQuoteId(generateQuoteId());
+  }, []);
+
   useEffect(() => {
     if (open) {
       setStep(1);
       resetForm();
+      // Generate new quote ID when modal opens
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+      setQuoteId(`QR-${timestamp}-${random}`);
     }
   }, [open]);
 
@@ -52,6 +68,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     setSelectedSupplier(null);
     setAttachments([]);
     setCreatedQuote(null);
+    setSendMethod('system');
   };
 
   const handleNext = () => {
@@ -79,9 +96,11 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      // First, save the quote request to the database
       const { data, error } = await supabase
         .from('quote_requests')
         .insert({
+          quote_id: quoteId,
           part_id: selectedPart.id,
           supplier_id: selectedSupplier.id,
           quantity_requested: parseInt(formData.quantity_requested),
@@ -90,6 +109,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
           delivery_date: formData.deliveryDate || null,
           budget_expectation: formData.budgetExpectation || null,
           status: 'pending',
+          send_method: sendMethod,
           created_by: user.id,
           created_at: new Date().toISOString(),
           has_attachments: attachments.length > 0,
@@ -99,15 +119,24 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
       if (error) throw error;
 
-      setCreatedQuote(data[0]);
-      setStep(3);
+      const createdQuoteData = data[0];
+      setCreatedQuote(createdQuoteData);
+
+      // If sending via system or Outlook, proceed to step 3 (confirmation)
+      if (sendMethod === 'system' || sendMethod === 'outlook') {
+        setStep(3);
+      }
+      // If copy/paste, show the copy option step
+      else if (sendMethod === 'copy') {
+        setStep(4);
+      }
 
       toast({
-        title: "Quote Request Created!",
-        description: `Quote request sent to ${selectedSupplier?.name}`
+        title: "Quote Request Recorded!",
+        description: `Quote ID: ${quoteId}`
       });
 
-      if (onSuccess) {
+      if (onSuccess && (sendMethod === 'system' || sendMethod === 'outlook')) {
         setTimeout(() => onSuccess(), 1500);
       }
     } catch (error) {
@@ -147,7 +176,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
             {/* Step Indicator */}
             <div className="flex gap-2 mb-6">
-              {[1, 2, 3].map((stepNum) => (
+              {[1, 2, 3, 4].map((stepNum) => (
                 <div key={stepNum} className="flex items-center">
                   <div
                     className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold transition-all ${
@@ -158,7 +187,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                   >
                     {step > stepNum ? <CheckCircle className="h-5 w-5" /> : stepNum}
                   </div>
-                  {stepNum < 3 && (
+                  {stepNum < 4 && (
                     <div
                       className={`h-1 w-12 mx-2 transition-all ${
                         step > stepNum ? 'bg-teal-600' : 'bg-slate-200'
@@ -172,6 +201,13 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
             {/* Step 1: Form */}
             {step === 1 && (
               <div className="space-y-6">
+                {/* Quote ID Display */}
+                <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg">
+                  <p className="text-xs text-teal-600 font-semibold uppercase">Quote ID (Auto-Generated)</p>
+                  <p className="text-lg font-mono font-bold text-teal-900 mt-2">{quoteId}</p>
+                  <p className="text-xs text-teal-700 mt-2">This ID will be in the email subject for easy tracking</p>
+                </div>
+
                 {/* Part Selection */}
                 <div>
                   <label className="text-sm font-semibold block mb-2">Select Part *</label>
@@ -317,6 +353,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                     quoteData={formData}
                     supplierData={selectedSupplier}
                     partData={selectedPart}
+                    quoteId={quoteId}
                   />
                 </div>
 
@@ -345,99 +382,138 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
               </div>
             )}
 
-            {/* Step 2: Review */}
+            {/* Step 2: Send Method Selection */}
             {step === 2 && selectedPart && selectedSupplier && (
               <div className="space-y-6">
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-amber-900">Review Before Sending</p>
-                    <p className="text-sm text-amber-800 mt-1">
-                      Please verify all details are correct. This quote request will be sent to the supplier.
+                    <p className="font-semibold text-blue-900">How would you like to send this quote?</p>
+                    <p className="text-sm text-blue-800 mt-1">
+                      The quote request will be saved to the system for tracking regardless of how you send it.
                     </p>
                   </div>
                 </div>
 
-                <Card>
-                  <CardHeader className="bg-slate-50 border-b">
-                    <CardTitle className="text-lg">Quote Request Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-2 gap-6 mb-6">
-                      <div>
-                        <p className="text-xs text-slate-600 font-semibold uppercase">Part</p>
-                        <p className="text-lg font-bold text-slate-900 mt-1">{selectedPart.name}</p>
-                        <p className="text-sm text-slate-600">#{selectedPart.sku || 'N/A'}</p>
+                {/* Send Method Options */}
+                <div className="space-y-3">
+                  {/* System Auto-Send */}
+                  <button
+                    onClick={() => setSendMethod('system')}
+                    className={`w-full p-4 border-2 rounded-lg transition-all text-left ${
+                      sendMethod === 'system'
+                        ? 'border-teal-600 bg-teal-50'
+                        : 'border-slate-200 bg-white hover:border-teal-400'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 mt-1 flex items-center justify-center ${
+                        sendMethod === 'system' ? 'border-teal-600 bg-teal-600' : 'border-slate-300'
+                      }`}>
+                        {sendMethod === 'system' && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
                       <div>
-                        <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
-                        <p className="text-lg font-bold text-slate-900 mt-1">{selectedSupplier.name}</p>
-                        <p className="text-sm text-slate-600">{selectedSupplier.email}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-600 font-semibold uppercase">Quantity</p>
-                        <p className="text-lg font-bold text-teal-600 mt-1">{formData.quantity_requested} units</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-600 font-semibold uppercase">Budget Expectation</p>
-                        <p className="text-lg font-bold text-slate-900 mt-1">
-                          {formData.budgetExpectation || 'Not specified'}
+                        <p className="font-semibold text-slate-900">🚀 Auto-Send via System</p>
+                        <p className="text-sm text-slate-600 mt-1">
+                          The system will send the quote email directly to the supplier automatically.
                         </p>
                       </div>
                     </div>
+                  </button>
 
-                    {formData.request_notes && (
-                      <div className="mt-6 pt-6 border-t">
-                        <p className="text-xs text-slate-600 font-semibold uppercase">Special Notes</p>
-                        <p className="text-slate-700 mt-2 whitespace-pre-wrap">{formData.request_notes}</p>
+                  {/* Outlook Option */}
+                  <button
+                    onClick={() => setSendMethod('outlook')}
+                    className={`w-full p-4 border-2 rounded-lg transition-all text-left ${
+                      sendMethod === 'outlook'
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 mt-1 flex items-center justify-center ${
+                        sendMethod === 'outlook' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
+                      }`}>
+                        {sendMethod === 'outlook' && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
-                    )}
+                      <div>
+                        <p className="font-semibold text-slate-900">📧 Open in Outlook</p>
+                        <p className="text-sm text-slate-600 mt-1">
+                          Opens Outlook with the pre-filled email. You can review and send manually.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
 
-                    {attachments.length > 0 && (
-                      <div className="mt-6 pt-6 border-t">
-                        <p className="text-xs text-slate-600 font-semibold uppercase mb-2">Attachments ({attachments.length})</p>
-                        <div className="space-y-1">
-                          {attachments.map((att, idx) => (
-                            <div key={idx} className="flex items-center gap-2 text-sm text-slate-700">
-                              <File className="h-4 w-4" />
-                              {att.name}
-                            </div>
-                          ))}
-                        </div>
+                  {/* Copy/Paste Option */}
+                  <button
+                    onClick={() => setSendMethod('copy')}
+                    className={`w-full p-4 border-2 rounded-lg transition-all text-left ${
+                      sendMethod === 'copy'
+                        ? 'border-purple-600 bg-purple-50'
+                        : 'border-slate-200 bg-white hover:border-purple-400'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 mt-1 flex items-center justify-center ${
+                        sendMethod === 'copy' ? 'border-purple-600 bg-purple-600' : 'border-slate-300'
+                      }`}>
+                        {sendMethod === 'copy' && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      <div>
+                        <p className="font-semibold text-slate-900">📋 Copy & Paste</p>
+                        <p className="text-sm text-slate-600 mt-1">
+                          Copy the email text and paste it into your email client manually.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
 
                 {/* Buttons */}
-                <div className="flex gap-2 pt-4">
+                <div className="flex gap-2 pt-4 border-t">
                   <Button
                     variant="outline"
                     className="flex-1"
                     onClick={() => setStep(1)}
-                    disabled={submitting}
                   >
                     Back
                   </Button>
                   <Button
                     onClick={handleSubmit}
-                    className="flex-1 bg-teal-600 hover:bg-teal-700"
+                    className={`flex-1 ${
+                      sendMethod === 'system'
+                        ? 'bg-teal-600 hover:bg-teal-700'
+                        : sendMethod === 'outlook'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
                     disabled={submitting}
                   >
                     {submitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Sending...
+                        Processing...
                       </>
+                    ) : sendMethod === 'system' ? (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Now
+                      </>
+                    ) : sendMethod === 'outlook' ? (
+                      <>Open in Outlook</>
                     ) : (
-                      'Send Quote Request'
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy Email
+                      </>
                     )}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Confirmation */}
+            {/* Step 3: Confirmation (for System Auto-Send or Outlook) */}
             {step === 3 && (
               <div className="text-center space-y-6 py-8">
                 <div className="flex justify-center">
@@ -449,7 +525,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                 <div>
                   <h3 className="text-2xl font-bold text-slate-900">Quote Request Sent!</h3>
                   <p className="text-slate-600 mt-2">
-                    Your quote request has been successfully sent to {selectedSupplier?.name}
+                    Your quote request has been sent to {selectedSupplier?.name}
                   </p>
                 </div>
 
@@ -459,7 +535,11 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       <div className="text-left space-y-3">
                         <div>
                           <p className="text-xs text-slate-600 font-semibold">Quote Request ID</p>
-                          <p className="font-mono text-sm text-slate-900 break-all">{createdQuote.id}</p>
+                          <p className="font-mono text-lg font-bold text-slate-900 break-all">{quoteId}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">Supplier</p>
+                          <p className="text-sm text-slate-900">{selectedSupplier?.name}</p>
                         </div>
                         <div>
                           <p className="text-xs text-slate-600 font-semibold">Status</p>
@@ -477,7 +557,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                 )}
 
                 <p className="text-sm text-slate-600">
-                  You can track the status in the Quote Management tab
+                  You can track the status in the Quote Management tab using the Quote ID above.
                 </p>
 
                 <Dialog.Close asChild>
@@ -485,6 +565,58 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                     Close
                   </Button>
                 </Dialog.Close>
+              </div>
+            )}
+
+            {/* Step 4: Copy/Paste Instructions */}
+            {step === 4 && (
+              <div className="space-y-6">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Quote Recorded & Ready to Send</p>
+                    <p className="text-sm text-amber-800 mt-1">
+                      Your quote request (ID: <span className="font-mono font-bold">{quoteId}</span>) has been saved to the system. Copy the email below and paste it into your email client.
+                    </p>
+                  </div>
+                </div>
+
+                {createdQuote && (
+                  <Card className="bg-slate-50 border-slate-200">
+                    <CardContent className="p-4">
+                      <div className="text-left space-y-3">
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">Quote ID</p>
+                          <p className="font-mono text-lg font-bold text-slate-900">{quoteId}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">Status</p>
+                          <p className="text-sm text-slate-900">Ready to Send - Saved for Tracking</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Email Template for Copy */}
+                <div>
+                  <label className="text-sm font-semibold text-slate-900 block mb-2">📋 Copy This Email</label>
+                  <EmailTemplateGenerator 
+                    quoteData={formData}
+                    supplierData={selectedSupplier}
+                    partData={selectedPart}
+                    quoteId={quoteId}
+                    showCopyOnly={true}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t">
+                  <Dialog.Close asChild>
+                    <Button variant="outline" className="flex-1">
+                      Done
+                    </Button>
+                  </Dialog.Close>
+                </div>
               </div>
             )}
           </Dialog.Content>
