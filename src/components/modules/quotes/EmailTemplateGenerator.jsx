@@ -3,23 +3,20 @@ import { Mail, Copy, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react
 
 /**
  * EmailTemplateGenerator Component
- * Generates professional email templates for sending quote requests
- * FIXED: Removed early return to prevent React Hook Violation #310
+ * Generates professional email templates with Quote ID for easy tracking
  */
-const EmailTemplateGenerator = ({ quoteData, supplierData, partData }) => {
+const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '', showCopyOnly = false }) => {
   const [copied, setCopied] = useState(false);
-  const [emailFormat, setEmailFormat] = useState('professional'); // professional, casual, technical
+  const [emailFormat, setEmailFormat] = useState('professional');
 
-  // Removed early return that caused React #310 hook violation
-  // Hooks must be called in the exact same order on every render
-
-  // Generate email subject - memoized
+  // Generate email subject with Quote ID - memoized
   const subject = useMemo(() => {
     if (!quoteData || !supplierData) return '';
     const partName = partData?.name || 'Part';
-    const quantity = quoteData.quantity || 1;
-    return `Quote Request: ${quantity}x ${partName}`;
-  }, [partData, quoteData, supplierData]);
+    const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
+    const idPart = quoteId ? ` [${quoteId}]` : '';
+    return `Quote Request: ${quantity}x ${partName}${idPart}`;
+  }, [partData, quoteData, supplierData, quoteId]);
 
   // Generate email body based on format - memoized
   const emailBody = useMemo(() => {
@@ -27,9 +24,9 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData }) => {
     
     const partName = partData?.name || 'Unknown Part';
     const partSku = partData?.sku || 'N/A';
-    const quantity = quoteData.quantity || 1;
+    const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
     const deliveryNeed = quoteData.deliveryDate || 'As soon as possible';
-    const specialNotes = quoteData.specialNotes || '';
+    const specialNotes = quoteData.request_notes || quoteData.specialNotes || '';
     const budgetExpectation = quoteData.budgetExpectation || '';
     const requesterName = quoteData.requesterName || 'The PartPulse Team';
     const requesterEmail = quoteData.requesterEmail || 'noreply@partpulse.eu';
@@ -37,10 +34,12 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData }) => {
     const companyName = quoteData.companyName || 'PartPulse Industrial';
     const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+    const quoteIdSection = quoteId ? `\nQuote Request ID: ${quoteId}\n` : '';
+
     const baseInfo = `Dear ${supplierData.name || 'Supplier'},
 
 We are reaching out regarding a quote request for the following item:
-
+${quoteIdSection}
 ------- QUOTE REQUEST DETAILS -------
 
 Part Information:
@@ -76,7 +75,7 @@ ${requesterPhone ? `Phone: ${requesterPhone}\n` : ''}${companyName}\n\n`;
   • Payment terms
   • Any volume discounts available
   • Warranty information
-\nPlease reply with your quotation at your earliest convenience.
+\nPlease reply with your quotation at your earliest convenience. Reference the Quote ID (${quoteId}) in your response for easy tracking.
 
 Thank you for your prompt attention to this request.
 
@@ -96,7 +95,7 @@ Quote Generated: ${date}`
         `Hi ${supplierData.name || 'there'},
 
 Hope you're doing well! We're looking for a quote on a part and thought of you.
-
+${quoteIdSection}
 **What We Need:**
 • Part: ${partName} (SKU: ${partSku})
 • Quantity: ${quantity} units
@@ -104,11 +103,13 @@ Hope you're doing well! We're looking for a quote on a part and thought of you.
 
 ${specialNotesSection}` +
         closingInfo +
-        `Could you send us your best quote? We're looking for:\n` +
-        `• Your pricing
+        `Could you send us your best quote? We're looking for:
+• Your pricing
 • How quickly you can deliver
 • Any bulk discounts
 • Your payment terms
+
+Please reference the Quote ID (${quoteId}) in your reply so we can track everything easily.
 
 Thanks a bunch!
 
@@ -139,6 +140,7 @@ ${specialNotesSection}` +
   7. Technical support availability
 
 Please ensure your quotation includes all technical specifications and compliance documentation if applicable.
+Reference Quote ID (${quoteId}) for tracking.
 
 Regards,
 ${requesterName}
@@ -150,7 +152,7 @@ Generated via PartPulse
 Date: ${date}`
       );
     }
-  }, [emailFormat, quoteData, supplierData, partData]);
+  }, [emailFormat, quoteData, supplierData, partData, quoteId]);
 
   const handleCopyToClipboard = () => {
     const fullEmail = `SUBJECT: ${subject}\n\n${emailBody}`;
@@ -215,7 +217,7 @@ Date: ${date}`
             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
               Subject
             </p>
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{subject}</p>
+            <p className="text-sm font-mono font-bold text-gray-900 dark:text-gray-100 mt-1 break-all">{subject}</p>
           </div>
 
           {/* Email Body */}
@@ -228,59 +230,87 @@ Date: ${date}`
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        {/* Copy to Clipboard */}
+      {!showCopyOnly && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Copy to Clipboard */}
+          <button
+            onClick={handleCopyToClipboard}
+            className={`flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+              copied
+                ? 'bg-green-500 hover:bg-green-600 text-white'
+                : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100'
+            }`}
+          >
+            {copied ? (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                Copied to Clipboard
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                Copy Email Text
+              </>
+            )}
+          </button>
+
+          {/* Send with Outlook (mailto) */}
+          {supplierData.email && (
+            <button
+              onClick={handleOpenInOutlook}
+              className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              title="Open in your default email client"
+            >
+              <Mail className="w-4 h-4" />
+              Open in Outlook
+            </button>
+          )}
+
+          {/* Send with Gmail */}
+          {supplierData.email && (
+            <button
+              onClick={handleOpenInGmail}
+              className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Send via Gmail
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Copy Only Mode (for step 4) */}
+      {showCopyOnly && (
         <button
           onClick={handleCopyToClipboard}
-          className={`flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+          className={`w-full px-4 py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
             copied
               ? 'bg-green-500 hover:bg-green-600 text-white'
-              : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100'
+              : 'bg-purple-600 hover:bg-purple-700 text-white'
           }`}
         >
           {copied ? (
             <>
               <CheckCircle className="w-4 h-4" />
-              Copied to Clipboard
+              Copied to Clipboard!
             </>
           ) : (
             <>
               <Copy className="w-4 h-4" />
-              Copy Email Text
+              Copy Full Email (Subject + Body)
             </>
           )}
         </button>
-
-        {/* Send with Outlook (mailto) */}
-        {supplierData.email && (
-          <button
-            onClick={handleOpenInOutlook}
-            className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            title="Open in your default email client"
-          >
-            <Mail className="w-4 h-4" />
-            Open in Outlook
-          </button>
-        )}
-
-        {/* Send with Gmail */}
-        {supplierData.email && (
-          <button
-            onClick={handleOpenInGmail}
-            className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Send via Gmail
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Info */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <p className="text-xs text-blue-700 dark:text-blue-300">
-          <strong>💡 Tip:</strong> Use "Copy Email Text" to paste into your email client, or use "Open in Outlook/Gmail" to send directly from your browser.
-        </p>
-      </div>
+      {!showCopyOnly && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <p className="text-xs text-blue-700 dark:text-blue-300">
+            <strong>💡 Tip:</strong> The Quote ID ({quoteId}) is included in the email subject for easy tracking.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
