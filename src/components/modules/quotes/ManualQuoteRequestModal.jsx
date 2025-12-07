@@ -3,7 +3,7 @@ import FileUploadManager from './FileUploadManager';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import EmailTemplateGenerator from './EmailTemplateGenerator';
-import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2, Send, Copy } from 'lucide-react';
+import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2, Send, Copy, Minus, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,19 +20,27 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [createdQuote, setCreatedQuote] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [quoteId, setQuoteId] = useState('');
-  const [sendMethod, setSendMethod] = useState('system'); // system, outlook, copy
+  const [sendMethod, setSendMethod] = useState('system');
+  const [items, setItems] = useState([]); // Multi-item support
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    quantity_requested: '',
-    requested_unit_price: '',
     request_notes: '',
     deliveryDate: '',
     budgetExpectation: '',
+    companyName: '',
+    projectName: '',
   });
 
-  const [selectedPart, setSelectedPart] = useState(null);
+  const [currentItem, setCurrentItem] = useState({
+    part: null,
+    quantity: '',
+    unitPrice: '',
+    notes: '',
+  });
+
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   // Generate unique quote ID on mount
@@ -49,7 +57,6 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     if (open) {
       setStep(1);
       resetForm();
-      // Generate new quote ID when modal opens
       const timestamp = Date.now().toString(36).toUpperCase();
       const random = Math.random().toString(36).substring(2, 8).toUpperCase();
       setQuoteId(`QR-${timestamp}-${random}`);
@@ -58,30 +65,37 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
   const resetForm = () => {
     setFormData({
-      quantity_requested: '',
-      requested_unit_price: '',
       request_notes: '',
       deliveryDate: '',
       budgetExpectation: '',
+      companyName: '',
+      projectName: '',
     });
-    setSelectedPart(null);
+    setCurrentItem({
+      part: null,
+      quantity: '',
+      unitPrice: '',
+      notes: '',
+    });
     setSelectedSupplier(null);
     setAttachments([]);
     setCreatedQuote(null);
     setSendMethod('system');
+    setItems([]);
+    setEditingItemIndex(null);
   };
 
-  const handleNext = () => {
-    if (!selectedPart || !selectedSupplier || !formData.quantity_requested) {
+  const addOrUpdateItem = () => {
+    if (!currentItem.part || !currentItem.quantity) {
       toast({
         variant: "destructive",
         title: "Missing Fields",
-        description: "Please fill in Part, Supplier, and Quantity"
+        description: "Please select a part and enter quantity"
       });
       return;
     }
 
-    if (parseInt(formData.quantity_requested) <= 0) {
+    if (parseInt(currentItem.quantity) <= 0) {
       toast({
         variant: "destructive",
         title: "Invalid Quantity",
@@ -90,24 +104,100 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       return;
     }
 
+    if (editingItemIndex !== null) {
+      // Update existing item
+      const updatedItems = [...items];
+      updatedItems[editingItemIndex] = { ...currentItem };
+      setItems(updatedItems);
+      setEditingItemIndex(null);
+      toast({
+        title: "Item Updated",
+        description: `${currentItem.part.name} updated`
+      });
+    } else {
+      // Add new item
+      setItems([...items, { ...currentItem }]);
+      toast({
+        title: "Item Added",
+        description: `${currentItem.part.name} added to quote`
+      });
+    }
+
+    // Reset form
+    setCurrentItem({
+      part: null,
+      quantity: '',
+      unitPrice: '',
+      notes: '',
+    });
+  };
+
+  const removeItem = (index) => {
+    const removedItem = items[index];
+    setItems(items.filter((_, i) => i !== index));
+    toast({
+      title: "Item Removed",
+      description: `${removedItem.part.name} removed from quote`
+    });
+  };
+
+  const editItem = (index) => {
+    setCurrentItem(items[index]);
+    setEditingItemIndex(index);
+  };
+
+  const handleNext = () => {
+    if (items.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No Items",
+        description: "Please add at least one item to the quote"
+      });
+      return;
+    }
+
+    if (!selectedSupplier) {
+      toast({
+        variant: "destructive",
+        title: "Missing Supplier",
+        description: "Please select a supplier"
+      });
+      return;
+    }
+
     setStep(2);
+  };
+
+  const calculateTotal = () => {
+    return items.reduce((sum, item) => {
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const quantity = parseInt(item.quantity) || 0;
+      return sum + (unitPrice * quantity);
+    }, 0);
   };
 
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      // First, save the quote request to the database
       const { data, error } = await supabase
         .from('quote_requests')
         .insert({
           quote_id: quoteId,
-          part_id: selectedPart.id,
           supplier_id: selectedSupplier.id,
-          quantity_requested: parseInt(formData.quantity_requested),
-          requested_unit_price: formData.requested_unit_price ? parseFloat(formData.requested_unit_price) : null,
+          items: items.map(item => ({
+            part_id: item.part.id,
+            part_name: item.part.name,
+            quantity: parseInt(item.quantity),
+            unit_price: item.unitPrice ? parseFloat(item.unitPrice) : null,
+            notes: item.notes || null
+          })),
+          total_items: items.length,
+          estimated_total: calculateTotal(),
           request_notes: formData.request_notes || null,
           delivery_date: formData.deliveryDate || null,
           budget_expectation: formData.budgetExpectation || null,
+          company_name: formData.companyName || null,
+          project_name: formData.projectName || null,
           status: 'pending',
           send_method: sendMethod,
           created_by: user.id,
@@ -122,18 +212,15 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       const createdQuoteData = data[0];
       setCreatedQuote(createdQuoteData);
 
-      // If sending via system or Outlook, proceed to step 3 (confirmation)
       if (sendMethod === 'system' || sendMethod === 'outlook') {
         setStep(3);
-      }
-      // If copy/paste, show the copy option step
-      else if (sendMethod === 'copy') {
+      } else if (sendMethod === 'copy') {
         setStep(4);
       }
 
       toast({
         title: "Quote Request Recorded!",
-        description: `Quote ID: ${quoteId}`
+        description: `Quote ID: ${quoteId} with ${items.length} item${items.length !== 1 ? 's' : ''}`
       });
 
       if (onSuccess && (sendMethod === 'system' || sendMethod === 'outlook')) {
@@ -160,7 +247,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <Dialog.Content className="w-full max-w-2xl bg-white rounded-2xl p-6 shadow-lg max-h-[90vh] overflow-y-auto">
+          <Dialog.Content className="w-full max-w-4xl bg-white rounded-2xl p-6 shadow-lg max-h-[95vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <Dialog.Title className="text-2xl font-bold text-slate-900">
@@ -198,62 +285,39 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
               ))}
             </div>
 
-            {/* Step 1: Form */}
+            {/* Step 1: Multi-Item Form */}
             {step === 1 && (
               <div className="space-y-6">
                 {/* Quote ID Display */}
                 <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg">
                   <p className="text-xs text-teal-600 font-semibold uppercase">Quote ID (Auto-Generated)</p>
                   <p className="text-lg font-mono font-bold text-teal-900 mt-2">{quoteId}</p>
-                  <p className="text-xs text-teal-700 mt-2">This ID will be in the email subject for easy tracking</p>
                 </div>
 
-                {/* Part Selection */}
-                <div>
-                  <label className="text-sm font-semibold block mb-2">Select Part *</label>
-                  <SearchablePartSelector 
-                    value={selectedPart}
-                    onChange={setSelectedPart}
-                    supplierFilter={selectedSupplier?.id}
-                  />
+                {/* Top Section: Supplier & General Info */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Supplier Selection */}
+                  <div>
+                    <label className="text-sm font-semibold block mb-2">Select Supplier *</label>
+                    <SearchableSupplierSelector
+                      value={selectedSupplier}
+                      onChange={setSelectedSupplier}
+                    />
+                  </div>
+
+                  {/* Project Info */}
+                  <div>
+                    <label className="text-sm font-semibold block mb-2">Project/Order Name (Optional)</label>
+                    <Input
+                      type="text"
+                      value={formData.projectName}
+                      onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                      placeholder="e.g., Q4 Maintenance, System Upgrade"
+                    />
+                  </div>
                 </div>
 
-                {/* Part Info */}
-                {selectedPart && (
-                  <Card className="bg-slate-50 border-slate-200">
-                    <CardContent className="p-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-slate-600">Current Stock</p>
-                          <p className="font-bold text-lg text-slate-900">{selectedPart.current_quantity || 0}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Reorder Point</p>
-                          <p className="font-bold text-lg text-slate-900">{selectedPart.reorder_point || 0}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Category</p>
-                          <p className="font-semibold text-slate-900">{selectedPart.category || '-'}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Unit Cost</p>
-                          <p className="font-semibold text-slate-900">€{selectedPart.unit_cost || '0.00'}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Supplier Selection */}
-                <div>
-                  <label className="text-sm font-semibold block mb-2">Select Supplier *</label>
-                  <SearchableSupplierSelector
-                    value={selectedSupplier}
-                    onChange={setSelectedSupplier}
-                  />
-                </div>
-
-                {/* Supplier Info */}
+                {/* Supplier Info Card */}
                 {selectedSupplier && (
                   <Card className="bg-blue-50 border-blue-200">
                     <CardContent className="p-4">
@@ -279,66 +343,221 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                   </Card>
                 )}
 
-                {/* Quantity & Price */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-semibold block mb-2">Quantity Needed *</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={formData.quantity_requested}
-                      onChange={(e) => setFormData({ ...formData, quantity_requested: e.target.value })}
-                      placeholder="Enter quantity"
-                    />
+                {/* Items Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Quote Items ({items.length})
+                    </h3>
+                    {editingItemIndex !== null && (
+                      <button
+                        onClick={() => {
+                          setEditingItemIndex(null);
+                          setCurrentItem({ part: null, quantity: '', unitPrice: '', notes: '' });
+                        }}
+                        className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
                   </div>
+
+                  {/* Current Item Form */}
+                  <Card className="bg-slate-50 border-slate-200">
+                    <CardHeader className="bg-slate-100 border-b pb-3">
+                      <CardTitle className="text-sm">
+                        {editingItemIndex !== null ? '✏️ Edit Item' : '➕ Add New Item'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-4">
+                      {/* Part Selection */}
+                      <div>
+                        <label className="text-sm font-semibold block mb-2">Select Part *</label>
+                        <SearchablePartSelector 
+                          value={currentItem.part}
+                          onChange={(part) => setCurrentItem({ ...currentItem, part })}
+                          supplierFilter={selectedSupplier?.id}
+                        />
+                      </div>
+
+                      {/* Part Details Grid */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-sm font-semibold block mb-2">Quantity *</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={currentItem.quantity}
+                            onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
+                            placeholder="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold block mb-2">Unit Price (€)</label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={currentItem.unitPrice}
+                            onChange={(e) => setCurrentItem({ ...currentItem, unitPrice: e.target.value })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold block mb-2">Line Total</label>
+                          <div className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold text-teal-600">
+                            €{(parseFloat(currentItem.unitPrice || 0) * parseInt(currentItem.quantity || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Item Notes */}
+                      <div>
+                        <label className="text-sm font-semibold block mb-2">Notes for this Item</label>
+                        <Input
+                          type="text"
+                          value={currentItem.notes}
+                          onChange={(e) => setCurrentItem({ ...currentItem, notes: e.target.value })}
+                          placeholder="e.g., Specific model, color, certification needed"
+                        />
+                      </div>
+
+                      {/* Add Button */}
+                      <button
+                        onClick={addOrUpdateItem}
+                        className="w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        {editingItemIndex !== null ? (
+                          <>
+                            <Edit2 className="h-4 w-4" />
+                            Update Item
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4" />
+                            Add Item
+                          </>
+                        )}
+                      </button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Items List */}
+                  {items.length > 0 && (
+                    <Card className="border border-slate-300">
+                      <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm">Items in Quote</CardTitle>
+                          <span className="text-xs px-2 py-1 bg-teal-100 text-teal-700 rounded-full font-semibold">
+                            {items.length} item{items.length !== 1 ? 's' : ''} • €{calculateTotal().toFixed(2)}
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 border-b">
+                              <tr>
+                                <th className="px-4 py-3 text-left font-semibold text-slate-700">Part</th>
+                                <th className="px-4 py-3 text-center font-semibold text-slate-700">Qty</th>
+                                <th className="px-4 py-3 text-right font-semibold text-slate-700">Unit Price</th>
+                                <th className="px-4 py-3 text-right font-semibold text-slate-700">Total</th>
+                                <th className="px-4 py-3 text-center font-semibold text-slate-700">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item, idx) => {
+                                const lineTotal = (parseFloat(item.unitPrice || 0) * parseInt(item.quantity || 0));
+                                return (
+                                  <tr key={idx} className={idx % 2 ? 'bg-white' : 'bg-slate-50 border-b'}>
+                                    <td className="px-4 py-3">
+                                      <div>
+                                        <p className="font-semibold text-slate-900">{item.part.name}</p>
+                                        <p className="text-xs text-slate-500">SKU: {item.part.sku || 'N/A'}</p>
+                                        {item.notes && <p className="text-xs text-amber-600 mt-1">📝 {item.notes}</p>}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-semibold">{item.quantity}</td>
+                                    <td className="px-4 py-3 text-right font-semibold">€{parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-right font-bold text-teal-600">€{lineTotal.toFixed(2)}</td>
+                                    <td className="px-4 py-3 text-center">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <button
+                                          onClick={() => editItem(idx)}
+                                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                          title="Edit item"
+                                        >
+                                          <Edit2 className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => removeItem(idx)}
+                                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="Remove item"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="border-t-2 border-slate-300 bg-teal-50">
+                              <tr>
+                                <td colSpan="3" className="px-4 py-3 text-right font-bold text-slate-900">
+                                  Estimated Total:
+                                </td>
+                                <td className="px-4 py-3 text-right text-xl font-bold text-teal-600">
+                                  €{calculateTotal().toFixed(2)}
+                                </td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* General Quote Info */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-slate-900">Additional Information</h3>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">Delivery Date</label>
+                      <Input
+                        type="date"
+                        value={formData.deliveryDate}
+                        onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">Budget Expectation (€)</label>
+                      <Input
+                        type="text"
+                        value={formData.budgetExpectation}
+                        onChange={(e) => setFormData({ ...formData, budgetExpectation: e.target.value })}
+                        placeholder="e.g., 5000-6000"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="text-sm font-semibold block mb-2">Expected Unit Price (€)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.requested_unit_price}
-                      onChange={(e) => setFormData({ ...formData, requested_unit_price: e.target.value })}
-                      placeholder="Optional - Your budget expectation"
+                    <label className="text-sm font-semibold block mb-2">General Notes & Special Requirements</label>
+                    <Textarea
+                      value={formData.request_notes}
+                      onChange={(e) => setFormData({ ...formData, request_notes: e.target.value })}
+                      placeholder="Payment terms, quality requirements, certifications, urgency notes, etc."
+                      className="resize-none h-24"
                     />
                   </div>
                 </div>
 
-                {/* Delivery Date & Budget */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-semibold block mb-2">Delivery Date</label>
-                    <Input
-                      type="date"
-                      value={formData.deliveryDate}
-                      onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold block mb-2">Budget Expectation (€)</label>
-                    <Input
-                      type="text"
-                      value={formData.budgetExpectation}
-                      onChange={(e) => setFormData({ ...formData, budgetExpectation: e.target.value })}
-                      placeholder="e.g., 500-600 EUR"
-                    />
-                  </div>
-                </div>
-
-                {/* Notes */}
+                {/* Attachments */}
                 <div>
-                  <label className="text-sm font-semibold block mb-2">Notes & Special Requirements</label>
-                  <Textarea
-                    value={formData.request_notes}
-                    onChange={(e) => setFormData({ ...formData, request_notes: e.target.value })}
-                    placeholder="Any special requirements, urgency, certifications needed, etc."
-                    className="resize-none h-24"
-                  />
-                </div>
-
-                {/* File Attachments */}
-                <div>
-                  <label className="text-sm font-semibold block mb-2">📎 Attachments (Images, PDFs, Documents)</label>
+                  <label className="text-sm font-semibold block mb-2">📎 Attachments (Specs, Drawings, etc.)</label>
                   <FileUploadManager 
                     onFilesSelected={setAttachments}
                     maxFiles={5}
@@ -346,19 +565,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                   />
                 </div>
 
-                {/* Email Template */}
-                <div>
-                  <label className="text-sm font-semibold block mb-2">📧 Email Template</label>
-                  <EmailTemplateGenerator 
-                    quoteData={formData}
-                    supplierData={selectedSupplier}
-                    partData={selectedPart}
-                    quoteId={quoteId}
-                  />
-                </div>
-
                 {/* Buttons */}
-                <div className="flex gap-2 pt-4">
+                <div className="flex gap-2 pt-4 border-t">
                   <Dialog.Close asChild>
                     <Button variant="outline" className="flex-1">
                       Cancel
@@ -367,36 +575,110 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                   <Button
                     onClick={handleNext}
                     className="flex-1 bg-teal-600 hover:bg-teal-700"
-                    disabled={loading}
                   >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      'Review & Send'
-                    )}
+                    Review & Send
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Send Method Selection */}
-            {step === 2 && selectedPart && selectedSupplier && (
+            {/* Step 2: Review Quote */}
+            {step === 2 && (
               <div className="space-y-6">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex gap-3">
                   <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-blue-900">How would you like to send this quote?</p>
-                    <p className="text-sm text-blue-800 mt-1">
-                      The quote request will be saved to the system for tracking regardless of how you send it.
-                    </p>
+                    <p className="font-semibold text-blue-900">Review Your Quote</p>
+                    <p className="text-sm text-blue-800 mt-1">Please verify all details before selecting send method.</p>
                   </div>
                 </div>
 
-                {/* Send Method Options */}
+                {/* Quote Summary */}
+                <Card>
+                  <CardHeader className="bg-gradient-to-r from-teal-50 to-teal-100 border-b">
+                    <CardTitle className="text-lg">Quote Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-6">
+                    {/* Header Info */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-600 font-semibold uppercase">Quote ID</p>
+                        <p className="font-mono font-bold text-slate-900 mt-1">{quoteId}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
+                        <p className="font-semibold text-slate-900 mt-1">{selectedSupplier?.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 font-semibold uppercase">Items</p>
+                        <p className="font-bold text-slate-900 mt-1">{items.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 font-semibold uppercase">Total</p>
+                        <p className="font-bold text-lg text-teal-600 mt-1">€{calculateTotal().toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Items Table */}
+                    <div className="border-t pt-6">
+                      <h4 className="font-bold text-slate-900 mb-3">Items</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-100 border-b">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold">Part</th>
+                              <th className="px-3 py-2 text-center font-semibold">Qty</th>
+                              <th className="px-3 py-2 text-right font-semibold">Unit Price</th>
+                              <th className="px-3 py-2 text-right font-semibold">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map((item, idx) => {
+                              const lineTotal = parseFloat(item.unitPrice || 0) * parseInt(item.quantity || 0);
+                              return (
+                                <tr key={idx} className={idx % 2 ? 'bg-white' : 'bg-slate-50'}>
+                                  <td className="px-3 py-2 font-semibold text-slate-900">{item.part.name}</td>
+                                  <td className="px-3 py-2 text-center">{item.quantity}</td>
+                                  <td className="px-3 py-2 text-right">€{parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+                                  <td className="px-3 py-2 text-right font-bold text-teal-600">€{lineTotal.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Request Details */}
+                    {(formData.deliveryDate || formData.budgetExpectation || formData.request_notes) && (
+                      <div className="border-t pt-6 space-y-3">
+                        {formData.deliveryDate && (
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">DELIVERY DATE</p>
+                            <p className="text-slate-900">{new Date(formData.deliveryDate).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                        {formData.budgetExpectation && (
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">BUDGET EXPECTATION</p>
+                            <p className="text-slate-900">€ {formData.budgetExpectation}</p>
+                          </div>
+                        )}
+                        {formData.request_notes && (
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">NOTES</p>
+                            <p className="text-slate-700 whitespace-pre-wrap">{formData.request_notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Send Method Selection */}
                 <div className="space-y-3">
+                  <h4 className="font-bold text-slate-900">How would you like to send this quote?</h4>
+                  
                   {/* System Auto-Send */}
                   <button
                     onClick={() => setSendMethod('system')}
@@ -414,9 +696,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       </div>
                       <div>
                         <p className="font-semibold text-slate-900">🚀 Auto-Send via System</p>
-                        <p className="text-sm text-slate-600 mt-1">
-                          The system will send the quote email directly to the supplier automatically.
-                        </p>
+                        <p className="text-sm text-slate-600 mt-1">System automatically emails the supplier</p>
                       </div>
                     </div>
                   </button>
@@ -437,10 +717,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                         {sendMethod === 'outlook' && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-900">📧 Open in Outlook</p>
-                        <p className="text-sm text-slate-600 mt-1">
-                          Opens Outlook with the pre-filled email. You can review and send manually.
-                        </p>
+                        <p className="font-semibold text-slate-900">📬 Open in Outlook</p>
+                        <p className="text-sm text-slate-600 mt-1">Review & send from your email client</p>
                       </div>
                     </div>
                   </button>
@@ -462,9 +740,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       </div>
                       <div>
                         <p className="font-semibold text-slate-900">📋 Copy & Paste</p>
-                        <p className="text-sm text-slate-600 mt-1">
-                          Copy the email text and paste it into your email client manually.
-                        </p>
+                        <p className="text-sm text-slate-600 mt-1">Copy email and send manually</p>
                       </div>
                     </div>
                   </button>
@@ -513,7 +789,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
               </div>
             )}
 
-            {/* Step 3: Confirmation (for System Auto-Send or Outlook) */}
+            {/* Step 3: Confirmation */}
             {step === 3 && (
               <div className="text-center space-y-6 py-8">
                 <div className="flex justify-center">
@@ -525,31 +801,31 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                 <div>
                   <h3 className="text-2xl font-bold text-slate-900">Quote Request Sent!</h3>
                   <p className="text-slate-600 mt-2">
-                    Your quote request has been sent to {selectedSupplier?.name}
+                    {items.length} item{items.length !== 1 ? 's' : ''} sent to {selectedSupplier?.name}
                   </p>
                 </div>
 
                 {createdQuote && (
                   <Card className="bg-slate-50 border-slate-200">
                     <CardContent className="p-4">
-                      <div className="text-left space-y-3">
+                      <div className="text-left space-y-3 text-sm">
                         <div>
-                          <p className="text-xs text-slate-600 font-semibold">Quote Request ID</p>
-                          <p className="font-mono text-lg font-bold text-slate-900 break-all">{quoteId}</p>
+                          <p className="text-xs text-slate-600 font-semibold">QUOTE ID</p>
+                          <p className="font-mono text-lg font-bold text-slate-900">{quoteId}</p>
                         </div>
-                        <div>
-                          <p className="text-xs text-slate-600 font-semibold">Supplier</p>
-                          <p className="text-sm text-slate-900">{selectedSupplier?.name}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-600 font-semibold">Status</p>
-                          <p className="text-sm text-slate-900">Waiting for supplier response</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-600 font-semibold">Created</p>
-                          <p className="text-sm text-slate-900">
-                            {new Date(createdQuote.created_at).toLocaleString()}
-                          </p>
+                        <div className="grid grid-cols-3 gap-4 pt-3 border-t">
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">Items</p>
+                            <p className="font-bold text-slate-900">{items.length}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">Total</p>
+                            <p className="font-bold text-teal-600">€{calculateTotal().toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-600 font-semibold">Status</p>
+                            <p className="font-bold text-slate-900">Pending</p>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -557,7 +833,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                 )}
 
                 <p className="text-sm text-slate-600">
-                  You can track the status in the Quote Management tab using the Quote ID above.
+                  Track status using Quote ID in the Quote Management tab
                 </p>
 
                 <Dialog.Close asChild>
@@ -568,53 +844,53 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
               </div>
             )}
 
-            {/* Step 4: Copy/Paste Instructions */}
+            {/* Step 4: Copy Instructions */}
             {step === 4 && (
               <div className="space-y-6">
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
                   <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-amber-900">Quote Recorded & Ready to Send</p>
+                    <p className="font-semibold text-amber-900">Quote Saved & Ready to Send</p>
                     <p className="text-sm text-amber-800 mt-1">
-                      Your quote request (ID: <span className="font-mono font-bold">{quoteId}</span>) has been saved to the system. Copy the email below and paste it into your email client.
+                      Quote ID: <span className="font-mono font-bold">{quoteId}</span> with {items.length} item{items.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
 
                 {createdQuote && (
-                  <Card className="bg-slate-50 border-slate-200">
+                  <Card>
                     <CardContent className="p-4">
-                      <div className="text-left space-y-3">
+                      <p className="text-xs text-slate-600 font-semibold mb-2">QUOTE DETAILS</p>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
-                          <p className="text-xs text-slate-600 font-semibold">Quote ID</p>
-                          <p className="font-mono text-lg font-bold text-slate-900">{quoteId}</p>
+                          <p className="text-slate-600">ID</p>
+                          <p className="font-mono font-bold text-slate-900">{quoteId}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-600 font-semibold">Status</p>
-                          <p className="text-sm text-slate-900">Ready to Send - Saved for Tracking</p>
+                          <p className="text-slate-600">Total Items</p>
+                          <p className="font-bold text-slate-900">{items.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-600">Total Value</p>
+                          <p className="font-bold text-teal-600">€{calculateTotal().toFixed(2)}</p>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Email Template for Copy */}
-                <div>
-                  <label className="text-sm font-semibold text-slate-900 block mb-2">📋 Copy This Email</label>
-                  <EmailTemplateGenerator 
-                    quoteData={formData}
-                    supplierData={selectedSupplier}
-                    partData={selectedPart}
-                    quoteId={quoteId}
-                    showCopyOnly={true}
-                  />
-                </div>
+                <EmailTemplateGenerator 
+                  quoteData={formData}
+                  supplierData={selectedSupplier}
+                  partData={null}
+                  quoteId={quoteId}
+                  showCopyOnly={true}
+                  items={items}
+                />
 
                 <div className="flex gap-2 pt-4 border-t">
                   <Dialog.Close asChild>
-                    <Button variant="outline" className="flex-1">
-                      Done
-                    </Button>
+                    <Button variant="outline" className="flex-1">Done</Button>
                   </Dialog.Close>
                 </div>
               </div>
