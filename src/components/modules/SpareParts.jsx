@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReorderQuoteOrders from './quotes/ReorderQuoteOrders';
+import ManualQuoteRequestModal from './quotes/ManualQuoteRequestModal';
+import BulkQuoteRequestCreator from './quotes/BulkQuoteRequestCreator';
 import { AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
@@ -35,7 +37,7 @@ import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
 
 // --- REORDER MODAL COMPONENT (WITH CORRECT SUPPLIERS TABLE SCHEMA) ---
-const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuoteRequests }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
@@ -547,8 +549,8 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
 
                 {/* Global Export Options */}
                 {Object.keys(groupedParts).length > 0 && (
-                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Export All Items</h3>
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-900">Export & Actions</h3>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => handleCopyToClipboard('list')}
@@ -579,6 +581,13 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                       >
                         <FileText className="h-3.5 w-3.5" />
                         HTML
+                      </button>
+                      <button
+                        onClick={() => onCreateQuoteRequests(reorderParts)}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-xs font-medium ml-auto"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Create Quote Requests
                       </button>
                     </div>
                   </div>
@@ -611,6 +620,9 @@ const SpareParts = () => {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showManualQuoteModal, setShowManualQuoteModal] = useState(false);
+  const [showBulkQuoteCreator, setShowBulkQuoteCreator] = useState(false);
+  const [bulkQuoteParts, setBulkQuoteParts] = useState([]);
   const [showReorderOrders, setShowReorderOrders] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
@@ -668,6 +680,11 @@ const SpareParts = () => {
     setEditingPart(part);
     handleCloseDetails();
     setIsFormOpen(true);
+  };
+
+  const handleCreateBulkQuoteRequests = (reorderParts) => {
+    setBulkQuoteParts(reorderParts);
+    setShowBulkQuoteCreator(true);
   };
 
   const pageSize = 12;
@@ -834,50 +851,52 @@ const SpareParts = () => {
               <option value="critical">Critical</option>
             </select>
 
-{/* Action Buttons */}
-<div className="flex gap-2">
-  {isGodAdmin && (
-    <>
-      <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
-        <Plus className="h-4 w-4 mr-1" />
-        Add Part
-      </Button>
-      <Button
-        onClick={() => setShowReorderOrders(true)}
-        className="bg-teal-600 hover:bg-teal-700"
-      >
-        <FileText className="h-4 w-4 mr-2" />
-        <span className="hidden sm:inline">Quote Request</span>
-      </Button>
-    </>
-  )}
+            {/* Action Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              {isGodAdmin && (
+                <>
+                  <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Part
+                  </Button>
+                  <Button
+                    onClick={() => setShowManualQuoteModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">New Quote Request</span>
+                    <span className="sm:hidden">Quote Request</span>
+                  </Button>
+                </>
+              )}
 
-  {/* Reorder Button with Badge */}
-  <button
-    onClick={() => setShowReorderModal(true)}
-    className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs sm:text-sm"
-  >
-    <RotateCcw className="h-4 w-4" />
-    <span className="hidden sm:inline">Reorder</span>
-    {needsReorderCount > 0 && (
-      <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
-    )}
-  </button>
+              {/* Reorder Button with Badge */}
+              <button
+                onClick={() => setShowReorderModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs sm:text-sm"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span className="hidden sm:inline">Reorder</span>
+                {needsReorderCount > 0 && (
+                  <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
+                )}
+              </button>
 
-  <Button
-    onClick={resetFilters}
-    variant="outline"
-    size="sm"
-    className="text-xs sm:text-sm"
-  >
-    <RotateCcw className="h-4 w-4" />
-  </Button>
+              <Button
+                onClick={resetFilters}
+                variant="outline"
+                size="sm"
+                className="text-xs sm:text-sm"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
 
-  <ReorderQuoteOrders
-  open={showReorderOrders}
-  onOpenChange={setShowReorderOrders}
-/>
-</div>
+              <ReorderQuoteOrders
+                open={showReorderOrders}
+                onOpenChange={setShowReorderOrders}
+              />
+            </div>
           </div>
         </div>
 
@@ -959,7 +978,7 @@ const SpareParts = () => {
         onEditRequest={handlePartEdit}
       />
 
-      {/* PartForm - FIXED: Changed 'part' to 'editPart' prop */}
+      {/* PartForm */}
       {isFormOpen && (
         <PartForm
           open={isFormOpen}
@@ -984,6 +1003,35 @@ const SpareParts = () => {
         onOpenChange={setShowReorderModal}
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
         onPartClick={handlePartClick}
+        onCreateQuoteRequests={handleCreateBulkQuoteRequests}
+      />
+
+      {/* Manual Quote Request Modal */}
+      <ManualQuoteRequestModal
+        open={showManualQuoteModal}
+        onOpenChange={setShowManualQuoteModal}
+        onSuccess={() => {
+          setShowManualQuoteModal(false);
+          toast({
+            title: "Quote Request Sent!",
+            description: "Check the Pending Quotes tab to track status"
+          });
+        }}
+      />
+
+      {/* Bulk Quote Request Creator */}
+      <BulkQuoteRequestCreator
+        open={showBulkQuoteCreator}
+        onOpenChange={setShowBulkQuoteCreator}
+        selectedParts={bulkQuoteParts}
+        onSuccess={() => {
+          setShowBulkQuoteCreator(false);
+          setShowReorderModal(false);
+          toast({
+            title: "Quote Requests Created!",
+            description: "Check the Pending Quotes tab to track status"
+          });
+        }}
       />
     </>
   );
