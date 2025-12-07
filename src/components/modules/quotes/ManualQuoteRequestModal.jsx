@@ -32,7 +32,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     supplier_id: '',
     quantity_requested: '',
     requested_unit_price: '',
-    request_notes: ''
+    request_notes: '',
+    deliveryDate: '',
+    budgetExpectation: '',
   });
 
   const [selectedPart, setSelectedPart] = useState(null);
@@ -53,7 +55,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       supplier_id: '',
       quantity_requested: '',
       requested_unit_price: '',
-      request_notes: ''
+      request_notes: '',
+      deliveryDate: '',
+      budgetExpectation: '',
     });
     setSelectedPart(null);
     setSelectedSupplier(null);
@@ -115,25 +119,6 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     setSelectedSupplier(supplier);
   };
 
-  const handleAttachmentUpload = (e) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach(file => {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "File too large",
-          description: "Maximum file size is 5MB"
-        });
-        return;
-      }
-      setAttachments(prev => [...prev, { id: Date.now(), file, name: file.name }]);
-    });
-  };
-
-  const removeAttachment = (id) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  };
-
   const handleNext = () => {
     if (!formData.part_id || !formData.supplier_id || !formData.quantity_requested) {
       toast({
@@ -167,10 +152,13 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
           quantity_requested: parseInt(formData.quantity_requested),
           requested_unit_price: formData.requested_unit_price ? parseFloat(formData.requested_unit_price) : null,
           request_notes: formData.request_notes || null,
+          delivery_date: formData.deliveryDate || null,
+          budget_expectation: formData.budgetExpectation || null,
           status: 'pending',
           created_by: user.id,
           created_at: new Date().toISOString(),
-          has_attachments: attachments.length > 0
+          has_attachments: attachments.length > 0,
+          attachments: attachments.map(a => ({ name: a.name, size: a.file.size }))
         })
         .select();
 
@@ -249,44 +237,14 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
             {/* Step 1: Form */}
             {step === 1 && (
               <div className="space-y-6">
-                {/* Part Search */}
-                <div className="relative">
+                {/* Part Selection */}
+                <div>
                   <label className="text-sm font-semibold block mb-2">Select Part *</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by name, number, or category..."
-                      value={formData.partSearch}
-                      onChange={(e) => handlePartSearch(e.target.value)}
-                      onFocus={() => formData.partSearch && setShowPartDropdown(true)}
-                      className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-
-                  {/* Dropdown */}
-                  {showPartDropdown && (
-                    <div className="absolute top-full mt-1 w-full bg-white border border-slate-300 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
-                      {filteredParts.length === 0 ? (
-                        <div className="p-4 text-center text-slate-500">
-                          No parts found. Create one in Spare Parts module.
-                        </div>
-                      ) : (
-                        filteredParts.map(part => (
-                          <button
-                            key={part.id}
-                            onClick={() => handleSelectPart(part)}
-                            className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b last:border-b-0 transition-colors"
-                          >
-                            <div className="font-semibold text-slate-900">{part.name}</div>
-                            <div className="text-xs text-slate-600">
-                              #{part.part_number} • {part.category} • Stock: {part.current_quantity}
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  <SearchablePartSelector 
+                    value={selectedPart}
+                    onChange={setSelectedPart}
+                    supplierFilter={selectedSupplier?.id}
+                  />
                 </div>
 
                 {/* Part Info */}
@@ -383,6 +341,27 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                   </div>
                 </div>
 
+                {/* Delivery Date & Budget */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold block mb-2">Delivery Date</label>
+                    <Input
+                      type="date"
+                      value={formData.deliveryDate}
+                      onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold block mb-2">Budget Expectation (€)</label>
+                    <Input
+                      type="text"
+                      value={formData.budgetExpectation}
+                      onChange={(e) => setFormData({ ...formData, budgetExpectation: e.target.value })}
+                      placeholder="e.g., 500-600 EUR"
+                    />
+                  </div>
+                </div>
+
                 {/* Notes */}
                 <div>
                   <label className="text-sm font-semibold block mb-2">Notes & Special Requirements</label>
@@ -396,44 +375,22 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
                 {/* File Attachments */}
                 <div>
-                  <label className="text-sm font-semibold block mb-2">Attachments (Optional)</label>
-                  <div className="border-2 border-dashed border-slate-300 rounded-lg p-4">
-                    <input
-                      type="file"
-                      multiple
-                      onChange={handleAttachmentUpload}
-                      className="hidden"
-                      id="file-upload"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png,.gif"
-                    />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="flex flex-col items-center">
-                        <Upload className="h-6 w-6 text-slate-400 mb-2" />
-                        <p className="text-sm font-medium text-slate-700">Click to upload or drag and drop</p>
-                        <p className="text-xs text-slate-500 mt-1">PNG, JPG, PDF, DOC, XLS up to 5MB</p>
-                      </div>
-                    </label>
-                  </div>
+                  <label className="text-sm font-semibold block mb-2">📎 Attachments (Images, PDFs, Documents)</label>
+                  <FileUploadManager 
+                    onFilesSelected={setAttachments}
+                    maxFiles={5}
+                    maxSizePerFile={10}
+                  />
+                </div>
 
-                  {/* Attachments List */}
-                  {attachments.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {attachments.map(att => (
-                        <div key={att.id} className="flex items-center justify-between p-2 bg-slate-50 rounded border">
-                          <div className="flex items-center gap-2">
-                            <File className="h-4 w-4 text-slate-600" />
-                            <span className="text-sm text-slate-700">{att.name}</span>
-                          </div>
-                          <button
-                            onClick={() => removeAttachment(att.id)}
-                            className="text-red-600 hover:text-red-700 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                {/* Email Template */}
+                <div>
+                  <label className="text-sm font-semibold block mb-2">📧 Email Template</label>
+                  <EmailTemplateGenerator 
+                    quoteData={formData}
+                    supplierData={selectedSupplier}
+                    partData={selectedPart}
+                  />
                 </div>
 
                 {/* Buttons */}
@@ -497,13 +454,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Budget Expectation</p>
                         <p className="text-lg font-bold text-slate-900 mt-1">
-                          {formData.requested_unit_price
-                            ? `€${(parseFloat(formData.requested_unit_price) * parseInt(formData.quantity_requested)).toFixed(2)}`
-                            : 'Not specified'}
+                          {formData.budgetExpectation || 'Not specified'}
                         </p>
-                        {formData.requested_unit_price && (
-                          <p className="text-sm text-slate-600">€{formData.requested_unit_price}/unit</p>
-                        )}
                       </div>
                     </div>
 
@@ -518,8 +470,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                       <div className="mt-6 pt-6 border-t">
                         <p className="text-xs text-slate-600 font-semibold uppercase mb-2">Attachments ({attachments.length})</p>
                         <div className="space-y-1">
-                          {attachments.map(att => (
-                            <div key={att.id} className="flex items-center gap-2 text-sm text-slate-700">
+                          {attachments.map((att, idx) => (
+                            <div key={idx} className="flex items-center gap-2 text-sm text-slate-700">
                               <File className="h-4 w-4" />
                               {att.name}
                             </div>
