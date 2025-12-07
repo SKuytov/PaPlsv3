@@ -8,7 +8,7 @@ const LoadingScreen = () => {
         <div className="absolute inset-0 bg-teal-100 rounded-full animate-ping opacity-25"></div>
         <Loader2 className="w-16 h-16 animate-spin text-teal-600 relative z-10" />
       </div>
-      <h2 className="mt-8 text-xl font-bold text-slate-800">Loading WMS</h2>
+      <h2 className="mt-8 text-xl font-bold text-slate-800">Loading PartPulse v3</h2>
       <p className="text-slate-500 mt-2">Initializing application...</p>
     </div>
   );
