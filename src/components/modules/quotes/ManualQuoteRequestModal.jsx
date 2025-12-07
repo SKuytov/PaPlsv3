@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FileUploadManager from './FileUploadManager';
 import SearchablePartSelector from './SearchablePartSelector';
+import SearchableSupplierSelector from './SearchableSupplierSelector';
 import EmailTemplateGenerator from './EmailTemplateGenerator';
 import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,21 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [step, setStep] = useState(1); // 1: Form, 2: Review, 3: Confirmation
-  const [parts, setParts] = useState([]);
-  const [filteredParts, setFilteredParts] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createdQuote, setCreatedQuote] = useState(null);
-  const [showPartDropdown, setShowPartDropdown] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    part_id: '',
-    partSearch: '',
-    supplier_id: '',
     quantity_requested: '',
     requested_unit_price: '',
     request_notes: '',
@@ -43,15 +37,11 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     if (open) {
       setStep(1);
       resetForm();
-      loadData();
     }
   }, [open]);
 
   const resetForm = () => {
     setFormData({
-      part_id: '',
-      partSearch: '',
-      supplier_id: '',
       quantity_requested: '',
       requested_unit_price: '',
       request_notes: '',
@@ -64,75 +54,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     setCreatedQuote(null);
   };
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // Fetch parts
-      const { data: partsData, error: partsError } = await supabase
-        .from('spare_parts')
-        .select('*')
-        .limit(500);
-      
-      if (partsError) throw partsError;
-
-      // Fetch suppliers
-      const { data: suppliersData, error: suppliersError } = await supabase
-        .from('suppliers')
-        .select('*');
-      
-      if (suppliersError) throw suppliersError;
-
-      setParts(partsData || []);
-      setFilteredParts(partsData || []);
-      setSuppliers(suppliersData || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load parts and suppliers"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePartSearch = (searchValue) => {
-    setFormData({ ...formData, partSearch: searchValue, part_id: '' });
-    setSelectedPart(null);
-
-    if (searchValue.length > 0) {
-      const filtered = parts.filter(p =>
-        p.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(searchValue.toLowerCase()) ||
-        p.category?.toLowerCase().includes(searchValue.toLowerCase())
-      );
-      setFilteredParts(filtered);
-      setShowPartDropdown(true);
-    } else {
-      setFilteredParts(parts);
-      setShowPartDropdown(false);
-    }
-  };
-
-  const handleSelectPart = (part) => {
-    setFormData({
-      ...formData,
-      part_id: part.id,
-      partSearch: part.name
-    });
-    setSelectedPart(part);
-    setShowPartDropdown(false);
-  };
-
-  const handleSupplierChange = (supplierId) => {
-    setFormData({ ...formData, supplier_id: supplierId });
-    const supplier = suppliers.find(s => s.id === supplierId);
-    setSelectedSupplier(supplier || null);
-  };
-
   const handleNext = () => {
-    if (!formData.part_id || !formData.supplier_id || !formData.quantity_requested) {
+    if (!selectedPart || !selectedSupplier || !formData.quantity_requested) {
       toast({
         variant: "destructive",
         title: "Missing Fields",
@@ -159,8 +82,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       const { data, error } = await supabase
         .from('quote_requests')
         .insert({
-          part_id: formData.part_id,
-          supplier_id: formData.supplier_id,
+          part_id: selectedPart.id,
+          supplier_id: selectedSupplier.id,
           quantity_requested: parseInt(formData.quantity_requested),
           requested_unit_price: formData.requested_unit_price ? parseFloat(formData.requested_unit_price) : null,
           request_notes: formData.request_notes || null,
@@ -288,18 +211,10 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                 {/* Supplier Selection */}
                 <div>
                   <label className="text-sm font-semibold block mb-2">Select Supplier *</label>
-                  <select
-                    value={formData.supplier_id}
-                    onChange={(e) => handleSupplierChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="">Choose a supplier...</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSupplierSelector
+                    value={selectedSupplier}
+                    onChange={setSelectedSupplier}
+                  />
                 </div>
 
                 {/* Supplier Info */}
