@@ -124,6 +124,263 @@ export const dbService = {
   async getRoles() {
     return handleRequest(supabase.from('roles').select('id, name, description, permissions').order('name'));
   },
+// #region Quote Management & Approvals - NEW
+  async getQuoteRequests(status = null) {
+    let query = supabase.from('quote_requests').select(`
+      *,
+      part:spare_parts(id, name, part_number, category),
+      supplier:suppliers(id, name, email),
+      quotes:quotes(*),
+      approvals:quote_approvals(*)
+    `).order('created_at', { ascending: false });
+    
+    if (status) query = query.eq('status', status);
+    
+    return handleRequest(query);
+  },
+
+  async getQuoteRequest(id) {
+    return handleRequest(supabase.from('quote_requests')
+      .select(`
+        *,
+        part:spare_parts(*),
+        supplier:suppliers(*),
+        quotes:quotes(*),
+        approvals:quote_approvals(*),
+        purchase_orders:purchase_orders(*),
+        created_user:users!created_by(id, full_name, email)
+      `)
+      .eq('id', id)
+      .single());
+  },
+
+  async updateQuoteRequestStatus(id, status) {
+    return handleRequest(supabase.from('quote_requests')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single());
+  },
+
+  // Quote Approvals
+  async createQuoteApproval(quoteRequestId, approvalLevel, userId) {
+    return handleRequest(supabase.from('quote_approvals')
+      .insert({
+        quote_request_id: quoteRequestId,
+        approval_level: approvalLevel,
+        created_by: userId,
+        approval_status: 'pending'
+      })
+      .select()
+      .single());
+  },
+
+  async getQuoteApprovalsForUser(userId, approvalLevel) {
+    return handleRequest(supabase.from('quote_approvals')
+      .select(`
+        *,
+        quote_request:quote_requests(
+          id,
+          quantity_requested,
+          requested_unit_price,
+          request_notes,
+          created_at,
+          part:spare_parts(id, name, part_number),
+          supplier:suppliers(id, name, email),
+          quotes(id, total_quote_price, quoted_unit_price)
+        )
+      `)
+      .eq('approval_level', approvalLevel)
+      .eq('approval_status', 'pending')
+      .order('created_at', { ascending: false }));
+  },
+
+  async approveQuote(approvalId, notes, userId) {
+    return handleRequest(supabase.from('quote_approvals')
+      .update({
+        approval_status: 'approved',
+        approved_by: userId,
+        approved_at: new Date().toISOString(),
+        notes: notes
+      })
+      .eq('id', approvalId)
+      .select()
+      .single());
+  },
+
+  async rejectQuote(approvalId, rejectionReason, userId) {
+    return handleRequest(supabase.from('quote_approvals')
+      .update({
+        approval_status: 'rejected',
+        approved_by: userId,
+        approved_at: new Date().toISOString(),
+        rejection_reason: rejectionReason
+      })
+      .eq('id', approvalId)
+      .select()
+      .single());
+  },
+
+  // Purchase Orders
+  async generatePONumber() {
+    const date = new Date().toISOString().split('T').replace(/-/g, '');
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `PO-${date}-${random}`;
+  },
+
+  async createPurchaseOrder(poData, userId) {
+    const poNumber = await this.generatePONumber();
+    return handleRequest(supabase.from('purchase_orders')
+      .insert({
+        ...poData,
+        po_number: poNumber,
+        placed_by: userId,
+        placed_at: new Date().toISOString(),
+        po_status: 'draft'
+      })
+      .select(`
+        *,
+        supplier:suppliers(*),
+        part:spare_parts(name, part_number),
+        quote_request:quote_requests(*)
+      `)
+      .single());
+  },
+
+  async getPurchaseOrder(poId) {
+    return handleRequest(supabase.from('purchase_orders')
+      .select(`
+        *,
+        supplier:suppliers(*),
+        part:spare_parts(name, part_number),
+        quote_request:quote_requests(*),
+        tracking:order_tracking(*),
+        delivery:delivery_verification(*)
+      `)
+      .eq('id', poId)
+      .single());
+  },
+
+  async getPurchaseOrders(status = null) {
+    let query = supabase.from('purchase_orders').select(`
+      *,
+      supplier:suppliers(name),
+      part:spare_parts(name, part_number),
+      tracking:order_tracking(*),
+      placed_user:users!placed_by(full_name)
+    `).order('placed_at', { ascending: false });
+
+    if (status) query = query.eq('po_status', status);
+    
+    return handleRequest(query);
+  },
+
+  async updatePurchaseOrderStatus(poId, status) {
+    return handleRequest(supabase.from('purchase_orders')
+      .update({
+        po_status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', poId)
+      .select()
+      .single());
+  },
+
+  // Order Tracking
+  async addOrderTracking(poId, trackingData, userId) {
+    const { data: trackingRecord, error } = await handleRequest(supabase.from('order_tracking')
+      .insert({
+        po_id: poId,
+        status: trackingData.status,
+        tracking_number: trackingData.tracking_number,
+        carrier: trackingData.carrier,
+        estimated_delivery: trackingData.estimated_delivery,
+        notes: trackingData.notes,
+        updated_by: userId
+      })
+      .select()
+      .single());
+
+    if (!error && trackingRecord) {
+      await this.updatePurchaseOrderStatus(poId, trackingData.status);
+    }
+
+    return { data: trackingRecord, error };
+  },
+
+  async getOrderTracking(poId) {
+    return handleRequest(supabase.from('order_tracking')
+      .select('*')
+      .eq('po_id', poId)
+      .order('status_date', { ascending: false }));
+  },
+
+  // Delivery Verification
+  async verifyDelivery(poId, verificationData, userId) {
+    // Create verification record
+    const { data: verification, error } = await handleRequest(supabase.from('delivery_verification')
+      .insert({
+        po_id: poId,
+        received_quantity: verificationData.received_quantity,
+        received_date: verificationData.received_date,
+        received_by: userId,
+        condition_notes: verificationData.condition_notes,
+        verification_status: verificationData.verification_status
+      })
+      .select()
+      .single());
+
+    if (!error && verification && verificationData.verification_status === 'verified') {
+      // Get PO details
+      const { data: po } = await this.getPurchaseOrder(poId);
+      
+      if (po) {
+        // Update PO status to delivered
+        await this.updatePurchaseOrderStatus(poId, 'delivered');
+
+        // Update spare parts inventory
+        const { data: part } = await supabase.from('spare_parts')
+          .select('current_quantity')
+          .eq('id', po.part_id)
+          .single();
+
+        if (part) {
+          const newQuantity = (part.current_quantity || 0) + verificationData.received_quantity;
+          await supabase.from('spare_parts')
+            .update({
+              current_quantity: newQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', po.part_id);
+        }
+      }
+    }
+
+    return { data: verification, error };
+  },
+
+  async getDeliveryVerification(poId) {
+    return handleRequest(supabase.from('delivery_verification')
+      .select('*')
+      .eq('po_id', poId)
+      .single());
+  },
+
+  async getActiveOrders() {
+    return handleRequest(supabase.from('purchase_orders')
+      .select(`
+        *,
+        supplier:suppliers(name),
+        part:spare_parts(name, part_number),
+        tracking:order_tracking(*)
+      `)
+      .in('po_status', ['sent', 'confirmed', 'shipped', 'in_transit'])
+      .order('expected_arrival_date', { ascending: true }));
+  },
+
+// #endregion
+
+  
   // #endregion
 
   // #region Documents & Files - UPDATED FOR SERVER UPLOAD
