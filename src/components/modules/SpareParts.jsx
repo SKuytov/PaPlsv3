@@ -38,7 +38,6 @@ import CategoryManager from './spare-parts/CategoryManager';
 const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
-  const [showReorderOrders, setShowReorderOrders] = useState(false);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
   const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
@@ -612,6 +611,7 @@ const SpareParts = () => {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showReorderOrders, setShowReorderOrders] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
