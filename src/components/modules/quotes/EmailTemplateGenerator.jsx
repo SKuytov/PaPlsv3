@@ -4,32 +4,27 @@ import { Mail, Copy, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react
 /**
  * EmailTemplateGenerator Component
  * Generates professional email templates for sending quote requests
- * Supports both copy-to-clipboard and Outlook mailto: opening
+ * FIXED: Removed early return to prevent React Hook Violation #310
  */
 const EmailTemplateGenerator = ({ quoteData, supplierData, partData }) => {
   const [copied, setCopied] = useState(false);
   const [emailFormat, setEmailFormat] = useState('professional'); // professional, casual, technical
 
-  if (!quoteData || !supplierData) {
-    return (
-      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
-        <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-        <span className="text-sm text-yellow-700 dark:text-yellow-300">
-          Missing quote or supplier data for email template
-        </span>
-      </div>
-    );
-  }
+  // Removed early return that caused React #310 hook violation
+  // Hooks must be called in the exact same order on every render
 
-  // Generate email subject
-  const generateSubject = () => {
+  // Generate email subject - memoized
+  const subject = useMemo(() => {
+    if (!quoteData || !supplierData) return '';
     const partName = partData?.name || 'Part';
     const quantity = quoteData.quantity || 1;
     return `Quote Request: ${quantity}x ${partName}`;
-  };
+  }, [partData, quoteData, supplierData]);
 
-  // Generate email body based on format
-  const generateEmailBody = () => {
+  // Generate email body based on format - memoized
+  const emailBody = useMemo(() => {
+    if (!quoteData || !supplierData) return '';
+    
     const partName = partData?.name || 'Unknown Part';
     const partSku = partData?.sku || 'N/A';
     const quantity = quoteData.quantity || 1;
@@ -155,10 +150,7 @@ Generated via PartPulse
 Date: ${date}`
       );
     }
-  };
-
-  const subject = useMemo(() => generateSubject(), [partData, quoteData]);
-  const emailBody = useMemo(() => generateEmailBody(), [emailFormat, quoteData, supplierData, partData]);
+  }, [emailFormat, quoteData, supplierData, partData]);
 
   const handleCopyToClipboard = () => {
     const fullEmail = `SUBJECT: ${subject}\n\n${emailBody}`;
@@ -169,18 +161,30 @@ Date: ${date}`
   };
 
   const handleOpenInOutlook = () => {
-    const mailtoLink = `mailto:${supplierData.email || ''}
+    const mailtoLink = `mailto:${supplierData?.email || ''}
       ?subject=${encodeURIComponent(subject)}
       &body=${encodeURIComponent(emailBody)}`;
     window.location.href = mailtoLink;
   };
 
   const handleOpenInGmail = () => {
-    const gmailLink = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(supplierData.email || '')}
+    const gmailLink = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(supplierData?.email || '')}
       &su=${encodeURIComponent(subject)}
       &body=${encodeURIComponent(emailBody)}`;
     window.open(gmailLink, '_blank');
   };
+
+  // If data is missing, render error state BUT AFTER HOOKS are called
+  if (!quoteData || !supplierData) {
+    return (
+      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-2">
+        <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+        <span className="text-sm text-yellow-700 dark:text-yellow-300">
+          Missing quote or supplier data for email template
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-4">
