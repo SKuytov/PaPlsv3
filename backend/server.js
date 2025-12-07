@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import quoteRoutes from './routes/quoteRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -77,15 +78,34 @@ const upload = multer({
   }
 });
 
+// ============================================================
+// HEALTH CHECK
+// ============================================================
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    upload_dir: UPLOAD_DIR
+    upload_dir: UPLOAD_DIR,
+    services: {
+      express: 'running',
+      multer: 'configured',
+      quote_api: 'active'
+    }
   });
 });
+
+// ============================================================
+// MOUNT ROUTES
+// ============================================================
+
+app.use('/api', quoteRoutes);
+
+// ============================================================
+// LEGACY DOCUMENT ENDPOINTS (KEPT FOR COMPATIBILITY)
+// ============================================================
 
 // POST: Upload document to server
 app.post('/api/documents/upload', upload.single('file'), async (req, res) => {
@@ -185,6 +205,10 @@ app.delete('/api/documents/delete/:filename', (req, res) => {
   }
 });
 
+// ============================================================
+// ERROR HANDLING
+// ============================================================
+
 // Error handling middleware for multer
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -208,11 +232,25 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+// ============================================================
+// START SERVER
+// ============================================================
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n${'='.repeat(60)}`);
   console.log(`✅ Backend server running on port ${PORT}`);
   console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
   console.log(`🏆 API ready at http://localhost:${PORT}/api`);
+  console.log(`\n📋 Available Endpoints:`);
+  console.log(`   GET    /api/health                          - Health check`);
+  console.log(`   POST   /api/parts                           - Create new part`);
+  console.log(`   GET    /api/parts?q=search                  - Search parts`);
+  console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
+  console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
+  console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
+  console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
+  console.log(`${'='.repeat(60)}\n`);
 });
 
 export default app;
