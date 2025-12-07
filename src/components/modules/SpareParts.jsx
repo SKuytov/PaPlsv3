@@ -26,7 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import * as Dialog from '@radix-ui/react-dialog';
-
+import ReorderQuoteOrders from './quotes/ReorderQuoteOrders';
 // Imported Components
 import PartCard from './spare-parts/PartCard';
 import PartDetailsModal from './spare-parts/PartDetailsModal';
@@ -37,6 +37,7 @@ import CategoryManager from './spare-parts/CategoryManager';
 const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
+  const [showReorderOrders, setShowReorderOrders] = useState(false);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
   const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
@@ -844,13 +845,20 @@ const SpareParts = () => {
               {/* Reorder Button with Badge */}
               <button
                 onClick={() => setShowReorderModal(true)}
-                className="relative px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-xs sm:text-sm font-medium flex items-center gap-2"
-              >
+                className="bg-teal-600 hover:bg-teal-700"
+            >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                    Reorder
                 <ShoppingCart className="h-4 w-4" />
                 <span className="hidden sm:inline">Reorder</span>
                 {needsReorderCount > 0 && (
                   <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
                 )}
+
+                <ReorderQuoteOrders
+  open={showReorderOrders}
+  onOpenChange={setShowReorderOrders}
+/>
               </button>
 
               <Button
