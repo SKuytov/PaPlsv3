@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 /**
  * SearchablePartSelector Component
  * Allows searching for existing parts or creating new ones inline
+ * FIXED: Removed useMemo to prevent React #310 errors
  */
 const SearchablePartSelector = ({ 
   value, 
@@ -51,8 +52,8 @@ const SearchablePartSelector = ({
     loadParts();
   }, [supplierFilter]);
 
-  // Filter parts based on search query - stable memoization
-  const filteredParts = useMemo(() => {
+  // Filter parts based on search query - NO USEMEMO
+  const filterParts = () => {
     try {
       if (!Array.isArray(parts)) {
         return [];
@@ -76,19 +77,21 @@ const SearchablePartSelector = ({
       console.error('Filter error:', err);
       return parts || [];
     }
-  }, [parts, searchQuery]);
+  };
+
+  const filteredParts = filterParts();
 
   // Check if search query could be a new part
   const isNewPartQuery = searchQuery.trim().length > 0 && 
     !filteredParts.some(p => p.name?.toLowerCase() === searchQuery.toLowerCase());
 
-  // Handle selection of existing part with stable callback
-  const handleSelectPart = useCallback((part) => {
+  // Handle selection of existing part
+  const handleSelectPart = (part) => {
     onChange(part);
     setIsOpen(false);
     setSearchQuery('');
     setShowCreateForm(false);
-  }, [onChange]);
+  };
 
   // Handle creation of new part
   const handleCreatePart = async () => {
