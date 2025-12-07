@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, AlertCircle, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 
 /**
  * SearchableSupplierSelector Component
  * Allows searching for suppliers with a dropdown
+ * FIXED: Removed useMemo to prevent React #310 errors
  */
 const SearchableSupplierSelector = ({ 
   value, 
@@ -43,8 +44,8 @@ const SearchableSupplierSelector = ({
     loadSuppliers();
   }, []);
 
-  // Filter suppliers based on search query - stable memoization
-  const filteredSuppliers = useMemo(() => {
+  // Filter suppliers based on search query - NO USEMEMO
+  const filterSuppliers = () => {
     try {
       if (!Array.isArray(suppliers)) {
         return [];
@@ -67,14 +68,16 @@ const SearchableSupplierSelector = ({
       console.error('Filter error:', err);
       return suppliers || [];
     }
-  }, [suppliers, searchQuery]);
+  };
 
-  // Handle selection of supplier with stable callback
-  const handleSelectSupplier = useCallback((supplier) => {
+  const filteredSuppliers = filterSuppliers();
+
+  // Handle selection of supplier
+  const handleSelectSupplier = (supplier) => {
     onChange(supplier);
     setIsOpen(false);
     setSearchQuery('');
-  }, [onChange]);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
