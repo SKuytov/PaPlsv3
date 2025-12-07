@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
-import { dbService } from '../../../utils/dbService';
+import { supabase } from '@/lib/customSupabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * SearchablePartSelector Component
@@ -20,6 +21,7 @@ const SearchablePartSelector = ({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPart, setNewPart] = useState({ name: '', sku: '', category: '' });
   const [creating, setCreating] = useState(false);
+  const { user } = useAuth();
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
@@ -29,10 +31,14 @@ const SearchablePartSelector = ({
       try {
         setLoading(true);
         setError(null);
-        const response = await dbService.get('/api/parts', {
-          params: supplierFilter ? { supplier_id: supplierFilter } : {},
-        });
-        setParts(response.data || []);
+        
+        const { data, error: err } = await supabase
+          .from('spare_parts')
+          .select('*')
+          .order('name', { ascending: true });
+        
+        if (err) throw err;
+        setParts(data || []);
       } catch (err) {
         setError('Failed to load parts');
         console.error('Error loading parts:', err);
@@ -81,14 +87,23 @@ const SearchablePartSelector = ({
       setCreating(true);
       setError(null);
 
-      const response = await dbService.post('/api/parts', {
-        name: newPart.name || searchQuery,
-        sku: newPart.sku || `SKU-${Date.now()}`,
-        category: newPart.category || 'Custom',
-        description: `Custom part created on ${new Date().toLocaleDateString()}`,
-      });
+      const { data, error: err } = await supabase
+        .from('spare_parts')
+        .insert({
+          name: newPart.name || searchQuery,
+          sku: newPart.sku || `SKU-${Date.now()}`,
+          category: newPart.category || 'Custom',
+          description: `Custom part created on ${new Date().toLocaleDateString()}`,
+          current_quantity: 0,
+          reorder_point: 0,
+          unit_cost: 0,
+          created_at: new Date().toISOString()
+        })
+        .select();
 
-      const createdPart = response.data;
+      if (err) throw err;
+
+      const createdPart = data[0];
       setParts((prev) => [createdPart, ...prev]);
       handleSelectPart(createdPart);
       setNewPart({ name: '', sku: '', category: '' });
@@ -119,10 +134,10 @@ const SearchablePartSelector = ({
       {/* Main Input */}
       <div className="relative">
         <div
-          className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:border-gray-400 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all"
+          className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg bg-white hover:border-slate-400 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition-all"
           onClick={() => !isOpen && setIsOpen(true)}
         >
-          <Search className="w-4 h-4 text-gray-400" />
+          <Search className="w-4 h-4 text-slate-400" />
           <input
             ref={searchInputRef}
             type="text"
@@ -133,15 +148,16 @@ const SearchablePartSelector = ({
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
-            className="flex-1 bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100"
+            className="flex-1 bg-transparent outline-none text-sm text-slate-900"
           />
           {selectedPart && (
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 onChange(null);
                 setSearchQuery('');
               }}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="text-slate-400 hover:text-slate-600"
             >
               ×
             </button>
@@ -150,45 +166,45 @@ const SearchablePartSelector = ({
 
         {/* Dropdown Menu */}
         {isOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-300 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
             {/* Loading State */}
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                <span className="ml-2 text-sm text-gray-500">Loading parts...</span>
+                <Loader2 className="w-5 h-5 text-teal-600 animate-spin" />
+                <span className="ml-2 text-sm text-slate-500">Loading parts...</span>
               </div>
             )}
 
             {/* Error State */}
             {error && !loading && (
-              <div className="p-4 flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+              <div className="p-4 flex items-start gap-2 bg-red-50 border-b border-red-200">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+                <span className="text-sm text-red-600">{error}</span>
               </div>
             )}
 
             {/* Parts List */}
             {!loading && filteredParts.length > 0 && (
-              <div className="border-b border-gray-200 dark:border-gray-700">
+              <div className="border-b border-slate-200">
                 {filteredParts.map((part) => (
                   <button
                     key={part.id}
                     onClick={() => handleSelectPart(part)}
-                    className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors"
+                    className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <p className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                        <p className="font-medium text-sm text-slate-900">
                           {part.name}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           {part.sku && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs text-slate-500">
                               SKU: {part.sku}
                             </span>
                           )}
                           {part.category && showCategoryInfo && (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
                               {part.category}
                             </span>
                           )}
@@ -205,17 +221,17 @@ const SearchablePartSelector = ({
 
             {/* No Results Message */}
             {!loading && filteredParts.length === 0 && !isNewPartQuery && (
-              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+              <div className="p-4 text-center text-sm text-slate-500">
                 No parts found
               </div>
             )}
 
             {/* Create New Part Option */}
             {isNewPartQuery && (
-              <div className="border-b border-gray-200 dark:border-gray-700">
+              <div className="border-b border-slate-200">
                 <button
                   onClick={() => setShowCreateForm(!showCreateForm)}
-                  className="w-full px-4 py-3 flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  className="w-full px-4 py-3 flex items-center gap-2 text-teal-600 hover:bg-teal-50 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm font-medium">
@@ -227,41 +243,41 @@ const SearchablePartSelector = ({
 
             {/* Create Form */}
             {showCreateForm && (
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+              <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Part Name *
                   </label>
                   <input
                     type="text"
                     value={newPart.name || searchQuery}
                     onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     placeholder="Enter part name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     SKU (Optional)
                   </label>
                   <input
                     type="text"
                     value={newPart.sku}
                     onChange={(e) => setNewPart({ ...newPart, sku: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     placeholder="e.g., PART-001"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Category (Optional)
                   </label>
                   <select
                     value={newPart.category}
                     onChange={(e) => setNewPart({ ...newPart, category: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="">Select category...</option>
                     <option value="Mechanical">Mechanical</option>
@@ -276,7 +292,7 @@ const SearchablePartSelector = ({
                   <button
                     onClick={handleCreatePart}
                     disabled={creating}
-                    className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white text-sm font-medium rounded transition-colors flex items-center justify-center gap-2"
                   >
                     {creating ? (
                       <>
@@ -295,7 +311,7 @@ const SearchablePartSelector = ({
                       setShowCreateForm(false);
                       setNewPart({ name: '', sku: '', category: '' });
                     }}
-                    className="flex-1 px-3 py-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 text-sm font-medium rounded transition-colors"
+                    className="flex-1 px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-900 text-sm font-medium rounded transition-colors"
                   >
                     Cancel
                   </button>
@@ -308,10 +324,13 @@ const SearchablePartSelector = ({
 
       {/* Selected Part Display */}
       {selectedPart && !isOpen && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{selectedPart.name}</p>
+        <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+          <p className="text-sm font-medium text-teal-900">{selectedPart.name}</p>
           {selectedPart.sku && (
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">SKU: {selectedPart.sku}</p>
+            <p className="text-xs text-teal-700 mt-1">SKU: {selectedPart.sku}</p>
+          )}
+          {selectedPart.category && (
+            <p className="text-xs text-teal-700">Category: {selectedPart.category}</p>
           )}
         </div>
       )}
