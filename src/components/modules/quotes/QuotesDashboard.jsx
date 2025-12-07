@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
+import QuoteResponseModal from './QuoteResponseModal';
 import {
   Search,
   Filter,
@@ -31,6 +32,7 @@ const QuotesDashboard = () => {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedQuote, setSelectedQuote] = useState(null);
+  const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -126,7 +128,7 @@ const QuotesDashboard = () => {
   const getStatusBadge = (status) => {
     const statuses = {
       pending: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', label: '⏳ Pending' },
-      responded: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: '📩 Response Received' },
+      responded: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: '📧 Response Received' },
       approved: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', label: '✅ Approved' },
       ordered: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', label: '📦 Ordered' },
       rejected: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', label: '❌ Rejected' },
@@ -247,7 +249,7 @@ const QuotesDashboard = () => {
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">⏳ Pending</option>
-                <option value="responded">📩 Response Received</option>
+                <option value="responded">📧 Response Received</option>
                 <option value="approved">✅ Approved</option>
                 <option value="ordered">📦 Ordered</option>
                 <option value="rejected">❌ Rejected</option>
@@ -315,9 +317,7 @@ const QuotesDashboard = () => {
       {/* Quotes Table */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
-            📋 All Quotes ({filteredQuotes.length})
-          </CardTitle>
+          <CardTitle className="text-lg">📋 All Quotes ({filteredQuotes.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -387,13 +387,27 @@ const QuotesDashboard = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => setSelectedQuote(quote)}
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-slate-200 transition-colors text-slate-600 hover:text-slate-900"
-                            title="View details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            {quote.status === 'pending' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedQuote(quote);
+                                  setResponseModalOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-700"
+                                title="Record supplier response"
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setSelectedQuote(quote)}
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-slate-200 transition-colors text-slate-600 hover:text-slate-900"
+                              title="View details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -406,11 +420,25 @@ const QuotesDashboard = () => {
       </Card>
 
       {/* Quote Details Modal */}
-      {selectedQuote && (
+      {selectedQuote && !responseModalOpen && (
         <QuoteDetailsModal
           quote={selectedQuote}
           onClose={() => setSelectedQuote(null)}
           onUpdate={fetchQuotes}
+          onRecordResponse={() => setResponseModalOpen(true)}
+        />
+      )}
+
+      {/* Response Modal */}
+      {selectedQuote && responseModalOpen && (
+        <QuoteResponseModal
+          quote={selectedQuote}
+          supplier={selectedQuote.suppliers}
+          onClose={() => {
+            setResponseModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          onSuccess={fetchQuotes}
         />
       )}
     </div>
@@ -418,7 +446,7 @@ const QuotesDashboard = () => {
 };
 
 // Quote Details Modal Component
-const QuoteDetailsModal = ({ quote, onClose, onUpdate }) => {
+const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const [updating, setUpdating] = useState(false);
   const [newStatus, setNewStatus] = useState(quote.status);
   const { toast } = useToast();
@@ -452,6 +480,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate }) => {
   };
 
   const daysAgo = Math.floor((new Date() - new Date(quote.created_at)) / (1000 * 60 * 60 * 24));
+  const hasResponse = quote.supplier_response;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -528,6 +557,33 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate }) => {
             <p className="text-2xl font-bold text-teal-600">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</p>
           </div>
 
+          {/* Response Info if exists */}
+          {hasResponse && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+              <h4 className="font-bold text-slate-900 text-blue-900">📧 Supplier Response</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">Quoted Price</p>
+                  <p className="font-bold text-blue-900 mt-1">€{quote.supplier_response.quoted_price_total?.toFixed(2) || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">Delivery Date</p>
+                  <p className="font-bold text-blue-900 mt-1">
+                    {quote.supplier_response.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">Payment Terms</p>
+                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response.payment_terms || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 font-semibold">Lead Time</p>
+                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response.lead_time_days || 'N/A'} days</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           {quote.request_notes && (
             <div>
@@ -557,25 +613,36 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate }) => {
               className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="pending">⏳ Pending</option>
-              <option value="responded">📩 Response Received</option>
+              <option value="responded">📧 Response Received</option>
               <option value="approved">✅ Approved</option>
               <option value="ordered">📦 Ordered</option>
               <option value="rejected">❌ Rejected</option>
             </select>
-            <Button
-              onClick={handleStatusUpdate}
-              disabled={updating || newStatus === quote.status}
-              className="w-full bg-teal-600 hover:bg-teal-700"
-            >
-              {updating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Update Status'
+            <div className="flex gap-2">
+              <Button
+                onClick={handleStatusUpdate}
+                disabled={updating || newStatus === quote.status}
+                className="flex-1 bg-teal-600 hover:bg-teal-700"
+              >
+                {updating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Status'
+                )}
+              </Button>
+              {quote.status === 'pending' && (
+                <Button
+                  onClick={onRecordResponse}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Record Response
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
