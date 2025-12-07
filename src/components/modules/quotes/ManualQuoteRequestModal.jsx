@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import FileUploadManager from './FileUploadManager';
+import SearchablePartSelector from './SearchablePartSelector';
+import EmailTemplateGenerator from './EmailTemplateGenerator';
 import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
