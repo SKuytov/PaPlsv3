@@ -943,12 +943,12 @@ const SpareParts = () => {
         onEditRequest={handlePartEdit}
       />
 
-      {/* PartForm */}
+      {/* PartForm - FIXED: Changed 'part' to 'editPart' prop */}
       {isFormOpen && (
         <PartForm
           open={isFormOpen}
           onOpenChange={setIsFormOpen}
-          part={editingPart}
+          editPart={editingPart}
           onSuccess={handleFormSuccess}
         />
       )}
