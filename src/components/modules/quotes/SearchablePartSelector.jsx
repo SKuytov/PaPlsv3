@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, Plus, AlertCircle, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +42,7 @@ const SearchablePartSelector = ({
       } catch (err) {
         setError('Failed to load parts');
         console.error('Error loading parts:', err);
+        setParts([]);
       } finally {
         setLoading(false);
       }
@@ -50,31 +51,44 @@ const SearchablePartSelector = ({
     loadParts();
   }, [supplierFilter]);
 
-  // Filter parts based on search query
+  // Filter parts based on search query - stable memoization
   const filteredParts = useMemo(() => {
-    if (!searchQuery.trim()) return parts;
+    try {
+      if (!Array.isArray(parts)) {
+        return [];
+      }
+      
+      if (!searchQuery || !searchQuery.trim()) {
+        return parts;
+      }
 
-    const query = searchQuery.toLowerCase();
-    return parts.filter(
-      (part) =>
-        part.name?.toLowerCase().includes(query) ||
-        part.sku?.toLowerCase().includes(query) ||
-        part.category?.toLowerCase().includes(query) ||
-        part.description?.toLowerCase().includes(query)
-    );
+      const query = searchQuery.toLowerCase();
+      return parts.filter((part) => {
+        if (!part) return false;
+        return (
+          (part.name && part.name.toLowerCase().includes(query)) ||
+          (part.sku && part.sku.toLowerCase().includes(query)) ||
+          (part.category && part.category.toLowerCase().includes(query)) ||
+          (part.description && part.description.toLowerCase().includes(query))
+        );
+      });
+    } catch (err) {
+      console.error('Filter error:', err);
+      return parts || [];
+    }
   }, [parts, searchQuery]);
 
   // Check if search query could be a new part
   const isNewPartQuery = searchQuery.trim().length > 0 && 
     !filteredParts.some(p => p.name?.toLowerCase() === searchQuery.toLowerCase());
 
-  // Handle selection of existing part
-  const handleSelectPart = (part) => {
+  // Handle selection of existing part with stable callback
+  const handleSelectPart = useCallback((part) => {
     onChange(part);
     setIsOpen(false);
     setSearchQuery('');
     setShowCreateForm(false);
-  };
+  }, [onChange]);
 
   // Handle creation of new part
   const handleCreatePart = async () => {
@@ -128,6 +142,8 @@ const SearchablePartSelector = ({
   }, []);
 
   const selectedPart = value;
+  const displayName = selectedPart?.name ? String(selectedPart.name) : 'Search or create part...';
+  const inputValue = isOpen ? searchQuery : (selectedPart?.name ? String(selectedPart.name) : '');
 
   return (
     <div className="w-full space-y-2" ref={dropdownRef}>
@@ -141,8 +157,8 @@ const SearchablePartSelector = ({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder={selectedPart ? selectedPart.name : 'Search or create part...'}
-            value={isOpen ? searchQuery : selectedPart?.name || ''}
+            placeholder={displayName}
+            value={inputValue}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setIsOpen(true);
@@ -158,6 +174,7 @@ const SearchablePartSelector = ({
                 setSearchQuery('');
               }}
               className="text-slate-400 hover:text-slate-600"
+              type="button"
             >
               ×
             </button>
@@ -184,43 +201,47 @@ const SearchablePartSelector = ({
             )}
 
             {/* Parts List */}
-            {!loading && filteredParts.length > 0 && (
+            {!loading && Array.isArray(filteredParts) && filteredParts.length > 0 && (
               <div className="border-b border-slate-200">
-                {filteredParts.map((part) => (
-                  <button
-                    key={part.id}
-                    onClick={() => handleSelectPart(part)}
-                    className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm text-slate-900">
-                          {part.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {part.sku && (
-                            <span className="text-xs text-slate-500">
-                              SKU: {part.sku}
-                            </span>
-                          )}
-                          {part.category && showCategoryInfo && (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
-                              {part.category}
-                            </span>
-                          )}
+                {filteredParts.map((part) => {
+                  if (!part?.id) return null;
+                  return (
+                    <button
+                      key={part.id}
+                      onClick={() => handleSelectPart(part)}
+                      className="w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm text-slate-900">
+                            {part.name || 'Unknown'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {part.sku && (
+                              <span className="text-xs text-slate-500">
+                                SKU: {part.sku}
+                              </span>
+                            )}
+                            {part.category && showCategoryInfo && (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700">
+                                {part.category}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {selectedPart?.id === part.id && (
+                          <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                        )}
                       </div>
-                      {selectedPart?.id === part.id && (
-                        <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {/* No Results Message */}
-            {!loading && filteredParts.length === 0 && !isNewPartQuery && (
+            {!loading && (!Array.isArray(filteredParts) || filteredParts.length === 0) && !isNewPartQuery && (
               <div className="p-4 text-center text-sm text-slate-500">
                 No parts found
               </div>
@@ -232,6 +253,7 @@ const SearchablePartSelector = ({
                 <button
                   onClick={() => setShowCreateForm(!showCreateForm)}
                   className="w-full px-4 py-3 flex items-center gap-2 text-teal-600 hover:bg-teal-50 transition-colors"
+                  type="button"
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm font-medium">
@@ -293,6 +315,7 @@ const SearchablePartSelector = ({
                     onClick={handleCreatePart}
                     disabled={creating}
                     className="flex-1 px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white text-sm font-medium rounded transition-colors flex items-center justify-center gap-2"
+                    type="button"
                   >
                     {creating ? (
                       <>
@@ -312,6 +335,7 @@ const SearchablePartSelector = ({
                       setNewPart({ name: '', sku: '', category: '' });
                     }}
                     className="flex-1 px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-900 text-sm font-medium rounded transition-colors"
+                    type="button"
                   >
                     Cancel
                   </button>
