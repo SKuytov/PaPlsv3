@@ -18,6 +18,7 @@ import Documentation from '@/components/modules/Documentation';
 import Downtime from '@/components/modules/Downtime';
 import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
+import QuotesDashboard from '@/components/modules/quotes/QuotesDashboard';
 import WelcomeMessage from '@/components/WelcomeMessage';
 
 // Layout Wrapper Component
@@ -69,7 +70,7 @@ const AppRouter = () => {
       <Route path="/login" element={<LoginPage />} />
    
       <Route path="/forgot-password" element={<ForgotPassword />} />
-<Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       <Route path="/" element={
         <PrivateRoute>
@@ -111,6 +112,12 @@ const AppRouter = () => {
       <Route path="/orders" element={
         <PrivateRoute>
           <Orders />
+        </PrivateRoute>
+      } />
+
+      <Route path="/quotes/dashboard" element={
+        <PrivateRoute>
+          <QuotesDashboard />
         </PrivateRoute>
       } />
 
