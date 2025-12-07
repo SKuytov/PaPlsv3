@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, File, Loader2, CheckCircle, AlertCircle, Trash2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,8 +16,48 @@ const QuoteApprovalPanel = ({ quote, onClose, onSuccess }) => {
   const [approvalNotes, setApprovalNotes] = useState('');
   const [quotePrice, setQuotePrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [partData, setPartData] = useState(null);
+  const [supplierData, setSupplierData] = useState(null);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Load part and supplier data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        if (quote?.part_id) {
+          const { data: part, error: partError } = await supabase
+            .from('spare_parts')
+            .select('*')
+            .eq('id', quote.part_id)
+            .single();
+          
+          if (partError) throw partError;
+          setPartData(part);
+        }
+
+        if (quote?.supplier_id) {
+          const { data: supplier, error: supplierError } = await supabase
+            .from('suppliers')
+            .select('*')
+            .eq('id', quote.supplier_id)
+            .single();
+          
+          if (supplierError) throw supplierError;
+          setSupplierData(supplier);
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load quote details"
+        });
+      }
+    };
+
+    loadData();
+  }, [quote]);
 
   const handlePdfUpload = (e) => {
     const file = e.target.files?.[0];
@@ -126,6 +166,24 @@ const QuoteApprovalPanel = ({ quote, onClose, onSuccess }) => {
     }
   };
 
+  if (!partData || !supplierData) {
+    return (
+      <Dialog.Root open={true} onOpenChange={onClose}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <Dialog.Content className="w-full max-w-3xl bg-white rounded-2xl p-6 shadow-lg">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 text-teal-600 animate-spin" />
+                <span className="ml-3 text-slate-600">Loading quote details...</span>
+              </div>
+            </Dialog.Content>
+          </div>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  }
+
   return (
     <Dialog.Root open={true} onOpenChange={onClose}>
       <Dialog.Portal>
@@ -180,13 +238,13 @@ const QuoteApprovalPanel = ({ quote, onClose, onSuccess }) => {
                     <div className="grid grid-cols-2 gap-6">
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Part</p>
-                        <p className="text-lg font-bold text-slate-900 mt-2">{quote.part?.name}</p>
-                        <p className="text-sm text-slate-600">#{quote.part?.part_number}</p>
+                        <p className="text-lg font-bold text-slate-900 mt-2">{partData?.name}</p>
+                        <p className="text-sm text-slate-600">#{partData?.sku || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
-                        <p className="text-lg font-bold text-slate-900 mt-2">{quote.supplier?.name}</p>
-                        <p className="text-sm text-slate-600">{quote.supplier?.email}</p>
+                        <p className="text-lg font-bold text-slate-900 mt-2">{supplierData?.name}</p>
+                        <p className="text-sm text-slate-600">{supplierData?.email}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-600 font-semibold uppercase">Quantity</p>
