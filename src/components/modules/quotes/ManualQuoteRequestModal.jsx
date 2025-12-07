@@ -14,7 +14,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
-  const [step, setStep] = useState(1); // 1: Form, 2: Review, 3: Confirmation
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createdQuote, setCreatedQuote] = useState(null);
@@ -131,7 +131,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <Dialog.Content className="w-full max-w-2xl bg-white rounded-2xl p-6 shadow-lg max-h-[90vh] overflow-y-auto">
+          <Dialog.Content className="w-full max-w-2xl bg-white rounded-2xl p-6 shadow-lg max-h-[90vh] overflow-y-auto" aria-describedby="quote-dialog-description">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <Dialog.Title className="text-2xl font-bold text-slate-900">
@@ -143,6 +143,10 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
               >
                 <X className="h-6 w-6" />
               </button>
+            </div>
+            
+            <div id="quote-dialog-description" className="sr-only">
+              Create a new quote request by selecting a part and supplier
             </div>
 
             {/* Step Indicator */}
