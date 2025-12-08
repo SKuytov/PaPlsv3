@@ -20,6 +20,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     supplier: null,
     quantity: '', 
     notes: '',
+    supplierPartId: '', // Supplier's unique ID for this part
     isCustom: false,
     customPartName: ''
   });
@@ -307,6 +308,20 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </div>
                   )}
 
+                  {/* Supplier Part ID */}
+                  {(currentItem.part || currentItem.customPartName) && currentItem.supplier && !currentItem.isCustom && (
+                    <div>
+                      <label className="text-sm font-semibold block mb-2">Supplier's Part ID/SKU (Optional)</label>
+                      <Input
+                        type="text"
+                        value={currentItem.supplierPartId}
+                        onChange={(e) => setCurrentItem({ ...currentItem, supplierPartId: e.target.value })}
+                        placeholder="e.g., SKU-12345, PART-ABC, their internal ID"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">💡 This supplier's unique identifier for this part (different from your internal part number)</p>
+                    </div>
+                  )}
+
                   {/* Quantity */}
                   {(currentItem.part || currentItem.customPartName) && (
                     <div className="grid grid-cols-2 gap-3">
@@ -343,7 +358,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                             } else {
                               setItems([...items, currentItem]);
                             }
-                            setCurrentItem({ part: null, supplier: null, quantity: '', notes: '', isCustom: false, customPartName: '' });
+                            setCurrentItem({ part: null, supplier: null, quantity: '', notes: '', supplierPartId: '', isCustom: false, customPartName: '' });
                           }}
                           className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors text-sm h-10"
                         >
@@ -395,6 +410,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                                 </p>
                                 {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
                               </div>
+                              {item.supplierPartId && <p className="text-xs text-blue-600">🏷️ {item.supplier?.name} SKU: {item.supplierPartId}</p>}
                               <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
                               {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
                             </div>
@@ -543,7 +559,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       <div className="space-y-1">
                         {group.items.map((item, idx) => (
                           <p key={idx} className="text-sm text-slate-700">
-                            • {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity})
+                            • {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity}){item.supplierPartId ? ` - SKU: ${item.supplierPartId}` : ''}
                           </p>
                         ))}
                       </div>
@@ -585,6 +601,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         part_name: i.isCustom ? i.customPartName : (i.part?.name || ''),
                         part_number: i.isCustom ? null : (i.part?.part_number || ''),
                         description: i.isCustom ? null : (i.part?.description || ''),
+                        supplier_part_id: i.supplierPartId || null,
                         quantity: parseInt(i.quantity),
                         unit_of_measure: i.part?.unit_of_measure || 'pcs',
                         notes: i.notes || '',
