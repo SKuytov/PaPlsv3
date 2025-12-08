@@ -1,20 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, AlertCircle, Loader2, Check, Scan } from 'lucide-react';
+import { Search, Plus, AlertCircle, Loader2, Check, Scan, Edit2 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import BarcodeScanner from './BarcodeScanner';
 
 /**
  * SearchablePartSelector Component
- * Enhanced to search by: name, SKU, barcode, part_number
- * Integrated with QR/barcode scanner for fast item addition
+ * Enhanced to:
+ * - Load supplier_part_number and supplier_sku from supplier_part_mappings
+ * - Display warnings when supplier data is missing
+ * - Allow users to add missing supplier information
  */
 const SearchablePartSelector = ({ 
   value, 
   onChange, 
   supplierFilter = null,
   showCategoryInfo = true,
-  onScanComplete = null
+  onScanComplete = null,
+  selectedSupplier = null
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -25,18 +28,19 @@ const SearchablePartSelector = ({
   const [showScanner, setShowScanner] = useState(false);
   const [newPart, setNewPart] = useState({ name: '', sku: '', category: '' });
   const [creating, setCreating] = useState(false);
+  const [supplierPartData, setSupplierPartData] = useState({});
   const { user } = useAuth();
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // Fetch parts on mount - NOW INCLUDES barcode and part_number
+  // Fetch parts with supplier mappings
   useEffect(() => {
     const loadParts = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Load parts with their preferred supplier and all searchable fields
+        // Load parts with their preferred supplier and supplier mappings
         const { data, error: err } = await supabase
           .from('spare_parts')
           .select(`
@@ -46,12 +50,31 @@ const SearchablePartSelector = ({
               name,
               email,
               phone
+            ),
+            supplier_part_mappings(
+              id,
+              supplier_id,
+              supplier_part_number,
+              supplier_sku,
+              supplier:supplier_id(
+                id,
+                name
+              )
             )
           `)
           .order('name', { ascending: true });
         
         if (err) throw err;
         setParts(data || []);
+        
+        // Build supplier part data lookup
+        const supplierData = {};
+        data?.forEach(part => {
+          if (part.supplier_part_mappings && part.supplier_part_mappings.length > 0) {
+            supplierData[part.id] = part.supplier_part_mappings;
+          }
+        });
+        setSupplierPartData(supplierData);
       } catch (err) {
         setError('Failed to load parts');
         console.error('Error loading parts:', err);
@@ -63,6 +86,12 @@ const SearchablePartSelector = ({
 
     loadParts();
   }, [supplierFilter]);
+
+  // Get supplier part info for selected supplier
+  const getSupplierPartInfo = (partId, supplierId) => {
+    if (!supplierPartData[partId]) return null;
+    return supplierPartData[partId].find(m => m.supplier_id === supplierId);
+  };
 
   // Enhanced filter - searches by name, SKU, barcode, and part_number
   const filterParts = () => {
@@ -188,6 +217,12 @@ const SearchablePartSelector = ({
   const displayName = selectedPart?.name ? String(selectedPart.name) : 'Search or create part...';
   const inputValue = isOpen ? searchQuery : (selectedPart?.name ? String(selectedPart.name) : '');
 
+  // Get supplier info for selected part
+  const selectedSupplierInfo = selectedPart && selectedSupplier?.id 
+    ? getSupplierPartInfo(selectedPart.id, selectedSupplier.id)
+    : null;
+  const hasSupplierData = selectedSupplierInfo?.supplier_part_number || selectedSupplierInfo?.supplier_sku;
+
   return (
     <div className="w-full space-y-2" ref={dropdownRef}>
       {showScanner && (
@@ -275,13 +310,16 @@ const SearchablePartSelector = ({
                 {filteredParts.map((part) => {
                   if (!part?.id) return null;
                   const hasPreferredSupplier = part.preferred_supplier && part.preferred_supplier.id;
+                  const supplierInfo = selectedSupplier?.id ? getSupplierPartInfo(part.id, selectedSupplier.id) : null;
+                  const hasMissingSupplierData = selectedSupplier && !supplierInfo?.supplier_part_number && !supplierInfo?.supplier_sku;
+                  
                   return (
                     <button
                       key={part.id}
                       onClick={() => handleSelectPart(part)}
                       className={`w-full text-left px-4 py-3 hover:bg-teal-50 border-b border-slate-100 last:border-b-0 transition-colors ${
                         hasPreferredSupplier ? 'bg-gradient-to-r from-white to-teal-50/50' : ''
-                      }`}
+                      } ${hasMissingSupplierData ? 'ring-1 ring-amber-200 bg-amber-50/30' : ''}`}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -318,6 +356,28 @@ const SearchablePartSelector = ({
                               </span>
                             )}
                           </div>
+                          
+                          {/* Supplier Part Info */}
+                          {selectedSupplier && (
+                            <div className="mt-2 pt-2 border-t border-slate-200">
+                              {supplierInfo ? (
+                                <div className="space-y-1">
+                                  {supplierInfo.supplier_part_number && (
+                                    <p className="text-xs text-slate-600">Supplier Part #: <span className="font-semibold text-slate-900">{supplierInfo.supplier_part_number}</span></p>
+                                  )}
+                                  {supplierInfo.supplier_sku && (
+                                    <p className="text-xs text-slate-600">Supplier SKU: <span className="font-semibold text-slate-900">{supplierInfo.supplier_sku}</span></p>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                  <span className="text-xs text-amber-700 font-medium">⚠️ No supplier mapping for {selectedSupplier.name}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
                           {hasPreferredSupplier && (
                             <p className="text-xs text-teal-600 mt-1 font-medium">
                               📧 {part.preferred_supplier.email}
@@ -440,12 +500,12 @@ const SearchablePartSelector = ({
         )}
       </div>
 
-      {/* Selected Part Display - WITH Preferred Supplier */}
+      {/* Selected Part Display - WITH Supplier Data */}
       {selectedPart && !isOpen && (
         <div className={`p-3 rounded-lg border ${
-          selectedPart.preferred_supplier
+          hasSupplierData
             ? 'bg-teal-50 border-teal-200'
-            : 'bg-slate-50 border-slate-200'
+            : 'bg-amber-50 border-amber-200'
         }`}>
           <p className="text-sm font-medium text-slate-900">{selectedPart.name}</p>
           <div className="flex flex-wrap gap-2 mt-1">
@@ -462,6 +522,36 @@ const SearchablePartSelector = ({
           {selectedPart.category && (
             <p className="text-xs text-slate-600 mt-1">Category: {selectedPart.category}</p>
           )}
+          
+          {/* Supplier Data Section */}
+          {selectedSupplier && (
+            <div className="mt-3 pt-3 border-t border-current border-opacity-20">
+              <p className="text-xs font-semibold text-slate-700 mb-2">Supplier: {selectedSupplier.name}</p>
+              {selectedSupplierInfo ? (
+                <div className="space-y-1">
+                  {selectedSupplierInfo.supplier_part_number ? (
+                    <p className="text-xs text-slate-600">Supplier Part #: <span className="font-semibold text-slate-900">{selectedSupplierInfo.supplier_part_number}</span></p>
+                  ) : (
+                    <p className="text-xs text-amber-700 font-medium">⚠️ No Supplier Part Number</p>
+                  )}
+                  {selectedSupplierInfo.supplier_sku ? (
+                    <p className="text-xs text-slate-600">Supplier SKU: <span className="font-semibold text-slate-900">{selectedSupplierInfo.supplier_sku}</span></p>
+                  ) : (
+                    <p className="text-xs text-amber-700 font-medium">⚠️ No Supplier SKU</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-2 bg-amber-100 border border-amber-300 rounded">
+                  <p className="text-xs text-amber-800 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    No supplier mapping for this supplier
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">You can add supplier part number and SKU during quote creation if needed.</p>
+                </div>
+              )}
+            </div>
+          )}
+          
           {selectedPart.preferred_supplier && (
             <div className="mt-2 pt-2 border-t border-teal-200">
               <p className="text-xs font-semibold text-teal-700">Preferred Supplier:</p>
