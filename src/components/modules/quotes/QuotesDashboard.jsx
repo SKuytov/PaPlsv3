@@ -69,7 +69,10 @@ const QuotesDashboard = () => {
       setLoading(true);
       let query = supabase
         .from('quote_requests')
-        .select('*, suppliers(id, name, email, phone, quality_score, delivery_score)')
+        .select(`
+          *,
+          suppliers:supplier_id (id, name, email, phone, quality_score, delivery_score)
+        `)
         .eq('created_by', user.id)
         .order(sortBy, { ascending: sortOrder === 'asc' });
 
@@ -102,10 +105,13 @@ const QuotesDashboard = () => {
   // Filter quotes based on search and date range
   const filteredQuotes = quotes.filter(quote => {
     const searchLower = searchTerm.toLowerCase();
+    const supplierName = quote.suppliers?.name || 'Unknown';
+    const projectName = quote.project_name || '';
+    
     const matchesSearch =
       quote.quote_id.toLowerCase().includes(searchLower) ||
-      quote.suppliers?.name.toLowerCase().includes(searchLower) ||
-      quote.project_name?.toLowerCase().includes(searchLower);
+      supplierName.toLowerCase().includes(searchLower) ||
+      projectName.toLowerCase().includes(searchLower);
 
     if (!matchesSearch) return false;
 
@@ -421,6 +427,8 @@ const QuotesDashboard = () => {
                   {filteredQuotes.map((quote, idx) => {
                     const daysAgo = getDaysSinceSent(quote.created_at);
                     const overdue = isOverdue(quote);
+                    const supplierName = quote.suppliers?.name || 'Unknown';
+                    const supplierEmail = quote.suppliers?.email || '-';
 
                     return (
                       <tr
@@ -439,9 +447,9 @@ const QuotesDashboard = () => {
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-semibold text-slate-900 text-sm">
-                            {quote.suppliers?.name || 'Unknown'}
+                            {supplierName}
                           </div>
-                          <p className="text-xs text-slate-500">{quote.suppliers?.email || '-'}</p>
+                          <p className="text-xs text-slate-500">{supplierEmail}</p>
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
@@ -665,6 +673,8 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
 
   const daysAgo = Math.floor((new Date() - new Date(quote.created_at)) / (1000 * 60 * 60 * 24));
   const hasResponse = quote.supplier_response;
+  const supplierName = quote.suppliers?.name || 'Unknown';
+  const supplierEmail = quote.suppliers?.email || '-';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
@@ -687,8 +697,8 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
-              <p className="text-lg font-bold text-slate-900 mt-2">{quote.suppliers?.name}</p>
-              <p className="text-sm text-slate-600">{quote.suppliers?.email}</p>
+              <p className="text-lg font-bold text-slate-900 mt-2">{supplierName}</p>
+              <p className="text-sm text-slate-600">{supplierEmail}</p>
             </div>
             <div>
               <p className="text-xs text-slate-600 font-semibold uppercase">Project</p>
@@ -720,13 +730,13 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                 {quote.items.map((item, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
                     <div>
-                      <p className="font-semibold text-slate-900">{item.part_name}</p>
-                      <p className="text-xs text-slate-600 mt-1">Qty: {item.quantity}</p>
+                      <p className="font-semibold text-slate-900">{item.part_name || 'N/A'}</p>
+                      <p className="text-xs text-slate-600 mt-1">Qty: {item.quantity || 0}</p>
                     </div>
                     {item.unit_price && (
                       <div className="text-right">
-                        <p className="font-bold text-teal-600">€{(item.unit_price * item.quantity).toFixed(2)}</p>
-                        <p className="text-xs text-slate-600">@ €{item.unit_price.toFixed(2)}</p>
+                        <p className="font-bold text-teal-600">€{((item.unit_price || 0) * (item.quantity || 0)).toFixed(2)}</p>
+                        <p className="text-xs text-slate-600">@ €{(item.unit_price || 0).toFixed(2)}</p>
                       </div>
                     )}
                   </div>
@@ -762,21 +772,21 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-blue-700 font-semibold">Quoted Price</p>
-                  <p className="font-bold text-blue-900 mt-1">€{quote.supplier_response.quoted_price_total?.toFixed(2) || 'N/A'}</p>
+                  <p className="font-bold text-blue-900 mt-1">€{(quote.supplier_response?.quoted_price_total || 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-blue-700 font-semibold">Delivery Date</p>
                   <p className="font-bold text-blue-900 mt-1">
-                    {quote.supplier_response.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}
+                    {quote.supplier_response?.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-blue-700 font-semibold">Payment Terms</p>
-                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response.payment_terms || 'N/A'}</p>
+                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response?.payment_terms || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-blue-700 font-semibold">Lead Time</p>
-                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response.lead_time_days || 'N/A'} days</p>
+                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response?.lead_time_days || 'N/A'} days</p>
                 </div>
               </div>
             </div>
