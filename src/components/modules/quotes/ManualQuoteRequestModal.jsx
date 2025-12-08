@@ -182,10 +182,10 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     }, 0);
   };
 
-  // Generate professional email body using EmailTemplateGenerator
+  // Generate professional email body
   const generateEmailBody = () => {
     const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const deliveryNeed = formData.deliveryDate || 'As soon as possible';
+    const deliveryNeed = formData.deliveryDate ? new Date(formData.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' }) : 'As soon as possible';
     const specialNotes = formData.request_notes || '';
     const budgetExpectation = formData.budgetExpectation || '';
     const requesterName = formData.requesterName || 'Procurement Team';
@@ -277,6 +277,31 @@ Quote Generated: ${date}`;
     }
   };
 
+  const handleOutlookOpen = () => {
+    try {
+      const emailBody = generateEmailBody();
+      const subject = generateEmailSubject();
+      
+      // Try to use the native Outlook protocol if available
+      if (window.navigator.msLaunchUri) {
+        // Microsoft Edge / IE
+        const outlookUri = `ms-outlook:compose?to=${encodeURIComponent(selectedSupplier.email || '')}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        window.navigator.msLaunchUri(outlookUri);
+      } else {
+        // Fallback to mailto (works on most systems)
+        const mailtoLink = `mailto:${selectedSupplier.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        window.location.href = mailtoLink;
+      }
+    } catch (error) {
+      console.error('Error opening Outlook:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not open email client"
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
@@ -313,13 +338,13 @@ Quote Generated: ${date}`;
       const createdQuoteData = data[0];
       setCreatedQuote(createdQuoteData);
 
-      // If sending via Outlook, open mailto with proper email body
+      // If sending via Outlook, open email client AFTER database insert
       if (sendMethod === 'outlook') {
-        const emailBody = generateEmailBody();
-        const subject = generateEmailSubject();
-        const mailtoLink = `mailto:${selectedSupplier.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
-        window.location.href = mailtoLink;
-        setStep(3);
+        // Small delay to ensure DB write completes
+        setTimeout(() => {
+          handleOutlookOpen();
+          setStep(3);
+        }, 500);
       } else if (sendMethod === 'system') {
         setStep(3);
       } else if (sendMethod === 'copy') {
@@ -332,7 +357,7 @@ Quote Generated: ${date}`;
       });
 
       if (onSuccess && (sendMethod === 'system' || sendMethod === 'outlook')) {
-        setTimeout(() => onSuccess(), 1500);
+        setTimeout(() => onSuccess(), 2000);
       }
     } catch (error) {
       console.error('Error creating quote request:', error);
