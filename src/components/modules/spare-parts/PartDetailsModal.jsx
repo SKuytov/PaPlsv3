@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Wrench, History, AlertTriangle, 
   Trash2, Ruler, MapPin, FileText, Pencil, Users, Monitor,
-  Plus, Save, DollarSign, X, Search, Check, Link as LinkIcon, Eye
+  Plus, Save, DollarSign, X, Search, Check, Link as LinkIcon, Eye, Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { dbService } from '@/lib/supabase';
+import { supabase } from '@/lib/customSupabaseClient';
 import { getStockStatus } from '@/utils/calculations';
 import StatusBadge from '@/components/common/StatusBadge';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
@@ -33,6 +34,8 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
   const [loadingFullDetails, setLoadingFullDetails] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false);
+  const [supplierMappings, setSupplierMappings] = useState([]);
+  const [loadingMappings, setLoadingMappings] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -77,11 +80,71 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
     setLoadingFullDetails(false);
   };
 
+  const loadSupplierMappings = async () => {
+    if (!part?.id) return;
+    setLoadingMappings(true);
+    try {
+      const { data, error } = await supabase
+        .from('supplier_part_mappings')
+        .select(`
+          id,
+          supplier_id,
+          supplier_sku,
+          supplier_part_number,
+          min_order_qty,
+          lead_time_days,
+          price_per_unit,
+          supplier:suppliers(id, name, email)
+        `)
+        .eq('part_id', part.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSupplierMappings(data || []);
+    } catch (error) {
+      console.error('Error loading supplier mappings:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load supplier mappings"
+      });
+    } finally {
+      setLoadingMappings(false);
+    }
+  };
+
+  const handleRemoveSupplierMapping = async (mappingId) => {
+    if (!isGodAdmin) return;
+    
+    try {
+      const { error } = await supabase
+        .from('supplier_part_mappings')
+        .delete()
+        .eq('id', mappingId);
+
+      if (error) throw error;
+      setSupplierMappings(prev => prev.filter(m => m.id !== mappingId));
+      toast({
+        title: "Removed",
+        description: "Supplier mapping removed successfully"
+      });
+    } catch (error) {
+      console.error('Error removing mapping:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to remove supplier mapping"
+      });
+    }
+  };
 
   // Tab Switching Logic
   useEffect(() => {
     if (part && activeTab === 'history') {
       fetchHistory();
+    }
+    if (activeTab === 'mappings') {
+      loadSupplierMappings();
     }
     if (activeTab === 'suppliers' && isAddingSupplier && availableSuppliers.length === 0) {
         fetchSuppliers();
@@ -298,6 +361,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                  <div className="px-4 sm:px-6 pt-2 sm:pt-4 overflow-x-auto no-scrollbar">
                     <TabsList className="flex w-full justify-start bg-transparent p-0 h-auto gap-2 sm:gap-0 mb-0">
                       <TabsTrigger value="info" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Info</TabsTrigger>
+                      <TabsTrigger value="mappings" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Supplier IDs</TabsTrigger>
                       <TabsTrigger value="suppliers" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Suppliers</TabsTrigger>
                       <TabsTrigger value="machines" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Machines</TabsTrigger>
                       <TabsTrigger value="specs" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Specs</TabsTrigger>
@@ -394,6 +458,87 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                     </div>
                   </TabsContent>
 
+                  {/* SUPPLIER MAPPINGS TAB */}
+                  <TabsContent value="mappings" className="mt-0">
+                    <Card className="bg-white shadow-sm">
+                      <CardHeader>
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Tag className="w-5 h-5 text-purple-600" /> Supplier Part IDs / SKUs
+                        </h3>
+                        <p className="text-sm text-slate-600 mt-2">Unique identifiers used by each supplier for this part</p>
+                      </CardHeader>
+                      <CardContent>
+                        {loadingMappings ? (
+                          <div className="flex justify-center py-8">
+                            <LoadingSpinner />
+                          </div>
+                        ) : supplierMappings.length === 0 ? (
+                          <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded-xl">
+                            <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>No supplier mappings yet.</p>
+                            <p className="text-xs mt-1">Add supplier part IDs when creating or editing the part.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {supplierMappings.map((mapping) => (
+                              <div key={mapping.id} className="border border-slate-200 rounded-lg p-4 bg-gradient-to-br from-slate-50 to-white hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between gap-4 mb-3">
+                                  <div className="flex-1">
+                                    <h4 className="font-bold text-slate-900 text-lg">{mapping.supplier?.name || 'Unknown Supplier'}</h4>
+                                    <p className="text-xs text-slate-500">{mapping.supplier?.email || ''}</p>
+                                  </div>
+                                  {isGodAdmin && (
+                                    <button
+                                      onClick={() => handleRemoveSupplierMapping(mapping.id)}
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                                      title="Remove mapping"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white rounded-lg p-3 border border-slate-100">
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Their SKU/ID</p>
+                                    <p className="font-mono font-bold text-teal-700 text-sm break-all">{mapping.supplier_sku}</p>
+                                  </div>
+
+                                  {mapping.supplier_part_number && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Their Part #</p>
+                                      <p className="font-mono font-bold text-slate-800 text-sm break-all">{mapping.supplier_part_number}</p>
+                                    </div>
+                                  )}
+
+                                  {mapping.lead_time_days && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Lead Time</p>
+                                      <p className="font-mono text-slate-800 text-sm">{mapping.lead_time_days} days</p>
+                                    </div>
+                                  )}
+
+                                  {mapping.price_per_unit && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Unit Price</p>
+                                      <p className="font-mono font-bold text-emerald-700 text-sm">€{mapping.price_per_unit.toFixed(2)}</p>
+                                    </div>
+                                  )}
+
+                                  {mapping.min_order_qty && mapping.min_order_qty > 1 && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Min Order</p>
+                                      <p className="font-mono text-slate-800 text-sm">{mapping.min_order_qty} units</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
 
                   {/* SUPPLIERS TAB */}
                   <TabsContent value="suppliers" className="mt-0">
@@ -505,7 +650,6 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                         </CardContent>
                      </Card>
                   </TabsContent>
-
 
                   {/* MACHINES TAB */}
                   <TabsContent value="machines" className="mt-0">
