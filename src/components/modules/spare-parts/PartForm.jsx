@@ -100,16 +100,38 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
   const loadRefs = async () => {
     setSuppliersLoading(true);
     try {
-      const [b, w, c, s] = await Promise.all([
+      const [b, w, c] = await Promise.all([
         dbService.getBuildings(),
         dbService.getWarehouses(),
-        dbService.getCategories(),
-        supabase.from('suppliers').select('id, name, email').eq('is_active', true)
+        dbService.getCategories()
       ]);
       setBuildings(b.data || []);
       setWarehouses(w.data || []);
       setCategories(c.data || []);
-      setSuppliers(s.data || []);
+
+      // Load suppliers with better error handling
+      let suppliersData = [];
+      try {
+        const { data, error } = await supabase
+          .from('suppliers')
+          .select('id, name, email')
+          .order('name', { ascending: true });
+        
+        if (error) {
+          console.error('Supabase error loading suppliers:', error);
+          toast({
+            variant: "destructive",
+            title: "Warning",
+            description: "Could not load suppliers list"
+          });
+        } else {
+          suppliersData = data || [];
+        }
+      } catch (err) {
+        console.error('Error loading suppliers:', err);
+      }
+      
+      setSuppliers(suppliersData);
 
       // Set default category if needed
       if (!editPart && c.data && c.data.length > 0) {
@@ -321,6 +343,11 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     }));
   };
 
+  // Get available suppliers (not already mapped)
+  const availableSuppliers = suppliers.filter(
+    s => !supplierMappings.some(m => m.supplier_id === s.id)
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
@@ -497,19 +524,35 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
 
                 {/* Add New Mapping */}
                 <div className="border border-slate-300 rounded-lg p-4 bg-slate-50 space-y-3">
-                  <p className="text-sm font-medium text-slate-900">Add Supplier Mapping</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-slate-900">Add Supplier Mapping</p>
+                    {suppliers.length === 0 && (
+                      <p className="text-xs text-red-600 font-medium">No suppliers available</p>
+                    )}
+                    {availableSuppliers.length === 0 && suppliers.length > 0 && (
+                      <p className="text-xs text-amber-600 font-medium">All suppliers mapped</p>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium mb-1 block">Supplier</label>
+                      <label className="text-xs font-medium mb-1 block">Supplier *</label>
                       <Select value={newMapping.supplier_id} onValueChange={(v) => setNewMapping({ ...newMapping, supplier_id: v })}>
                         <SelectTrigger className="bg-white h-9 text-sm">
-                          <SelectValue placeholder="Select supplier..." />
+                          <SelectValue placeholder={suppliers.length === 0 ? "No suppliers" : "Select supplier..."} />
                         </SelectTrigger>
                         <SelectContent className="bg-white">
-                          {suppliers
-                            .filter(s => !supplierMappings.some(m => m.supplier_id === s.id))
-                            .map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          {availableSuppliers.length === 0 ? (
+                            <div className="p-2 text-xs text-slate-500 text-center">
+                              {suppliers.length === 0 ? "No suppliers in system" : "All suppliers already mapped"}
+                            </div>
+                          ) : (
+                            availableSuppliers.map(s => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -578,7 +621,8 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
                     type="button"
                     onClick={handleAddSupplierMapping}
                     size="sm"
-                    className="bg-teal-600 hover:bg-teal-700 w-full"
+                    className="bg-teal-600 hover:bg-teal-700 w-full disabled:bg-slate-300"
+                    disabled={availableSuppliers.length === 0}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Supplier
