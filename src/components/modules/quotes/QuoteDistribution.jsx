@@ -46,9 +46,14 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
       const itemName = item.part_name || item.name || 'Item';
       body += `${index + 1}. ${itemName}\n`;
       
-      // Add part number if available
+      // Add internal part number
       if (item.part_number && !item.is_custom) {
-        body += `   Part Number: ${item.part_number}\n`;
+        body += `   Our Part Number: ${item.part_number}\n`;
+      }
+      
+      // Add supplier's part ID
+      if (item.supplier_part_id && !item.is_custom) {
+        body += `   Your Part ID/SKU: ${item.supplier_part_id}\n`;
       }
       
       // Add description if available
