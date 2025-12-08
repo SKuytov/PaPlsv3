@@ -582,8 +582,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
                       const itemsForDB = group.items.map(i => ({
                         part_id: i.isCustom ? null : (i.part?.id || null),
-                        part_name: i.isCustom ? i.customPartName : i.part?.name,
+                        part_name: i.isCustom ? i.customPartName : (i.part?.name || ''),
+                        part_number: i.isCustom ? null : (i.part?.part_number || ''),
+                        description: i.isCustom ? null : (i.part?.description || ''),
                         quantity: parseInt(i.quantity),
+                        unit_of_measure: i.part?.unit_of_measure || 'pcs',
                         notes: i.notes || '',
                         is_custom: i.isCustom
                       }));
@@ -611,7 +614,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                         createdQuotesList.push({
                           ...quote,
                           supplier: group.supplier,
-                          items: group.items
+                          items: itemsForDB // Use the full item data with all fields
                         });
                       }
                     }
