@@ -42,10 +42,22 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
     body += `\n---\n\nITEMS REQUESTED:\n\n`;
     
     items.forEach((item, index) => {
-      // Fixed: Use part_name directly, it should always be populated
+      // Use part_name (always populated)
       const itemName = item.part_name || item.name || 'Item';
       body += `${index + 1}. ${itemName}\n`;
+      
+      // Add part number if available
+      if (item.part_number && !item.is_custom) {
+        body += `   Part Number: ${item.part_number}\n`;
+      }
+      
+      // Add description if available
+      if (item.description && !item.is_custom) {
+        body += `   Description: ${item.description}\n`;
+      }
+      
       body += `   Quantity: ${item.quantity} ${item.unit_of_measure || 'pcs'}\n`;
+      
       if (item.notes) {
         body += `   Notes: ${item.notes}\n`;
       }
