@@ -60,6 +60,12 @@ const QuotesDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  // Safe number parsing utility
+  const safeNumber = (val) => {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   // Fetch quotes on mount
   useEffect(() => {
     fetchQuotes();
@@ -144,7 +150,7 @@ const QuotesDashboard = () => {
     received: quotes.filter(q => q.status === 'received').length,
     posSent: quotes.filter(q => q.po_status === 'sent').length,
     delivered: quotes.filter(q => q.delivery_status === 'delivered').length,
-    totalValue: quotes.reduce((sum, q) => sum + (parseFloat(q.estimated_total) || 0), 0),
+    totalValue: quotes.reduce((sum, q) => sum + safeNumber(q.estimated_total), 0),
     overdue: quotes.filter(q => {
       if (q.status !== 'pending' && q.status !== 'responded') return false;
       const daysSinceSent = Math.floor((new Date() - new Date(q.created_at)) / (1000 * 60 * 60 * 24));
@@ -433,6 +439,7 @@ const QuotesDashboard = () => {
                     const overdue = isOverdue(quote);
                     const supplierName = quote.suppliers?.name || 'Unknown';
                     const supplierEmail = quote.suppliers?.email || '-';
+                    const quoteValue = safeNumber(quote.estimated_total);
 
                     return (
                       <tr
@@ -461,7 +468,7 @@ const QuotesDashboard = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <span className="font-bold text-teal-600">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</span>
+                          <span className="font-bold text-teal-600">€{quoteValue.toFixed(2)}</span>
                         </td>
                         <td className="px-4 py-3">{getStatusBadge(quote.status)}</td>
                         <td className="px-4 py-3 text-center">
@@ -653,6 +660,12 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const [downloadingFiles, setDownloadingFiles] = useState({});
   const { toast } = useToast();
 
+  // Safe number parsing utility
+  const safeNumber = (val) => {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const handleStatusUpdate = async () => {
     setUpdating(true);
     try {
@@ -732,12 +745,6 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const supplierEmail = quote.suppliers?.email || '-';
   const responseAttachments = quote.response_attachments || [];
   const requestAttachments = quote.request_attachments || [];
-
-  // Safe number parsing utility
-  const safeNumber = (val) => {
-    const parsed = parseFloat(val);
-    return isNaN(parsed) ? 0 : parsed;
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
