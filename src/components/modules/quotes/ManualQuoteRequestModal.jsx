@@ -32,6 +32,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     budgetExpectation: '',
     companyName: '',
     projectName: '',
+    requesterName: 'Procurement Team',
+    requesterEmail: user?.email || 'noreply@partpulse.eu',
+    requesterPhone: '',
   });
 
   const [currentItem, setCurrentItem] = useState({
@@ -70,6 +73,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       budgetExpectation: '',
       companyName: '',
       projectName: '',
+      requesterName: 'Procurement Team',
+      requesterEmail: user?.email || 'noreply@partpulse.eu',
+      requesterPhone: '',
     });
     setCurrentItem({
       part: null,
@@ -176,6 +182,101 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     }, 0);
   };
 
+  // Generate professional email body using EmailTemplateGenerator
+  const generateEmailBody = () => {
+    const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const deliveryNeed = formData.deliveryDate || 'As soon as possible';
+    const specialNotes = formData.request_notes || '';
+    const budgetExpectation = formData.budgetExpectation || '';
+    const requesterName = formData.requesterName || 'Procurement Team';
+    const requesterEmail = formData.requesterEmail || user?.email || 'noreply@partpulse.eu';
+    const requesterPhone = formData.requesterPhone || '';
+    const companyName = 'PartPulse Industrial';
+
+    // Quote Details Section
+    let emailBody = `Dear ${selectedSupplier.name || 'Supplier'},
+
+We are reaching out regarding a quote request for the following items:
+
+------- QUOTE REQUEST DETAILS -------
+
+Quote ID: ${quoteId}
+Date: ${date}
+Delivery Date: ${deliveryNeed}
+`;
+
+    // Items Section
+    emailBody += `
+------- REQUESTED ITEMS -------
+
+`;
+    items.forEach((item, index) => {
+      const itemName = item.part?.name || 'Unknown Item';
+      const itemSKU = item.part?.barcode || 'N/A';
+      const itemQuantity = item.quantity || 1;
+      const itemDescription = item.part?.description || 'No description provided';
+      const supplierPartNumber = item.part?.supplier_part_mappings?.[0]?.supplier_part_number || 'N/A';
+      const supplierPartInfo = item.part?.supplier_part_mappings?.[0]?.supplier_sku || 'N/A';
+      
+      emailBody += `Item ${index + 1}:\n`;
+      emailBody += `  Part Name: ${itemName}\n`;
+      emailBody += `  Supplier Part Number: ${supplierPartNumber}\n`;
+      emailBody += `  Supplier SKU: ${supplierPartInfo}\n`;
+      emailBody += `  SKU/Internal ID: ${itemSKU}\n`;
+      emailBody += `\n  Quantity: ${itemQuantity} units\n`;
+      emailBody += `  Description: ${itemDescription}\n\n`;
+    });
+
+    emailBody += `Delivery Location: To be confirmed
+
+Budget & Preferences:
+${budgetExpectation ? `  • Budget Expectation: €${budgetExpectation}\n` : ''}`;
+
+    if (specialNotes) {
+      emailBody += `\nSpecial Instructions & Notes:\n  ${specialNotes}\n`;
+    }
+
+    emailBody += `
+------- REQUESTOR INFORMATION -------
+
+${requesterName}
+${requesterEmail}
+${requesterPhone ? `Phone: ${requesterPhone}\n` : ''}${companyName}
+
+`;
+
+    emailBody += `We would appreciate your detailed quotation including:
+  • Unit price and total cost for each item
+  • Availability and lead time
+  • Delivery terms and freight cost (if applicable)
+  • Payment terms
+  • Any volume discounts available
+  • Warranty information
+
+Please reply with your quotation at your earliest convenience. Reference the Quote ID (${quoteId}) in your response for easy tracking.
+
+Thank you for your prompt attention to this request.
+
+Best regards,
+${requesterName}
+${companyName}
+${requesterEmail}
+${requesterPhone ? `${requesterPhone}\n` : ''}
+www.partpulse.eu
+
+Quote Generated: ${date}`;
+
+    return emailBody;
+  };
+
+  const generateEmailSubject = () => {
+    if (items.length === 1) {
+      return `Quote Request: ${items[0].quantity}x ${items[0].part.name} [${quoteId}]`;
+    } else {
+      return `Quote Request: ${items.length} items [${quoteId}]`;
+    }
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
@@ -212,7 +313,14 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       const createdQuoteData = data[0];
       setCreatedQuote(createdQuoteData);
 
-      if (sendMethod === 'system' || sendMethod === 'outlook') {
+      // If sending via Outlook, open mailto with proper email body
+      if (sendMethod === 'outlook') {
+        const emailBody = generateEmailBody();
+        const subject = generateEmailSubject();
+        const mailtoLink = `mailto:${selectedSupplier.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        window.location.href = mailtoLink;
+        setStep(3);
+      } else if (sendMethod === 'system') {
         setStep(3);
       } else if (sendMethod === 'copy') {
         setStep(4);
@@ -473,7 +581,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                                     <td className="px-4 py-3">
                                       <div>
                                         <p className="font-semibold text-slate-900">{item.part.name}</p>
-                                        <p className="text-xs text-slate-500">SKU: {item.part.sku || 'N/A'}</p>
+                                        <p className="text-xs text-slate-500">SKU: {item.part.barcode || 'N/A'}</p>
                                         {item.notes && <p className="text-xs text-amber-600 mt-1">📝 {item.notes}</p>}
                                       </div>
                                     </td>
