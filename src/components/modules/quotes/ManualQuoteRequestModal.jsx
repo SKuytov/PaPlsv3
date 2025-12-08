@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FileUploadManager from './FileUploadManager';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import EmailTemplateGenerator from './EmailTemplateGenerator';
+import { useSupplierPartMapping } from '@/lib/hooks/useSupplierPartMapping';
 import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2, Send, Copy, Minus, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,47 +62,29 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     return `QT-${year}-${sequentialNumber}`;
   };
 
-  // Load supplier part mappings when part or supplier changes
+  // Use custom hook to load supplier part mappings
+  const { mapping: supplierMapping, loading: mappingLoading } = useSupplierPartMapping(
+    currentItem.part?.id,
+    selectedSupplier?.id,
+    (data) => {
+      // Auto-populate when mapping found
+      setCurrentItem(prev => ({
+        ...prev,
+        supplierPartNumber: data.supplier_part_number || '',
+        supplierSku: data.supplier_sku || ''
+      }));
+    }
+  );
+
+  // Keep track of mapped parts for UI feedback
   useEffect(() => {
-    const loadSupplierMappings = async () => {
-      if (!currentItem.part || !selectedSupplier?.id) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('supplier_part_mappings')
-          .select('supplier_part_number, supplier_sku')
-          .eq('part_id', currentItem.part.id)
-          .eq('supplier_id', selectedSupplier.id)
-          .single();
-
-        if (data) {
-          setSupplierPartMappings(prev => ({
-            ...prev,
-            [currentItem.part.id]: data
-          }));
-          // Auto-fill if found
-          if (data.supplier_part_number || data.supplier_sku) {
-            setCurrentItem(prev => ({
-              ...prev,
-              supplierPartNumber: data.supplier_part_number || '',
-              supplierSku: data.supplier_sku || ''
-            }));
-          }
-        } else if (!error) {
-          // No mapping found - keep fields empty for manual entry
-          setCurrentItem(prev => ({
-            ...prev,
-            supplierPartNumber: '',
-            supplierSku: ''
-          }));
-        }
-      } catch (err) {
-        console.log('No supplier mapping found (optional):', err);
-      }
-    };
-
-    loadSupplierMappings();
-  }, [currentItem.part?.id, selectedSupplier?.id]);
+    if (supplierMapping && currentItem.part) {
+      setSupplierPartMappings(prev => ({
+        ...prev,
+        [currentItem.part.id]: supplierMapping
+      }));
+    }
+  }, [supplierMapping, currentItem.part?.id]);
 
   // Generate unique quote ID on mount
   useEffect(() => {
@@ -558,33 +541,127 @@ Quote Generated: ${date}`;
 
                       {/* Supplier Part Fields - Auto-populated or allow manual entry */}
                       {currentItem.part && selectedSupplier && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-sm font-semibold block mb-2">Supplier Part Number</label>
-                            <Input
-                              type="text"
-                              value={currentItem.supplierPartNumber}
-                              onChange={(e) => setCurrentItem({ ...currentItem, supplierPartNumber: e.target.value })}
-                              placeholder="Auto-loaded or enter manually"
-                              className={!currentItem.supplierPartNumber ? 'border-amber-300 bg-amber-50' : ''}
-                            />
-                            {!currentItem.supplierPartNumber && !supplierPartMappings[currentItem.part.id] && (
-                              <p className="text-xs text-amber-700 mt-1">⚠️ Not found - you can enter it manually</p>
-                            )}
+                        <div className="space-y-4">
+                          {/* Loading State */}
+                          {mappingLoading && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                              <div className="animate-spin text-blue-600">⟳</div>
+                              <div>
+                                <p className="text-sm font-semibold text-blue-900">Loading supplier info...</p>
+                                <p className="text-xs text-blue-700 mt-0.5">Checking for part number and SKU from {selectedSupplier.name}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Supplier Part Fields Grid */}
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {/* Supplier Part Number */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-semibold text-slate-900">Supplier Part Number</label>
+                                {supplierMapping?.supplier_part_number && (
+                                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                    ✓ Found
+                                  </span>
+                                )}
+                              </div>
+                              <Input
+                                type="text"
+                                value={currentItem.supplierPartNumber}
+                                onChange={(e) => setCurrentItem({ 
+                                  ...currentItem, 
+                                  supplierPartNumber: e.target.value 
+                                })}
+                                placeholder={
+                                  supplierMapping?.supplier_part_number 
+                                    ? supplierMapping.supplier_part_number
+                                    : "Enter part number..."
+                                }
+                                className={`${
+                                  supplierMapping?.supplier_part_number && !currentItem.supplierPartNumber
+                                    ? 'border-green-300 bg-green-50 text-slate-500'
+                                    : currentItem.supplierPartNumber
+                                    ? 'border-slate-300'
+                                    : 'border-amber-300 bg-amber-50'
+                                }`}
+                              />
+                              {!supplierMapping?.supplier_part_number && !mappingLoading && (
+                                <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                                  <span>⚠️</span>
+                                  <span>Not found - enter manually or create mapping in Suppliers</span>
+                                </p>
+                              )}
+                              {supplierMapping?.supplier_part_number && !currentItem.supplierPartNumber && (
+                                <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
+                                  <span>✓</span>
+                                  <span>Auto-populated from supplier data</span>
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Supplier SKU */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-semibold text-slate-900">Supplier SKU</label>
+                                {supplierMapping?.supplier_sku && (
+                                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                    ✓ Found
+                                  </span>
+                                )}
+                              </div>
+                              <Input
+                                type="text"
+                                value={currentItem.supplierSku}
+                                onChange={(e) => setCurrentItem({ 
+                                  ...currentItem, 
+                                  supplierSku: e.target.value 
+                                })}
+                                placeholder={
+                                  supplierMapping?.supplier_sku 
+                                    ? supplierMapping.supplier_sku
+                                    : "Enter SKU..."
+                                }
+                                className={`${
+                                  supplierMapping?.supplier_sku && !currentItem.supplierSku
+                                    ? 'border-green-300 bg-green-50 text-slate-500'
+                                    : currentItem.supplierSku
+                                    ? 'border-slate-300'
+                                    : 'border-amber-300 bg-amber-50'
+                                }`}
+                              />
+                              {!supplierMapping?.supplier_sku && !mappingLoading && (
+                                <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                                  <span>⚠️</span>
+                                  <span>Not found - enter manually or create mapping in Suppliers</span>
+                                </p>
+                              )}
+                              {supplierMapping?.supplier_sku && !currentItem.supplierSku && (
+                                <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
+                                  <span>✓</span>
+                                  <span>Auto-populated from supplier data</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-sm font-semibold block mb-2">Supplier SKU</label>
-                            <Input
-                              type="text"
-                              value={currentItem.supplierSku}
-                              onChange={(e) => setCurrentItem({ ...currentItem, supplierSku: e.target.value })}
-                              placeholder="Auto-loaded or enter manually"
-                              className={!currentItem.supplierSku ? 'border-amber-300 bg-amber-50' : ''}
-                            />
-                            {!currentItem.supplierSku && !supplierPartMappings[currentItem.part.id] && (
-                              <p className="text-xs text-amber-700 mt-1">⚠️ Not found - you can enter it manually</p>
-                            )}
-                          </div>
+
+                          {/* Info Box if mapping exists */}
+                          {supplierMapping && (
+                            <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                              <p className="text-xs text-teal-900 font-semibold">
+                                ✓ Supplier part data found in system
+                              </p>
+                              {supplierMapping.lead_time_days && (
+                                <p className="text-xs text-teal-700 mt-1">
+                                  Lead time: {supplierMapping.lead_time_days} days
+                                </p>
+                              )}
+                              {supplierMapping.unit_price && (
+                                <p className="text-xs text-teal-700">
+                                  Unit price: €{supplierMapping.unit_price.toFixed(2)}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
