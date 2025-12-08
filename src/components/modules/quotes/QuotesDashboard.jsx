@@ -694,6 +694,12 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const responseAttachments = quote.response_attachments || [];
   const requestAttachments = quote.request_attachments || [];
 
+  // Safe number parsing utility
+  const safeNumber = (val) => {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
       <Card className="w-full max-w-4xl my-4">
@@ -755,20 +761,26 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
               </button>
               {expandedSections.items && (
                 <div className="p-4 space-y-2">
-                  {quote.items.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between border border-slate-200">
-                      <div>
-                        <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
-                        <p className="text-xs text-slate-600 mt-1">Qty: {item.quantity || 0}</p>
-                      </div>
-                      {item.unit_price && (
-                        <div className="text-right">
-                          <p className="font-bold text-teal-600">€{((item.unit_price || 0) * (item.quantity || 0)).toFixed(2)}</p>
-                          <p className="text-xs text-slate-600">@ €{(item.unit_price || 0).toFixed(2)}</p>
+                  {quote.items.map((item, idx) => {
+                    const quantity = safeNumber(item.quantity);
+                    const unitPrice = safeNumber(item.unit_price);
+                    const lineTotal = quantity * unitPrice;
+                    
+                    return (
+                      <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between border border-slate-200">
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
+                          <p className="text-xs text-slate-600 mt-1">Qty: {quantity}</p>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {unitPrice > 0 && (
+                          <div className="text-right">
+                            <p className="font-bold text-teal-600">€{lineTotal.toFixed(2)}</p>
+                            <p className="text-xs text-slate-600">@ €{unitPrice.toFixed(2)}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -780,7 +792,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
               <DollarSign className="h-5 w-5" />
               Estimated Total
             </p>
-            <p className="text-3xl font-bold text-teal-700">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</p>
+            <p className="text-3xl font-bold text-teal-700">€{safeNumber(quote.estimated_total).toFixed(2)}</p>
           </div>
 
           {/* Supplier Response Section */}
@@ -813,14 +825,20 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                             </tr>
                           </thead>
                           <tbody>
-                            {quote.supplier_response.item_prices.map((item, idx) => (
-                              <tr key={idx} className="border-b border-blue-200 bg-white">
-                                <td className="px-2 py-1 font-semibold">{item.part_name}</td>
-                                <td className="px-2 py-1 text-center">{item.quantity}</td>
-                                <td className="px-2 py-1 text-right">€{(item.unit_price || 0).toFixed(2)}</td>
-                                <td className="px-2 py-1 text-right font-semibold">€{(item.line_total || 0).toFixed(2)}</td>
-                              </tr>
-                            ))}
+                            {quote.supplier_response.item_prices.map((item, idx) => {
+                              const itemQty = safeNumber(item.quantity);
+                              const itemPrice = safeNumber(item.unit_price);
+                              const itemLineTotal = safeNumber(item.line_total);
+                              
+                              return (
+                                <tr key={idx} className="border-b border-blue-200 bg-white">
+                                  <td className="px-2 py-1 font-semibold">{item.part_name}</td>
+                                  <td className="px-2 py-1 text-center">{itemQty}</td>
+                                  <td className="px-2 py-1 text-right">€{itemPrice.toFixed(2)}</td>
+                                  <td className="px-2 py-1 text-right font-semibold">€{itemLineTotal.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -831,17 +849,17 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                   <div className="grid grid-cols-2 gap-3 p-3 bg-white rounded-lg border border-blue-200">
                     <div>
                       <p className="text-xs text-blue-700 font-semibold">Subtotal</p>
-                      <p className="text-lg font-bold text-blue-900">€{(quote.supplier_response?.quoted_price_subtotal || 0).toFixed(2)}</p>
+                      <p className="text-lg font-bold text-blue-900">€{safeNumber(quote.supplier_response?.quoted_price_subtotal).toFixed(2)}</p>
                     </div>
-                    {quote.supplier_response?.total_charges > 0 && (
+                    {safeNumber(quote.supplier_response?.total_charges) > 0 && (
                       <div>
                         <p className="text-xs text-orange-700 font-semibold">Charges</p>
-                        <p className="text-lg font-bold text-orange-900">€{(quote.supplier_response?.total_charges || 0).toFixed(2)}</p>
+                        <p className="text-lg font-bold text-orange-900">€{safeNumber(quote.supplier_response?.total_charges).toFixed(2)}</p>
                       </div>
                     )}
                     <div className="col-span-2 pt-2 border-t border-blue-200 flex justify-between">
                       <p className="font-semibold text-slate-900">Total Quoted</p>
-                      <p className="text-lg font-bold text-teal-700">€{(quote.supplier_response?.quoted_price_total || 0).toFixed(2)}</p>
+                      <p className="text-lg font-bold text-teal-700">€{safeNumber(quote.supplier_response?.quoted_price_total).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -850,22 +868,22 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                     <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
                       <p className="text-sm font-semibold text-orange-900 mb-2">Additional Charges:</p>
                       <div className="space-y-1 text-sm">
-                        {quote.supplier_response.charges.transport > 0 && (
+                        {safeNumber(quote.supplier_response.charges.transport) > 0 && (
                           <div className="flex justify-between">
                             <span>Transport:</span>
-                            <span className="font-semibold">€{quote.supplier_response.charges.transport.toFixed(2)}</span>
+                            <span className="font-semibold">€{safeNumber(quote.supplier_response.charges.transport).toFixed(2)}</span>
                           </div>
                         )}
-                        {quote.supplier_response.charges.minimum_order_charge > 0 && (
+                        {safeNumber(quote.supplier_response.charges.minimum_order_charge) > 0 && (
                           <div className="flex justify-between">
                             <span>Minimum Order:</span>
-                            <span className="font-semibold">€{quote.supplier_response.charges.minimum_order_charge.toFixed(2)}</span>
+                            <span className="font-semibold">€{safeNumber(quote.supplier_response.charges.minimum_order_charge).toFixed(2)}</span>
                           </div>
                         )}
-                        {quote.supplier_response.charges.other_charge_amount > 0 && (
+                        {safeNumber(quote.supplier_response.charges.other_charge_amount) > 0 && (
                           <div className="flex justify-between">
                             <span>{quote.supplier_response.charges.other_charge_description || 'Other'}:</span>
-                            <span className="font-semibold">€{quote.supplier_response.charges.other_charge_amount.toFixed(2)}</span>
+                            <span className="font-semibold">€{safeNumber(quote.supplier_response.charges.other_charge_amount).toFixed(2)}</span>
                           </div>
                         )}
                       </div>
@@ -876,7 +894,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-2 bg-white rounded border border-slate-200">
                       <p className="text-xs text-slate-600 font-semibold">Delivery Date</p>
-                      <p className="text-sm font-bold text-slate-900">{ quote.supplier_response?.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}</p>
+                      <p className="text-sm font-bold text-slate-900">{quote.supplier_response?.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}</p>
                     </div>
                     <div className="p-2 bg-white rounded border border-slate-200">
                       <p className="text-xs text-slate-600 font-semibold">Payment Terms</p>
@@ -888,7 +906,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                     </div>
                     <div className="p-2 bg-white rounded border border-slate-200">
                       <p className="text-xs text-slate-600 font-semibold">Per Unit</p>
-                      <p className="text-sm font-bold text-teal-700">€{(quote.supplier_response?.quoted_price_per_unit || 0).toFixed(2)}</p>
+                      <p className="text-sm font-bold text-teal-700">€{safeNumber(quote.supplier_response?.quoted_price_per_unit).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -940,7 +958,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                               <File className="h-4 w-4 text-amber-600" />
                               <div>
                                 <p className="text-sm font-semibold text-slate-900">{file.name}</p>
-                                <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-xs text-slate-600">{(safeNumber(file.size) / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <button
@@ -975,7 +993,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                               <File className="h-4 w-4 text-amber-600" />
                               <div>
                                 <p className="text-sm font-semibold text-slate-900">{file.name}</p>
-                                <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-xs text-slate-600">{(safeNumber(file.size) / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <button
