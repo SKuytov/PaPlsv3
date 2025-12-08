@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Loader2, CheckCircle, AlertCircle, Send, Trash2, Edit2, Clock, Users, Zap, FileText } from 'lucide-react';
+import { Plus, X, Loader2, CheckCircle, AlertCircle, Send, Trash2, Edit2, Clock, Users, Zap, FileText, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,7 +33,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     paymentTerms: 'Net 30',
     specialRequirements: '',
   });
-  const [createdQuote, setCreatedQuote] = useState(null);
+  const [createdQuotes, setCreatedQuotes] = useState([]);
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [showDistribution, setShowDistribution] = useState(false);
   const [distributionData, setDistributionData] = useState(null);
@@ -50,7 +50,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
       } catch (err) {
         console.error('Error loading suppliers:', err);
       }
-    };
+    }
     loadSuppliers();
   }, []);
 
@@ -87,6 +87,19 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     }
   };
 
+  // Get items grouped by supplier
+  const getItemsBySupplier = () => {
+    const grouped = {};
+    items.forEach(item => {
+      const supplierId = item.supplier?.id || 'no-supplier';
+      if (!grouped[supplierId]) {
+        grouped[supplierId] = { supplier: item.supplier, items: [] };
+      }
+      grouped[supplierId].items.push(item);
+    });
+    return grouped;
+  };
+
   // Mode Selection Step
   if (step === 1) {
     return (
@@ -119,8 +132,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 <h3 className="font-bold text-slate-900 text-lg mb-2">Quick Create</h3>
                 <p className="text-sm text-slate-600">Add items one by one with smart supplier matching</p>
                 <p className="text-xs text-slate-500 mt-3">✓ Smart supplier auto-load</p>
-                <p className="text-xs text-slate-500">✓ Custom items supported</p>
-                <p className="text-xs text-slate-500">✓ Multiple items in ONE quote</p>
+                <p className="text-xs text-slate-500">✓ Separate quotes by supplier</p>
+                <p className="text-xs text-slate-500">✓ Multiple suppliers supported</p>
               </button>
 
               {/* Bulk Mode */}
@@ -168,8 +181,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               <div className="flex gap-3">
                 <Users className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-slate-900 text-sm">One Quote</p>
-                  <p className="text-xs text-slate-600">All items in a single quote request</p>
+                  <p className="font-semibold text-slate-900 text-sm">Separate Quotes</p>
+                  <p className="text-xs text-slate-600">One quote per supplier automatically</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -188,9 +201,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Creation Step
   if (step === 2 && mode === 'manual') {
-    const itemSuppliers = [...new Set(items.filter(i => i.supplier?.id).map(i => i.supplier.id))]
-      .map(id => allSuppliers.find(s => s.id === id))
-      .filter(Boolean);
+    const itemsBySupplier = getItemsBySupplier();
+    const uniqueSuppliers = Object.values(itemsBySupplier).filter(g => g.supplier);
 
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
@@ -198,7 +210,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-teal-50 to-teal-100">
             <div>
               <CardTitle className="text-2xl">Create Quote Request</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items (all items go into ONE quote)</p>
+              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items (separate quotes will be created per supplier)</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -210,8 +222,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             {items.length > 0 && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="font-semibold text-blue-900">📋 Quote Summary</p>
-                <p className="text-sm text-blue-700 mt-1">This quote will contain {items.length} item{items.length !== 1 ? 's' : ''}</p>
-                <p className="text-xs text-blue-600 mt-2">✓ All items will be sent together in ONE quote request</p>
+                <p className="text-sm text-blue-700 mt-1">You have {items.length} item{items.length !== 1 ? 's' : ''} in {uniqueSuppliers.length} supplier{uniqueSuppliers.length !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-blue-600 mt-2">✓ A separate quote will be created for each supplier</p>
               </div>
             )}
 
@@ -357,48 +369,58 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
               </Card>
             </div>
 
-            {/* Items List */}
+            {/* Items List - Grouped by Supplier */}
             {items.length > 0 && (
-              <div className="space-y-2 border-t pt-4">
-                <h3 className="font-bold text-slate-900">Items in Quote ({items.length})</h3>
-                {items.map((item, idx) => (
-                  <div key={idx} className="p-4 bg-white border border-slate-200 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-slate-900">
-                            {item.isCustom ? item.customPartName : item.part?.name}
-                          </p>
-                          {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
-                        </div>
-                        <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
-                        {item.supplier && (
-                          <p className="text-sm text-teal-600 font-medium flex items-center gap-1">
-                            👤 {item.supplier.name}
-                          </p>
-                        )}
-                        {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setCurrentItem(item);
-                            setEditingIndex(idx);
-                          }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-bold text-slate-900">Items Grouped by Supplier ({items.length} total)</h3>
+                {Object.entries(itemsBySupplier).map(([supplierId, group]) => (
+                  <div key={supplierId} className="border-l-4 border-teal-500 pl-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-slate-900">
+                        {group.supplier ? group.supplier.name : 'No Supplier'}
+                      </p>
+                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-full font-semibold">
+                        {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
+                    {group.items.map((item, idx) => {
+                      const actualIndex = items.indexOf(item);
+                      return (
+                        <div key={actualIndex} className="p-3 bg-white border border-slate-200 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-colors">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-slate-900">
+                                  {item.isCustom ? item.customPartName : item.part?.name}
+                                </p>
+                                {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
+                              </div>
+                              <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
+                              {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentItem(item);
+                                  setEditingIndex(actualIndex);
+                                }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => setItems(items.filter((_, i) => i !== actualIndex))}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
@@ -470,6 +492,9 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Review Step
   if (step === 3) {
+    const itemsBySupplier = getItemsBySupplier();
+    const quoteCount = Object.values(itemsBySupplier).filter(g => g.supplier).length;
+
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
         <Card className="w-full max-w-4xl my-4">
@@ -488,39 +513,53 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             <div className="grid grid-cols-2 gap-4">
               <Card className="bg-slate-50">
                 <CardContent className="pt-4">
-                  <p className="text-xs text-slate-600 font-semibold uppercase">Items in Quote</p>
+                  <p className="text-xs text-slate-600 font-semibold uppercase">Items in Request</p>
                   <p className="text-2xl font-bold text-slate-900 mt-1">{items.length}</p>
                 </CardContent>
               </Card>
               <Card className="bg-blue-50">
                 <CardContent className="pt-4">
                   <p className="text-xs text-blue-700 font-semibold uppercase">Quote Records</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">1</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{quoteCount}</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Items */}
+            {/* Items by Supplier */}
             <div>
-              <h4 className="font-bold text-slate-900 mb-3">Items to be Quoted ({items.length})</h4>
-              <div className="space-y-2">
-                {items.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-900">{item.isCustom ? item.customPartName : item.part?.name}</p>
-                        <p className="text-xs text-slate-600">Qty: {item.quantity} • Supplier: {item.supplier?.name}</p>
+              <h4 className="font-bold text-slate-900 mb-3">Quotes to be Created ({quoteCount})</h4>
+              <div className="space-y-4">
+                {Object.entries(itemsBySupplier).map(([supplierId, group]) => (
+                  group.supplier && (
+                    <div key={supplierId} className="border-l-4 border-teal-500 pl-4 space-y-2 p-4 bg-slate-50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <p className="font-bold text-slate-900">
+                          📧 Quote for {group.supplier.name}
+                        </p>
+                        <span className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-full font-semibold">
+                          {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {group.items.map((item, idx) => (
+                          <p key={idx} className="text-sm text-slate-700">
+                            • {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity})
+                          </p>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )
                 ))}
               </div>
             </div>
 
             {/* Quote Summary */}
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="font-semibold text-green-900">✓ One Quote Request</p>
-              <p className="text-sm text-green-700 mt-1">All {items.length} items will be sent in a single quote request</p>
+              <p className="font-semibold text-green-900 flex items-center gap-2">
+                <CheckCircle className="h-5 w-5" />
+                ✓ {quoteCount} Separate Quote{quoteCount !== 1 ? 's' : ''} Ready
+              </p>
+              <p className="text-sm text-green-700 mt-1">Each supplier will receive their own quote with only their items</p>
             </div>
 
             {/* Navigation */}
@@ -532,89 +571,68 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 onClick={async () => {
                   setLoading(true);
                   try {
-                    console.log('=== CREATING QUOTE ===' );
-                    console.log('Items:', items);
-                    console.log('Metadata:', quoteMetadata);
-                    
-                    // Create ONE quote with all items
-                    const quoteId = `QR-${Date.now().toString(36).toUpperCase()}`;
-                    console.log('Quote ID:', quoteId);
-                    
-                    // Map items correctly for database
-                    const itemsForDB = items.map(i => ({
-                      part_id: i.isCustom ? null : (i.part?.id || null),
-                      part_name: i.isCustom ? i.customPartName : i.part?.name,
-                      quantity: parseInt(i.quantity),
-                      notes: i.notes || '',
-                      is_custom: i.isCustom
-                    }));
-                    
-                    console.log('Items for DB:', itemsForDB);
-                    
-                    const { data, error } = await supabase
-                      .from('quote_requests')
-                      .insert({
-                        quote_id: quoteId,
-                        items: itemsForDB,
-                        total_items: items.length,
-                        estimated_total: 0,
-                        status: 'pending',
-                        created_by: user?.id || null,
-                        project_name: quoteMetadata.projectName || null,
-                        delivery_date: quoteMetadata.deliveryDate || null,
-                        request_notes: quoteMetadata.specialRequirements || null
-                      })
-                      .select();
+                    const itemsBySupplier = getItemsBySupplier();
+                    const createdQuotesList = [];
 
-                    console.log('Database response error:', error);
-                    console.log('Database response data:', data);
+                    // Create one quote per supplier
+                    for (const [supplierId, group] of Object.entries(itemsBySupplier)) {
+                      if (!group.supplier) continue;
 
-                    if (error) {
-                      console.error('Database error:', error);
-                      throw new Error(error.message);
+                      const quoteId = `QR-${Date.now().toString(36).toUpperCase()}-${group.supplier.id.slice(0, 6).toUpperCase()}`;
+
+                      const itemsForDB = group.items.map(i => ({
+                        part_id: i.isCustom ? null : (i.part?.id || null),
+                        part_name: i.isCustom ? i.customPartName : i.part?.name,
+                        quantity: parseInt(i.quantity),
+                        notes: i.notes || '',
+                        is_custom: i.isCustom
+                      }));
+
+                      const { data, error } = await supabase
+                        .from('quote_requests')
+                        .insert({
+                          quote_id: quoteId,
+                          supplier_id: group.supplier.id,
+                          items: itemsForDB,
+                          total_items: group.items.length,
+                          estimated_total: 0,
+                          status: 'pending',
+                          created_by: user?.id || null,
+                          project_name: quoteMetadata.projectName || null,
+                          delivery_date: quoteMetadata.deliveryDate || null,
+                          request_notes: quoteMetadata.specialRequirements || null
+                        })
+                        .select();
+
+                      if (error) throw error;
+
+                      if (data && data.length > 0) {
+                        const quote = data[0];
+                        createdQuotesList.push({
+                          ...quote,
+                          supplier: group.supplier,
+                          items: group.items
+                        });
+                      }
                     }
 
-                    if (data && data.length > 0) {
-                      const quote = data[0];
-                      console.log('Quote created successfully:', quote);
-                      
-                      // Prepare distribution data
-                      const distData = {
-                        id: quote.quote_id,
-                        items: items.map(i => ({
-                          part_name: i.isCustom ? i.customPartName : i.part?.name,
-                          quantity: i.quantity,
-                          notes: i.notes || '',
-                          is_custom: i.isCustom
-                        })),
-                        project: quote.project_name,
-                        delivery_date: quote.delivery_date,
-                        payment_terms: quoteMetadata.paymentTerms,
-                        special_notes: quote.request_notes,
-                        created_by: user?.email || 'Procurement Team',
-                        created_at: quote.created_at
-                      };
-                      
-                      console.log('Distribution data:', distData);
-                      
-                      setCreatedQuote(quote);
-                      setDistributionData(distData);
+                    if (createdQuotesList.length > 0) {
+                      setCreatedQuotes(createdQuotesList);
+                      setDistributionData({ quotes: createdQuotesList, metadata: quoteMetadata });
                       setShowDistribution(true);
                       setStep(4);
-                      
+
                       toast({
-                        title: '✅ Quote Created',
-                        description: `Quote #${quoteId} created successfully`
+                        title: '✅ Quotes Created',
+                        description: `${createdQuotesList.length} quote${createdQuotesList.length !== 1 ? 's' : ''} created successfully`
                       });
-                    } else {
-                      throw new Error('No quote returned from database');
                     }
                   } catch (error) {
-                    console.error('Error creating quote:', error);
+                    console.error('Error creating quotes:', error);
                     toast({
                       variant: 'destructive',
-                      title: 'Error Creating Quote',
-                      description: error.message || 'Failed to create quote'
+                      title: 'Error Creating Quotes',
+                      description: error.message || 'Failed to create quotes'
                     });
                   } finally {
                     setLoading(false);
@@ -631,7 +649,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Create & Send Quote
+                    Create & Send Quotes
                   </>
                 )}
               </Button>
@@ -644,9 +662,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
   // Success Step with Distribution
   if (step === 4) {
-    console.log('STEP 4 - showDistribution:', showDistribution);
-    console.log('STEP 4 - distributionData:', distributionData);
-    
     return (
       <>
         {!showDistribution && (
@@ -659,15 +674,16 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900">Quote Created Successfully!</h3>
-                  <p className="text-slate-600 mt-2">Quote #{createdQuote?.quote_id}</p>
+                  <h3 className="text-2xl font-bold text-slate-900">Quotes Created Successfully!</h3>
+                  <p className="text-slate-600 mt-2">{createdQuotes.length} quote{createdQuotes.length !== 1 ? 's' : ''} ready to send</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-lg text-left space-y-2">
-                  <p className="text-sm font-semibold text-slate-900">Items: {items.length}</p>
-                  {items.slice(0, 3).map((item, idx) => (
-                    <p key={idx} className="text-xs text-slate-600">• {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity})</p>
+                  {createdQuotes.map((quote, idx) => (
+                    <div key={idx}>
+                      <p className="text-sm font-semibold text-slate-900">📧 {quote.supplier?.name}</p>
+                      <p className="text-xs text-slate-600">Quote #{quote.quote_id} • {quote.items?.length || 0} item{quote.items?.length !== 1 ? 's' : ''}</p>
+                    </div>
                   ))}
-                  {items.length > 3 && <p className="text-xs text-slate-600">... and {items.length - 3} more item(s)</p>}
                 </div>
                 <div className="flex gap-3">
                   <Button
@@ -680,11 +696,10 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <Button
                     className="flex-1 bg-teal-600 hover:bg-teal-700"
                     onClick={() => {
-                      console.log('Clicked Send Quote button');
                       setShowDistribution(true);
                     }}
                   >
-                    📧 Send Quote
+                    📧 Send Quotes
                   </Button>
                 </div>
               </CardContent>
@@ -692,20 +707,19 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           </div>
         )}
 
-        {/* Distribution Modal - ALWAYS render if showDistribution is true */}
+        {/* Distribution Modal */}
         {showDistribution && distributionData && (
           <QuoteDistribution
-            quoteRequest={distributionData}
+            quoteRequests={distributionData.quotes}
+            metadata={distributionData.metadata}
             onClose={() => {
-              console.log('Distribution modal closed');
               setShowDistribution(false);
               onClose();
             }}
             onSent={(data) => {
-              console.log('Quote sent via:', data);
               toast({
-                title: `✅ Quote sent via ${data.method}!`,
-                description: `Quote #${createdQuote?.quote_id} sent successfully`
+                title: `✅ Quotes sent via ${data.method}!`,
+                description: `${data.count} quote${data.count !== 1 ? 's' : ''} sent successfully`
               });
               setShowDistribution(false);
               onClose();
