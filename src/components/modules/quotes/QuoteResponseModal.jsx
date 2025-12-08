@@ -14,6 +14,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState({});
   const { toast } = useToast();
 
   // Safe supplier data
@@ -89,16 +90,76 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files || []);
     const newFiles = files.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
       name: file.name,
       size: file.size,
       type: file.type,
-      file: file
+      file: file,
+      uploaded: false,
+      uploading: false,
+      path: null,
+      url: null
     }));
     setAttachments([...attachments, ...newFiles]);
   };
 
-  const removeAttachment = (index) => {
-    setAttachments(attachments.filter((_, i) => i !== index));
+  const removeAttachment = (id) => {
+    setAttachments(attachments.filter((att) => att.id !== id));
+  };
+
+  // Upload file to Supabase Storage
+  const uploadFile = async (attachment) => {
+    try {
+      setUploadingFiles(prev => ({ ...prev, [attachment.id]: true }));
+
+      // Create storage path: quotes/{quote_id}/{timestamp}_{filename}
+      const timestamp = new Date().getTime();
+      const storagePath = `quotes/${quote.id}/${timestamp}_${attachment.name}`;
+
+      // Upload file to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from('quote-attachments')
+        .upload(storagePath, attachment.file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      // Get public URL for the file
+      const { data: urlData } = supabase.storage
+        .from('quote-attachments')
+        .getPublicUrl(storagePath);
+
+      // Update attachment with storage path and URL
+      setAttachments(prev => prev.map(att => {
+        if (att.id === attachment.id) {
+          return {
+            ...att,
+            uploaded: true,
+            uploading: false,
+            path: storagePath,
+            url: urlData?.publicUrl || null
+          };
+        }
+        return att;
+      }));
+
+      toast({
+        title: '✅ File Uploaded',
+        description: `${attachment.name} uploaded successfully`
+      });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setUploadingFiles(prev => ({ ...prev, [attachment.id]: false }));
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: error.message || 'Failed to upload file'
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -121,8 +182,29 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
       return;
     }
 
+    // Check if all attachments are uploaded
+    const unuploadedFiles = attachments.filter(att => !att.uploaded);
+    if (unuploadedFiles.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Files Not Uploaded',
+        description: `Please upload or remove ${unuploadedFiles.length} file(s) before saving`
+      });
+      return;
+    }
+
     setLoading(true);
     try {
+      // Prepare attachment metadata with storage paths and URLs
+      const attachmentMetadata = attachments.map(att => ({
+        id: att.id,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        path: att.path,
+        url: att.url
+      }));
+
       // Update quote with response data
       const { error: updateError } = await supabase
         .from('quote_requests')
@@ -147,11 +229,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
             special_conditions: response.special_conditions,
             response_received_at: new Date().toISOString()
           },
-          response_attachments: attachments.map(a => ({
-            name: a.name,
-            size: a.size,
-            type: a.type
-          }))
+          response_attachments: attachmentMetadata
         })
         .eq('id', quote.id);
 
@@ -159,7 +237,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
 
       toast({
         title: '✅ Response Recorded',
-        description: `Quote response from ${supplierName} saved successfully`
+        description: `Quote response from ${supplierName} saved successfully with ${attachments.length} file(s)`
       });
 
       onSuccess();
@@ -455,13 +533,13 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Attachments */}
+          {/* Attachments - ENHANCED WITH UPLOAD STATUS */}
           <div className="space-y-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <h4 className="font-bold text-slate-900 flex items-center gap-2">
               <Upload className="h-4 w-4" />
               Attach Supplier Quote Documents
             </h4>
-            <p className="text-sm text-slate-600">PDF, image, or document with supplier's official quote</p>
+            <p className="text-sm text-slate-600">PDF, image, or document with supplier's official quote - Files will be uploaded and accessible</p>
 
             <div className="border-2 border-dashed border-amber-300 rounded-lg p-6 text-center hover:bg-amber-100/50 transition-colors cursor-pointer">
               <input
@@ -470,30 +548,59 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
                 onChange={handleFileUpload}
                 className="hidden"
                 id="file-upload"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.zip"
               />
               <label htmlFor="file-upload" className="cursor-pointer">
                 <Upload className="h-8 w-8 text-amber-600 mx-auto mb-2" />
                 <p className="font-semibold text-amber-900">Click to upload or drag files</p>
-                <p className="text-xs text-amber-700 mt-1">PDF, Images, or Documents</p>
+                <p className="text-xs text-amber-700 mt-1">PDF, Images, Documents, ZIP - Max 10MB per file</p>
               </label>
             </div>
 
             {attachments.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">Attached Files ({attachments.length})</p>
-                {attachments.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-slate-200">
-                    <div className="text-sm">
-                      <p className="font-semibold text-slate-900">{file.name}</p>
+                {attachments.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200">
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900 text-sm">{file.name}</p>
                       <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</p>
                     </div>
-                    <button
-                      onClick={() => removeAttachment(idx)}
-                      className="text-red-600 hover:text-red-700 transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {!file.uploaded && (
+                        <Button
+                          size="sm"
+                          onClick={() => uploadFile(file)}
+                          disabled={uploadingFiles[file.id] || file.uploading}
+                          className="bg-amber-600 hover:bg-amber-700"
+                        >
+                          {uploadingFiles[file.id] || file.uploading ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3 w-3 mr-1" />
+                              Upload
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {file.uploaded && (
+                        <div className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded">
+                          <CheckCircle className="h-3 w-3" />
+                          Uploaded
+                        </div>
+                      )}
+                      <button
+                        onClick={() => removeAttachment(file.id)}
+                        className="text-red-600 hover:text-red-700 transition-colors p-1"
+                        title="Remove file"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -505,7 +612,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
             <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="font-semibold">💡 Pro Tip:</p>
-              <p>All pricing information including item-level prices and charges will be saved. You'll be able to compare this supplier's offer with others side-by-side in the Quote Comparison view.</p>
+              <p>All pricing information including item-level prices and charges will be saved. Upload files are stored securely and can be downloaded from the quote details. You'll be able to compare this supplier's offer with others side-by-side in the Quote Comparison view.</p>
             </div>
           </div>
 
