@@ -36,9 +36,10 @@ export const useSupplierPartMapping = (partId, supplierId, onMappingFound) => {
     try {
       // Use maybeSingle() instead of single() to avoid errors when no match
       // maybeSingle() returns null if no match instead of throwing an error
+      // ✅ FIXED: Removed 'unit_price' which doesn't exist in the table
       const { data, error: queryError } = await supabase
         .from('supplier_part_mappings')
-        .select('supplier_part_number, supplier_sku, lead_time_days, unit_price')
+        .select('supplier_part_number, supplier_sku, lead_time_days')
         .eq('part_id', partId)
         .eq('supplier_id', supplierId)
         .maybeSingle();
