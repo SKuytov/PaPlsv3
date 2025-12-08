@@ -20,67 +20,112 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
   const quotes = Array.isArray(quoteRequests) ? quoteRequests : [quoteRequests];
 
   const generateSubject = (quote) => {
-    return `Quote Request #${quote.quote_id}${quote.supplier ? ` for ${quote.supplier.name}` : ''}`;
+    return `Quote Request: ${quote.quote_id}`;
   };
 
+  // 🔧 IMPROVED EMAIL TEMPLATE: Professional, clean, readable
   const generateEmailBody = (quote) => {
     const items = quote.items || [];
     const supplierName = quote.supplier?.name || quote.suppliers?.name;
+    const today = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
 
-    let body = `Quote Request Details\n\n`;
-    body += `Quote ID: ${quote.quote_id}\n`;
-    body += `Date: ${new Date(quote.created_at).toLocaleDateString()}\n`;
+    let body = '';
+    
+    // Professional greeting
+    body += `Dear ${supplierName},\n\n`;
+    
+    // Opening statement
+    body += `We are writing to request a quotation for the following items. Please provide your best pricing and availability.\n\n`;
+    
+    // Quote Details Header
+    body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    body += `QUOTE REQUEST DETAILS\n`;
+    body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    body += `Quote ID        : ${quote.quote_id}\n`;
+    body += `Date Requested  : ${today}\n`;
     
     if (metadata?.projectName || quote.project_name) {
-      body += `Project: ${metadata?.projectName || quote.project_name}\n`;
+      body += `Project         : ${metadata?.projectName || quote.project_name}\n`;
     }
     
     if (metadata?.deliveryDate || quote.delivery_date) {
-      body += `Delivery Date: ${new Date(metadata?.deliveryDate || quote.delivery_date).toLocaleDateString()}\n`;
+      const deliveryDate = new Date(metadata?.deliveryDate || quote.delivery_date).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      body += `Required Delivery: ${deliveryDate}\n`;
     }
     
-    body += `\n---\n\nITEMS REQUESTED:\n\n`;
+    body += `\n`;
+    
+    // Items Section
+    body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    body += `ITEMS REQUESTED (${items.length})\n`;
+    body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
     items.forEach((item, index) => {
-      // Use part_name (always populated)
       const itemName = item.part_name || item.name || 'Item';
+      
       body += `${index + 1}. ${itemName}\n`;
       
-      // Add internal part number
+      // Internal part number
       if (item.part_number && !item.is_custom) {
-        body += `   Our Part Number: ${item.part_number}\n`;
+        body += `   Internal Part #: ${item.part_number}\n`;
       }
       
-      // Add supplier's part ID
+      // Supplier's part ID (bold in concept)
       if (item.supplier_part_id && !item.is_custom) {
-        body += `   Your Part ID/SKU: ${item.supplier_part_id}\n`;
+        body += `   Your Part ID   : ${item.supplier_part_id}\n`;
       }
       
-      // Add description if available
+      // Description
       if (item.description && !item.is_custom) {
-        body += `   Description: ${item.description}\n`;
+        body += `   Description    : ${item.description}\n`;
       }
       
-      body += `   Quantity: ${item.quantity} ${item.unit_of_measure || 'pcs'}\n`;
+      // Quantity
+      body += `   Quantity       : ${item.quantity} ${item.unit_of_measure || 'pcs'}\n`;
       
+      // Special notes
       if (item.notes) {
-        body += `   Notes: ${item.notes}\n`;
+        body += `   Special Notes  : ${item.notes}\n`;
       }
+      
       body += `\n`;
     });
     
+    // Payment Terms
     if (metadata?.paymentTerms) {
-      body += `Payment Terms: ${metadata.paymentTerms}\n`;
+      body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      body += `Payment Terms: ${metadata.paymentTerms}\n\n`;
     }
     
+    // Special Requirements
     if (metadata?.specialRequirements || quote.request_notes) {
-      body += `\nSpecial Notes: ${metadata?.specialRequirements || quote.request_notes}\n`;
+      body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      body += `SPECIAL REQUIREMENTS\n`;
+      body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      body += `${metadata?.specialRequirements || quote.request_notes}\n\n`;
     }
     
-    body += `\n---\n`;
-    body += `\nPlease provide your best quote for the above items.\n\n`;
-    body += `Thank you,\n`;
-    body += `${metadata?.created_by || 'Procurement Team'}`;
+    // Closing
+    body += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    body += `Please reply with your quote at your earliest convenience, including:\n`;
+    body += `• Unit price for each item\n`;
+    body += `• Lead time for delivery\n`;
+    body += `• Any applicable discounts for volume orders\n`;
+    body += `• Terms and conditions\n\n`;
+    body += `If you have any questions or need clarification, please don't hesitate to contact us.\n\n`;
+    body += `Best regards,\n`;
+    body += `Procurement Team\n\n`;
+    body += `---\n`;
+    body += `Quote Reference: ${quote.quote_id}\n`;
     
     return body;
   };
@@ -421,7 +466,7 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
                       <div className="bg-white border-2 border-slate-300 rounded-lg p-4">
                         <p className="text-sm font-bold text-slate-900 mb-3">Subject: {generateSubject(quote)}</p>
                         <div className="border-t pt-3">
-                          <pre className="text-xs whitespace-pre-wrap break-words text-slate-700 font-mono max-h-48 overflow-y-auto">
+                          <pre className="text-xs whitespace-pre-wrap break-words text-slate-700 font-mono max-h-96 overflow-y-auto">
                             {generateEmailBody(quote)}
                           </pre>
                         </div>
