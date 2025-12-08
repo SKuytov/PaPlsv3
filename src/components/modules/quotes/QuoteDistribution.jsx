@@ -42,7 +42,9 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
     body += `\n---\n\nITEMS REQUESTED:\n\n`;
     
     items.forEach((item, index) => {
-      body += `${index + 1}. ${item.part_name || item.name}\n`;
+      // Fixed: Use part_name directly, it should always be populated
+      const itemName = item.part_name || item.name || 'Item';
+      body += `${index + 1}. ${itemName}\n`;
       body += `   Quantity: ${item.quantity} ${item.unit_of_measure || 'pcs'}\n`;
       if (item.notes) {
         body += `   Notes: ${item.notes}\n`;
@@ -116,13 +118,26 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
 
     const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     
-    window.location.href = mailtoLink;
+    // Open Outlook WITHOUT closing the dialog
+    window.open(mailtoLink, '_blank');
     
-    setMessage({ type: 'success', text: 'Opening your email client...' });
-    setTimeout(() => {
-      onSent?.({ method: 'outlook', email, count: quotes.length });
-      onClose();
-    }, 1500);
+    setMessage({ type: 'success', text: `Outlook opened for ${quote.supplier?.name}. You can send more quotes below.` });
+    
+    // Collapse this quote to show next one
+    setExpandedQuotes(prev => ({
+      ...prev,
+      [quoteId]: false
+    }));
+    
+    // Auto-expand next quote if available
+    const nextQuoteIndex = quotes.findIndex(q => (q.quote_id || q.id) === quoteId) + 1;
+    if (nextQuoteIndex < quotes.length) {
+      const nextQuote = quotes[nextQuoteIndex];
+      setExpandedQuotes(prev => ({
+        ...prev,
+        [nextQuote.quote_id || nextQuote.id]: true
+      }));
+    }
   };
 
   const handleCopyEmail = async (quoteId) => {
@@ -146,6 +161,14 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
       [quoteId]: !prev[quoteId]
     }));
   };
+
+  // Auto-expand first quote on load
+  React.useEffect(() => {
+    if (quotes.length > 0 && Object.keys(expandedQuotes).length === 0) {
+      const firstQuoteId = quotes[0].quote_id || quotes[0].id;
+      setExpandedQuotes({ [firstQuoteId]: true });
+    }
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
@@ -304,6 +327,10 @@ const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
           {/* Outlook Form */}
           {selectedMethod === 'outlook' && (
             <div className="space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                ✓ Click "Open in Outlook" to send each quote. The dialog will stay open so you can send to multiple suppliers.
+              </div>
+              
               {quotes.map(quote => (
                 <div key={quote.quote_id || quote.id} className="border rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleQuote(quote.quote_id || quote.id)}>
