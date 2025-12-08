@@ -1,40 +1,42 @@
 import React, { useState } from 'react';
-import { Mail, Copy, Eye, Send, AlertCircle, Check } from 'lucide-react';
+import { Mail, Copy, Eye, Send, AlertCircle, Check, ChevronDown } from 'lucide-react';
 
 /**
  * QuoteDistribution Component
  * Send quote requests via email with multiple options:
  * 1. Auto-send via system email
- * 2. Open Outlook with pre-filled email
+ * 2. Open Outlook with pre-filled email and supplier email
  * 3. Preview and copy email text
  */
-const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
-  const [selectedMethod, setSelectedMethod] = useState(null); // 'auto', 'outlook', 'preview'
-  const [sendingEmail, setSendingEmail] = useState('');
+const QuoteDistribution = ({ quoteRequests, metadata, onClose, onSent }) => {
+  const [selectedMethod, setSelectedMethod] = useState(null);
+  const [expandedQuotes, setExpandedQuotes] = useState({});
+  const [sendingEmails, setSendingEmails] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Generate email subject
-  const generateSubject = () => {
-    return `Quote Request #${quoteRequest.id}`;
+  // Handle single quote (backward compatibility)
+  const quotes = Array.isArray(quoteRequests) ? quoteRequests : [quoteRequests];
+
+  const generateSubject = (quote) => {
+    return `Quote Request #${quote.quote_id}${quote.supplier ? ` for ${quote.supplier.name}` : ''}`;
   };
 
-  // Generate email body
-  const generateEmailBody = () => {
-    const items = quoteRequest.items || [];
-    const suppliers = quoteRequest.suppliers || [];
+  const generateEmailBody = (quote) => {
+    const items = quote.items || [];
+    const supplierName = quote.supplier?.name || quote.suppliers?.name;
 
     let body = `Quote Request Details\n\n`;
-    body += `Quote ID: ${quoteRequest.id}\n`;
-    body += `Date: ${new Date(quoteRequest.created_at).toLocaleDateString()}\n`;
+    body += `Quote ID: ${quote.quote_id}\n`;
+    body += `Date: ${new Date(quote.created_at).toLocaleDateString()}\n`;
     
-    if (quoteRequest.project) {
-      body += `Project: ${quoteRequest.project}\n`;
+    if (metadata?.projectName || quote.project_name) {
+      body += `Project: ${metadata?.projectName || quote.project_name}\n`;
     }
     
-    if (quoteRequest.delivery_date) {
-      body += `Delivery Date: ${new Date(quoteRequest.delivery_date).toLocaleDateString()}\n`;
+    if (metadata?.deliveryDate || quote.delivery_date) {
+      body += `Delivery Date: ${new Date(metadata?.deliveryDate || quote.delivery_date).toLocaleDateString()}\n`;
     }
     
     body += `\n---\n\nITEMS REQUESTED:\n\n`;
@@ -48,47 +50,49 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
       body += `\n`;
     });
     
-    if (quoteRequest.payment_terms) {
-      body += `Payment Terms: ${quoteRequest.payment_terms}\n`;
+    if (metadata?.paymentTerms) {
+      body += `Payment Terms: ${metadata.paymentTerms}\n`;
     }
     
-    if (quoteRequest.special_notes) {
-      body += `\nSpecial Notes: ${quoteRequest.special_notes}\n`;
+    if (metadata?.specialRequirements || quote.request_notes) {
+      body += `\nSpecial Notes: ${metadata?.specialRequirements || quote.request_notes}\n`;
     }
     
     body += `\n---\n`;
     body += `\nPlease provide your best quote for the above items.\n\n`;
     body += `Thank you,\n`;
-    body += `${quoteRequest.created_by || 'Procurement Team'}`;
+    body += `${metadata?.created_by || 'Procurement Team'}`;
     
     return body;
   };
 
-  // Handle auto-send via system email
-  const handleAutoSend = async () => {
-    if (!sendingEmail.trim()) {
+  const handleAutoSend = async (quoteId) => {
+    const quote = quotes.find(q => q.id === quoteId || q.quote_id === quoteId);
+    if (!quote) return;
+
+    const email = sendingEmails[quoteId];
+    if (!email?.trim()) {
       setMessage({ type: 'error', text: 'Please enter recipient email' });
       return;
     }
 
     setLoading(true);
     try {
-      // Call your backend API to send email
       const response = await fetch('/api/quotes/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          quoteId: quoteRequest.id,
-          recipientEmail: sendingEmail,
-          subject: generateSubject(),
-          body: generateEmailBody()
+          quoteId: quote.quote_id,
+          recipientEmail: email,
+          subject: generateSubject(quote),
+          body: generateEmailBody(quote)
         })
       });
 
       if (response.ok) {
-        setMessage({ type: 'success', text: 'Email sent successfully!' });
+        setMessage({ type: 'success', text: `Email sent to ${quote.supplier?.name}!` });
         setTimeout(() => {
-          onSent?.({ method: 'auto', email: sendingEmail });
+          onSent?.({ method: 'auto', email, count: quotes.length });
           onClose();
         }, 2000);
       } else {
@@ -101,28 +105,31 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
     }
   };
 
-  // Handle Outlook integration
-  const handleOutlookSend = () => {
-    const subject = generateSubject();
-    const body = generateEmailBody();
-    const email = sendingEmail || '';
+  const handleOutlookSend = (quoteId) => {
+    const quote = quotes.find(q => q.id === quoteId || q.quote_id === quoteId);
+    if (!quote) return;
 
-    // Create mailto link with pre-filled information
+    const subject = generateSubject(quote);
+    const body = generateEmailBody(quote);
+    // Auto-fill supplier email if available
+    const email = sendingEmails[quoteId] || quote.supplier?.email || '';
+
     const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     
-    // Open default email client
     window.location.href = mailtoLink;
     
     setMessage({ type: 'success', text: 'Opening your email client...' });
     setTimeout(() => {
-      onSent?.({ method: 'outlook', email });
+      onSent?.({ method: 'outlook', email, count: quotes.length });
       onClose();
     }, 1500);
   };
 
-  // Copy email text to clipboard
-  const handleCopyEmail = async () => {
-    const fullText = `Subject: ${generateSubject()}\n\n${generateEmailBody()}`;
+  const handleCopyEmail = async (quoteId) => {
+    const quote = quotes.find(q => q.id === quoteId || q.quote_id === quoteId);
+    if (!quote) return;
+
+    const fullText = `Subject: ${generateSubject(quote)}\n\n${generateEmailBody(quote)}`;
     try {
       await navigator.clipboard.writeText(fullText);
       setCopied(true);
@@ -133,14 +140,21 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
     }
   };
 
+  const toggleQuote = (quoteId) => {
+    setExpandedQuotes(prev => ({
+      ...prev,
+      [quoteId]: !prev[quoteId]
+    }));
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
       <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-teal-50 to-blue-50 sticky top-0">
           <div>
-            <h3 className="text-xl font-bold text-slate-900">Send Quote Request</h3>
-            <p className="text-sm text-slate-600 mt-1">Quote ID: {quoteRequest.id}</p>
+            <h3 className="text-xl font-bold text-slate-900">Send Quote Requests</h3>
+            <p className="text-sm text-slate-600 mt-1">{quotes.length} quote{quotes.length !== 1 ? 's' : ''} ready to send</p>
           </div>
           <button
             onClick={onClose}
@@ -174,7 +188,7 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
           {/* Method Selection */}
           {!selectedMethod && (
             <div className="space-y-3">
-              <p className="font-semibold text-slate-900">How would you like to send this quote request?</p>
+              <p className="font-semibold text-slate-900">How would you like to send these quote requests?</p>
               
               {/* Auto-Send Option */}
               <button
@@ -188,7 +202,7 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900">📧 Auto-Send via System Email</p>
-                    <p className="text-sm text-slate-600 mt-1">System automatically sends email to specified recipient</p>
+                    <p className="text-sm text-slate-600 mt-1">System automatically sends emails to specified recipients</p>
                   </div>
                 </div>
               </button>
@@ -205,7 +219,7 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900">💼 Open in Outlook</p>
-                    <p className="text-sm text-slate-600 mt-1">Opens Outlook with pre-filled email ready to send</p>
+                    <p className="text-sm text-slate-600 mt-1">Opens Outlook with pre-filled emails ready to send (supplier emails auto-filled)</p>
                   </div>
                 </div>
               </button>
@@ -232,153 +246,163 @@ const QuoteDistribution = ({ quoteRequest, onClose, onSent }) => {
           {/* Auto-Send Form */}
           {selectedMethod === 'auto' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Recipient Email Address
-                </label>
-                <input
-                  type="email"
-                  placeholder="supplier@company.com"
-                  value={sendingEmail}
-                  onChange={(e) => setSendingEmail(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                />
-              </div>
-              
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <p className="text-sm font-semibold text-slate-900 mb-2">Email Preview:</p>
-                <div className="space-y-2 text-xs">
-                  <p><strong>Subject:</strong> {generateSubject()}</p>
-                  <p><strong>Body Preview:</strong></p>
-                  <pre className="bg-white p-3 rounded border border-slate-200 text-xs overflow-auto max-h-48 whitespace-pre-wrap break-words">
-                    {generateEmailBody().substring(0, 300)}...
-                  </pre>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={handleAutoSend}
-                  disabled={loading}
-                  className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  type="button"
-                >
-                  {loading ? (
-                    <>
-                      <span className="animate-spin">⟳</span>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Send Email
-                    </>
+              {quotes.map(quote => (
+                <div key={quote.quote_id || quote.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleQuote(quote.quote_id || quote.id)}>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{quote.supplier?.name || 'Supplier'}</p>
+                      <p className="text-xs text-slate-600">Quote #{quote.quote_id}</p>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedQuotes[quote.quote_id || quote.id] ? 'rotate-180' : ''}`} />
+                  </div>
+                  
+                  {expandedQuotes[quote.quote_id || quote.id] && (
+                    <div className="space-y-3 border-t pt-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          Recipient Email Address
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="supplier@company.com"
+                          value={sendingEmails[quote.quote_id || quote.id] || ''}
+                          onChange={(e) => setSendingEmails({
+                            ...sendingEmails,
+                            [quote.quote_id || quote.id]: e.target.value
+                          })}
+                          defaultValue={quote.supplier?.email || ''}
+                          className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        />
+                        {quote.supplier?.email && (
+                          <p className="text-xs text-teal-600 mt-1">✓ Auto-filled from supplier database</p>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={() => handleAutoSend(quote.quote_id || quote.id)}
+                        disabled={loading}
+                        className="w-full py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white rounded-lg font-semibold transition-colors text-sm"
+                        type="button"
+                      >
+                        {loading ? '⟳ Sending...' : 'Send Email'}
+                      </button>
+                    </div>
                   )}
-                </button>
-                <button
-                  onClick={() => setSelectedMethod(null)}
-                  className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
-                  type="button"
-                >
-                  Back
-                </button>
-              </div>
+                </div>
+              ))}
+              
+              <button
+                onClick={() => setSelectedMethod(null)}
+                className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
+                type="button"
+              >
+                Back
+              </button>
             </div>
           )}
 
           {/* Outlook Form */}
           {selectedMethod === 'outlook' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Recipient Email Address (Optional)
-                </label>
-                <input
-                  type="email"
-                  placeholder="supplier@company.com"
-                  value={sendingEmail}
-                  onChange={(e) => setSendingEmail(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-slate-500 mt-1">Leave blank to fill manually in Outlook</p>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <p className="text-sm font-semibold text-slate-900 mb-2">Email Preview:</p>
-                <div className="space-y-2 text-xs">
-                  <p><strong>Subject:</strong> {generateSubject()}</p>
-                  <p><strong>Body Preview:</strong></p>
-                  <pre className="bg-white p-3 rounded border border-slate-200 text-xs overflow-auto max-h-48 whitespace-pre-wrap break-words">
-                    {generateEmailBody().substring(0, 300)}...
-                  </pre>
+              {quotes.map(quote => (
+                <div key={quote.quote_id || quote.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleQuote(quote.quote_id || quote.id)}>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{quote.supplier?.name || 'Supplier'}</p>
+                      <p className="text-xs text-slate-600">Quote #{quote.quote_id}</p>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedQuotes[quote.quote_id || quote.id] ? 'rotate-180' : ''}`} />
+                  </div>
+                  
+                  {expandedQuotes[quote.quote_id || quote.id] && (
+                    <div className="space-y-3 border-t pt-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          Recipient Email Address
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="supplier@company.com"
+                          value={sendingEmails[quote.quote_id || quote.id] || ''}
+                          onChange={(e) => setSendingEmails({
+                            ...sendingEmails,
+                            [quote.quote_id || quote.id]: e.target.value
+                          })}
+                          defaultValue={quote.supplier?.email || ''}
+                          className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        />
+                        {quote.supplier?.email && (
+                          <p className="text-xs text-blue-600 mt-1">✓ Auto-filled from supplier database</p>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={() => handleOutlookSend(quote.quote_id || quote.id)}
+                        className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors text-sm"
+                        type="button"
+                      >
+                        <Mail className="h-4 w-4 inline mr-2" />
+                        Open in Outlook
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={handleOutlookSend}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  type="button"
-                >
-                  <Mail className="h-4 w-4" />
-                  Open in Outlook
-                </button>
-                <button
-                  onClick={() => setSelectedMethod(null)}
-                  className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
-                  type="button"
-                >
-                  Back
-                </button>
-              </div>
+              ))}
+              
+              <button
+                onClick={() => setSelectedMethod(null)}
+                className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
+                type="button"
+              >
+                Back
+              </button>
             </div>
           )}
 
           {/* Preview & Copy */}
           {selectedMethod === 'preview' && (
             <div className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-900 mb-2">Email Content:</p>
-                <div className="bg-white border-2 border-slate-300 rounded-lg p-4">
-                  <p className="text-sm font-bold text-slate-900 mb-3">Subject: {generateSubject()}</p>
-                  <div className="border-t pt-3">
-                    <pre className="text-xs whitespace-pre-wrap break-words text-slate-700 font-mono max-h-96 overflow-y-auto">
-                      {generateEmailBody()}
-                    </pre>
+              {quotes.map(quote => (
+                <div key={quote.quote_id || quote.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleQuote(quote.quote_id || quote.id)}>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{quote.supplier?.name || 'Supplier'}</p>
+                      <p className="text-xs text-slate-600">Quote #{quote.quote_id}</p>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedQuotes[quote.quote_id || quote.id] ? 'rotate-180' : ''}`} />
                   </div>
-                </div>
-              </div>
+                  
+                  {expandedQuotes[quote.quote_id || quote.id] && (
+                    <div className="space-y-3 border-t pt-3">
+                      <div className="bg-white border-2 border-slate-300 rounded-lg p-4">
+                        <p className="text-sm font-bold text-slate-900 mb-3">Subject: {generateSubject(quote)}</p>
+                        <div className="border-t pt-3">
+                          <pre className="text-xs whitespace-pre-wrap break-words text-slate-700 font-mono max-h-48 overflow-y-auto">
+                            {generateEmailBody(quote)}
+                          </pre>
+                        </div>
+                      </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCopyEmail}
-                  className={`flex-1 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
-                    copied
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-purple-600 hover:bg-purple-700 text-white'
-                  }`}
-                  type="button"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy All Text
-                    </>
+                      <button
+                        onClick={() => handleCopyEmail(quote.quote_id || quote.id)}
+                        className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+                        type="button"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy Email Text
+                      </button>
+                    </div>
                   )}
-                </button>
-                <button
-                  onClick={() => setSelectedMethod(null)}
-                  className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
-                  type="button"
-                >
-                  Back
-                </button>
-              </div>
+                </div>
+              ))}
+              
+              <button
+                onClick={() => setSelectedMethod(null)}
+                className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg font-semibold transition-colors"
+                type="button"
+              >
+                Back
+              </button>
             </div>
           )}
         </div>
