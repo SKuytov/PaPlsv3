@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import QuoteDistribution from './QuoteDistribution';
+import { useSupplierPartMapping } from '@/lib/hooks/useSupplierPartMapping';
 
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [step, setStep] = useState(1);
@@ -38,6 +39,19 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [showDistribution, setShowDistribution] = useState(false);
   const [distributionData, setDistributionData] = useState(null);
+
+  // ✅ AUTO-LOAD SUPPLIER PART MAPPING DATA
+  const { mapping: supplierMapping, loading: mappingLoading } = useSupplierPartMapping(
+    currentItem.part?.id,
+    currentItem.supplier?.id,
+    (data) => {
+      // Auto-populate when mapping found
+      setCurrentItem(prev => ({
+        ...prev,
+        supplierPartId: data.supplier_part_number || ''
+      }));
+    }
+  );
 
   // Load all suppliers on mount
   useEffect(() => {
@@ -308,17 +322,71 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </div>
                   )}
 
-                  {/* Supplier Part ID */}
+                  {/* ✅ SUPPLIER PART ID WITH AUTO-MAPPING FIX */}
                   {(currentItem.part || currentItem.customPartName) && currentItem.supplier && !currentItem.isCustom && (
-                    <div>
-                      <label className="text-sm font-semibold block mb-2">Supplier's Part ID/SKU (Optional)</label>
-                      <Input
-                        type="text"
-                        value={currentItem.supplierPartId}
-                        onChange={(e) => setCurrentItem({ ...currentItem, supplierPartId: e.target.value })}
-                        placeholder="e.g., SKU-12345, PART-ABC, their internal ID"
-                      />
-                      <p className="text-xs text-slate-500 mt-1">💡 This supplier's unique identifier for this part (different from your internal part number)</p>
+                    <div className="space-y-4">
+                      {/* Loading State */}
+                      {mappingLoading && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                          <div className="animate-spin text-blue-600">⟳</div>
+                          <div>
+                            <p className="text-sm font-semibold text-blue-900">Loading supplier info...</p>
+                            <p className="text-xs text-blue-700 mt-0.5">
+                              Checking for part number from {currentItem.supplier.name}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Supplier Part ID Field */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-semibold text-slate-900">Supplier Part ID/SKU</label>
+                          {supplierMapping?.supplier_part_number && (
+                            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
+                              ✓ Found
+                            </span>
+                          )}
+                        </div>
+                        <Input
+                          type="text"
+                          value={currentItem.supplierPartId || (supplierMapping?.supplier_part_number || '')}
+                          onChange={(e) => setCurrentItem({ ...currentItem, supplierPartId: e.target.value })}
+                          placeholder="e.g., SKU-12345, PART-ABC, their internal ID"
+                          className={`${
+                            supplierMapping?.supplier_part_number && !currentItem.supplierPartId
+                              ? 'border-green-300 bg-green-50'
+                              : currentItem.supplierPartId
+                              ? 'border-slate-300'
+                              : 'border-amber-300 bg-amber-50'
+                          }`}
+                        />
+                        {!supplierMapping?.supplier_part_number && !mappingLoading && (
+                          <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                            <span>⚠️</span>
+                            <span>Not found - enter manually or create mapping in Suppliers</span>
+                          </p>
+                        )}
+                        {supplierMapping?.supplier_part_number && !currentItem.supplierPartId && (
+                          <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
+                            <span>✓</span>
+                            <span>Auto-populated from supplier data</span>
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Info Box if mapping exists */}
+                      {supplierMapping && (
+                        <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                          <p className="text-xs text-teal-900 font-semibold">✓ Supplier part data found in system</p>
+                          {supplierMapping.lead_time_days && (
+                            <p className="text-xs text-teal-700 mt-1">Lead time: {supplierMapping.lead_time_days} days</p>
+                          )}
+                          {supplierMapping.unit_price && (
+                            <p className="text-xs text-teal-700">Unit price: €{supplierMapping.unit_price.toFixed(2)}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
