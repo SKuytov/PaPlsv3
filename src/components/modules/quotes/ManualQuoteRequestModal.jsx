@@ -13,6 +13,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+// Global counter for quote ID sequencing
+let quoteCounter = 1000;
+
 const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -46,13 +49,17 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
+  // Generate unique quote ID with format: QR-YY-XXXXX
+  const generateQuoteId = () => {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
+    quoteCounter++; // Increment global counter
+    const sequentialNumber = quoteCounter.toString().padStart(5, '0'); // Pad to 5 digits
+    return `QR-${year}-${sequentialNumber}`;
+  };
+
   // Generate unique quote ID on mount
   useEffect(() => {
-    const generateQuoteId = () => {
-      const timestamp = Date.now().toString(36).toUpperCase();
-      const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-      return `QR-${timestamp}-${random}`;
-    };
     setQuoteId(generateQuoteId());
   }, []);
 
@@ -60,9 +67,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     if (open) {
       setStep(1);
       resetForm();
-      const timestamp = Date.now().toString(36).toUpperCase();
-      const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-      setQuoteId(`QR-${timestamp}-${random}`);
+      setQuoteId(generateQuoteId());
     }
   }, [open]);
 
