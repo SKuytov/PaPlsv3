@@ -51,7 +51,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     bin_location: '',
     average_cost: 0,
     unit_of_measure: 'pcs',
-    preferred_supplier_id: ''
+    preferred_supplier_id: null
   });
 
   useEffect(() => {
@@ -74,7 +74,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
           bin_location: editPart.bin_location || '',
           average_cost: editPart.average_cost || 0,
           unit_of_measure: editPart.unit_of_measure || 'pcs',
-          preferred_supplier_id: editPart.preferred_supplier_id || ''
+          preferred_supplier_id: editPart.preferred_supplier_id || null
         });
         loadSupplierMappings(editPart.id);
       } else {
@@ -94,7 +94,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
           bin_location: '',
           average_cost: 0,
           unit_of_measure: 'pcs',
-          preferred_supplier_id: ''
+          preferred_supplier_id: null
         });
         setSupplierMappings([]);
       }
@@ -374,6 +374,11 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     ? suppliers.find(s => s.id === newMapping.supplier_id)?.name 
     : null;
 
+  // Get preferred supplier name
+  const preferredSupplierName = formData.preferred_supplier_id
+    ? suppliers.find(s => s.id === formData.preferred_supplier_id)?.name
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
@@ -497,29 +502,36 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
               </div>
 
               {/* Preferred Supplier */}
-              <div className="col-span-2 border-t pt-4 mt-2">
-                <h4 className="text-sm font-semibold text-slate-500 uppercase mb-3">Supplier Preferences</h4>
-              </div>
+              {supplierMappings.length > 0 && (
+                <>
+                  <div className="col-span-2 border-t pt-4 mt-2">
+                    <h4 className="text-sm font-semibold text-slate-500 uppercase mb-3">Supplier Preferences</h4>
+                  </div>
 
-              <div className="col-span-2">
-                <label className="text-sm font-medium mb-1 block flex items-center gap-2">
-                  <Star className="w-4 h-4 text-amber-500" /> Preferred Supplier
-                </label>
-                <p className="text-xs text-slate-600 mb-2">Select which supplier to use by default for this part</p>
-                <Select value={formData.preferred_supplier_id} onValueChange={v => handleChange('preferred_supplier_id', v)}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="None (optional)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    <SelectItem value="">None</SelectItem>
-                    {supplierMappings.map(mapping => (
-                      <SelectItem key={mapping.supplier_id} value={mapping.supplier_id}>
-                        {mapping.supplier?.name || 'Unknown'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="col-span-2">
+                    <label className="text-sm font-medium mb-1 block flex items-center gap-2">
+                      <Star className="w-4 h-4 text-amber-500" /> Preferred Supplier
+                    </label>
+                    <p className="text-xs text-slate-600 mb-2">Select which supplier to use by default for this part</p>
+                    <Select 
+                      value={formData.preferred_supplier_id || 'none'} 
+                      onValueChange={(v) => handleChange('preferred_supplier_id', v === 'none' ? null : v)}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="None (optional)" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        <SelectItem value="none">None</SelectItem>
+                        {supplierMappings.map(mapping => (
+                          <SelectItem key={mapping.supplier_id} value={mapping.supplier_id}>
+                            {mapping.supplier?.name || 'Unknown'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
 
               {/* Supplier Mappings Section */}
               <div className="col-span-2 border-t pt-4 mt-2">
