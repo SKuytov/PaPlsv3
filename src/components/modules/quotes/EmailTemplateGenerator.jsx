@@ -43,7 +43,13 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
     const companyName = quoteData.companyName || 'PartPulse Industrial';
     const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-    const quoteIdSection = quoteId ? `\nQuote Request ID: ${quoteId}\n` : '';
+    // Quote Details Section
+    const quoteDetailsSection = `------- QUOTE REQUEST DETAILS -------
+
+Quote ID: ${quoteId || 'N/A'}
+Date: ${date}
+Delivery Date: ${deliveryNeed}
+`;
 
     // Build items section
     let itemsSection = '';
@@ -85,10 +91,9 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
     const baseInfo = `Dear ${supplierData.name || 'Supplier'},
 
 We are reaching out regarding a quote request for the following items:
-${quoteIdSection}` + itemsSection + `
-Delivery Requirements:
-  • Requested Delivery Date: ${deliveryNeed}
-  • Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
+
+${quoteDetailsSection}` + itemsSection + `
+Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
 
 Budget & Preferences:
 ${budgetExpectation ? `  • Budget Expectation: ${budgetExpectation}\n` : ''}`;
@@ -134,9 +139,10 @@ Quote Generated: ${date}`
         `Hi ${supplierData.name || 'there'},
 
 Hope you're doing well! We're looking for a quote on some parts and thought of you.
-${quoteIdSection}` +
+
+${quoteDetailsSection}` +
         itemsSection +
-        `Delivery Needed By: ${deliveryNeed}
+        `Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
 ${specialNotesSection}` +
         closingInfo +
         `Could you send us your best quote? We're looking for:
@@ -158,10 +164,11 @@ ${requesterPhone ? `${requesterPhone}\n` : ''}`
 
     if (emailFormat === 'technical') {
       return (
-        baseInfo +
-        `\nTechnical Requirements:
-${itemsSection}` +
-        `Delivery Target: ${deliveryNeed}
+        `Dear ${supplierData.name || 'Supplier'},
+
+${quoteDetailsSection}` +
+        itemsSection +
+        `Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
 ${specialNotesSection}` +
         closingInfo +
         `Expected Quotation Elements:
@@ -342,7 +349,7 @@ Date: ${date}`
       {!showCopyOnly && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <p className="text-xs text-blue-700 dark:text-blue-300">
-            <strong>💡 Tip:</strong> The Quote ID ({quoteId}) is included in the email subject for easy tracking. All item details including Part Numbers and SKUs are included in the email body.
+            <strong>💡 Tip:</strong> Quote request details including Quote ID, Date, and Delivery Date are shown at the top of the email. All item details with part numbers and SKUs follow.
           </p>
         </div>
       )}
