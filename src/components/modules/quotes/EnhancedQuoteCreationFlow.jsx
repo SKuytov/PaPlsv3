@@ -12,6 +12,14 @@ import SearchableSupplierSelector from './SearchableSupplierSelector';
 import QuoteDistribution from './QuoteDistribution';
 import { useSupplierPartMapping } from '@/lib/hooks/useSupplierPartMapping';
 
+// 🎯 SIMPLIFIED QUOTE ID GENERATOR: QT-YY-XXXXX
+const generateSimpleQuoteId = () => {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2); // YY: 25 for 2025
+  const random = Math.random().toString(36).substring(2, 7).toUpperCase(); // 5-char random: ABCDE
+  return `QT-${year}-${random}`;
+};
+
 const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(null);
@@ -322,11 +330,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     </div>
                   )}
 
-                  {/* ✅ SUPPLIER PART ID WITH AUTO-MAPPING FIX */}
+                  {/* ✅ SUPPLIER PART ID WITH AUTO-MAPPING FIX & FIXED LOADING STATE */}
                   {(currentItem.part || currentItem.customPartName) && currentItem.supplier && !currentItem.isCustom && (
                     <div className="space-y-4">
-                      {/* Loading State */}
-                      {mappingLoading && (
+                      {/* 🔧 FIXED: Only show loading if mapping is still loading AND we don't have data yet */}
+                      {mappingLoading && !supplierMapping?.supplier_part_number && (
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
                           <div className="animate-spin text-blue-600">⟳</div>
                           <div>
@@ -381,9 +389,6 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                           <p className="text-xs text-teal-900 font-semibold">✓ Supplier part data found in system</p>
                           {supplierMapping.lead_time_days && (
                             <p className="text-xs text-teal-700 mt-1">Lead time: {supplierMapping.lead_time_days} days</p>
-                          )}
-                          {supplierMapping.unit_price && (
-                            <p className="text-xs text-teal-700">Unit price: €{supplierMapping.unit_price.toFixed(2)}</p>
                           )}
                         </div>
                       )}
@@ -662,7 +667,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                     for (const [supplierId, group] of Object.entries(itemsBySupplier)) {
                       if (!group.supplier) continue;
 
-                      const quoteId = `QR-${Date.now().toString(36).toUpperCase()}-${group.supplier.id.slice(0, 6).toUpperCase()}`;
+                      // 🎯 NEW QUOTE ID FORMAT: QT-YY-XXXXX (simplified and cleaner)
+                      const quoteId = generateSimpleQuoteId();
 
                       const itemsForDB = group.items.map(i => ({
                         part_id: i.isCustom ? null : (i.part?.id || null),
