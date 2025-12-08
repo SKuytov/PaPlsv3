@@ -16,6 +16,10 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
   const [attachments, setAttachments] = useState([]);
   const { toast } = useToast();
 
+  // Safe supplier data
+  const supplierName = supplier?.name || quote.suppliers?.name || 'Unknown Supplier';
+  const supplierEmail = supplier?.email || quote.suppliers?.email || '-';
+
   const [response, setResponse] = useState({
     quoted_price_total: '',
     quoted_price_per_unit: '',
@@ -102,7 +106,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
 
       toast({
         title: '✅ Response Recorded',
-        description: `Quote response from ${supplier.name} saved successfully`
+        description: `Quote response from ${supplierName} saved successfully`
       });
 
       onSuccess();
@@ -139,8 +143,8 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
           {/* Supplier Info */}
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
             <p className="text-xs text-slate-600 font-semibold uppercase">Supplier Response From</p>
-            <p className="text-lg font-bold text-slate-900 mt-2">{supplier.name}</p>
-            <p className="text-sm text-slate-600 mt-1">{supplier.email}</p>
+            <p className="text-lg font-bold text-slate-900 mt-2">{supplierName}</p>
+            <p className="text-sm text-slate-600 mt-1">{supplierEmail}</p>
           </div>
 
           {/* Quote Items Being Quoted */}
@@ -150,8 +154,8 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
               {quote.items && quote.items.slice(0, 3).map((item, idx) => (
                 <div key={idx} className="p-2 bg-slate-50 rounded flex items-center justify-between text-sm">
                   <div>
-                    <p className="font-semibold text-slate-900">{item.part_name}</p>
-                    <p className="text-xs text-slate-600">Qty: {item.quantity}</p>
+                    <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
+                    <p className="text-xs text-slate-600">Qty: {item.quantity || 0}</p>
                   </div>
                 </div>
               ))}
