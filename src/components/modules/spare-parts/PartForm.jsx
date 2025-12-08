@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Link as LinkIcon, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Save, Loader2, Link as LinkIcon, Plus, Trash2, ChevronDown, ChevronUp, Search, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -24,6 +24,8 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
   const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [supplierMappings, setSupplierMappings] = useState([]);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [newMapping, setNewMapping] = useState({
     supplier_id: '',
     supplier_sku: '',
@@ -48,7 +50,8 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     warehouse_id: '',
     bin_location: '',
     average_cost: 0,
-    unit_of_measure: 'pcs'
+    unit_of_measure: 'pcs',
+    preferred_supplier_id: ''
   });
 
   useEffect(() => {
@@ -70,7 +73,8 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
           warehouse_id: editPart.warehouse_id || '',
           bin_location: editPart.bin_location || '',
           average_cost: editPart.average_cost || 0,
-          unit_of_measure: editPart.unit_of_measure || 'pcs'
+          unit_of_measure: editPart.unit_of_measure || 'pcs',
+          preferred_supplier_id: editPart.preferred_supplier_id || ''
         });
         loadSupplierMappings(editPart.id);
       } else {
@@ -89,11 +93,13 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
           warehouse_id: '',
           bin_location: '',
           average_cost: 0,
-          unit_of_measure: 'pcs'
+          unit_of_measure: 'pcs',
+          preferred_supplier_id: ''
         });
         setSupplierMappings([]);
       }
       resetNewMapping();
+      setSupplierSearchTerm('');
     }
   }, [open, editPart]);
 
@@ -182,6 +188,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
       lead_time_days: '',
       price_per_unit: ''
     });
+    setSupplierSearchTerm('');
   };
 
   const handleAddSupplierMapping = async () => {
@@ -220,6 +227,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     }, ...prev]);
 
     resetNewMapping();
+    setShowSupplierDropdown(false);
   };
 
   const handleRemoveSupplierMapping = async (mappingId, isNew = false) => {
@@ -256,6 +264,12 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleSelectSupplier = (supplierId) => {
+    setNewMapping({ ...newMapping, supplier_id: supplierId });
+    setShowSupplierDropdown(false);
+    setSupplierSearchTerm('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -272,6 +286,7 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
         ...formData,
         building_id: formData.building_id ? parseInt(formData.building_id) : null,
         warehouse_id: formData.warehouse_id || null,
+        preferred_supplier_id: formData.preferred_supplier_id || null,
         current_quantity: Number(formData.current_quantity),
         min_stock_level: Number(formData.min_stock_level),
         reorder_point: Number(formData.reorder_point),
@@ -347,6 +362,17 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
   const availableSuppliers = suppliers.filter(
     s => !supplierMappings.some(m => m.supplier_id === s.id)
   );
+
+  // Filter suppliers based on search term
+  const filteredSuppliers = availableSuppliers.filter(s =>
+    s.name.toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
+    s.email?.toLowerCase().includes(supplierSearchTerm.toLowerCase())
+  );
+
+  // Get selected supplier name
+  const selectedSupplierName = newMapping.supplier_id 
+    ? suppliers.find(s => s.id === newMapping.supplier_id)?.name 
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -470,6 +496,31 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
                 <Input value={formData.bin_location} onChange={e => handleChange('bin_location', e.target.value)} placeholder="e.g. A-12-3" />
               </div>
 
+              {/* Preferred Supplier */}
+              <div className="col-span-2 border-t pt-4 mt-2">
+                <h4 className="text-sm font-semibold text-slate-500 uppercase mb-3">Supplier Preferences</h4>
+              </div>
+
+              <div className="col-span-2">
+                <label className="text-sm font-medium mb-1 block flex items-center gap-2">
+                  <Star className="w-4 h-4 text-amber-500" /> Preferred Supplier
+                </label>
+                <p className="text-xs text-slate-600 mb-2">Select which supplier to use by default for this part</p>
+                <Select value={formData.preferred_supplier_id} onValueChange={v => handleChange('preferred_supplier_id', v)}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="None (optional)" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="">None</SelectItem>
+                    {supplierMappings.map(mapping => (
+                      <SelectItem key={mapping.supplier_id} value={mapping.supplier_id}>
+                        {mapping.supplier?.name || 'Unknown'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Supplier Mappings Section */}
               <div className="col-span-2 border-t pt-4 mt-2">
                 <h4 className="text-sm font-semibold text-slate-500 uppercase mb-3">Supplier Part IDs</h4>
@@ -479,10 +530,19 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
                 {supplierMappings.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {supplierMappings.map((mapping) => (
-                      <div key={mapping.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                      <div key={mapping.id} className={`border-2 rounded-lg p-3 ${
+                        formData.preferred_supplier_id === mapping.supplier_id 
+                          ? 'border-amber-400 bg-amber-50' 
+                          : 'border-slate-200 bg-slate-50'
+                      }`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1">
-                            <p className="font-medium text-slate-900">{mapping.supplier?.name || 'Unknown Supplier'}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-slate-900">{mapping.supplier?.name || 'Unknown Supplier'}</p>
+                              {formData.preferred_supplier_id === mapping.supplier_id && (
+                                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                              )}
+                            </div>
                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                               <div>
                                 <span className="text-slate-600">SKU:</span>
@@ -535,26 +595,66 @@ const PartForm = ({ open, onOpenChange, editPart, onSuccess }) => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
+                    {/* Searchable Supplier Dropdown */}
+                    <div className="relative">
                       <label className="text-xs font-medium mb-1 block">Supplier *</label>
-                      <Select value={newMapping.supplier_id} onValueChange={(v) => setNewMapping({ ...newMapping, supplier_id: v })}>
-                        <SelectTrigger className="bg-white h-9 text-sm">
-                          <SelectValue placeholder={suppliers.length === 0 ? "No suppliers" : "Select supplier..."} />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white">
-                          {availableSuppliers.length === 0 ? (
-                            <div className="p-2 text-xs text-slate-500 text-center">
-                              {suppliers.length === 0 ? "No suppliers in system" : "All suppliers already mapped"}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowSupplierDropdown(!showSupplierDropdown)}
+                          className="w-full px-3 py-2 h-9 text-sm bg-white border border-slate-300 rounded-lg text-left flex items-center justify-between hover:border-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                        >
+                          <span className={selectedSupplierName ? 'text-slate-900' : 'text-slate-500'}>
+                            {selectedSupplierName || (suppliers.length === 0 ? "No suppliers" : "Select supplier...")}
+                          </span>
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        </button>
+
+                        {showSupplierDropdown && (
+                          <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white border border-slate-300 rounded-lg shadow-lg">
+                            {/* Search Input */}
+                            <div className="p-2 border-b border-slate-200">
+                              <div className="relative">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Search suppliers..."
+                                  value={supplierSearchTerm}
+                                  onChange={(e) => setSupplierSearchTerm(e.target.value)}
+                                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded focus:border-teal-500 focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                                  autoFocus
+                                />
+                              </div>
                             </div>
-                          ) : (
-                            availableSuppliers.map(s => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+
+                            {/* Supplier List */}
+                            <div className="max-h-48 overflow-y-auto">
+                              {filteredSuppliers.length === 0 ? (
+                                <div className="p-3 text-sm text-slate-500 text-center">
+                                  {availableSuppliers.length === 0 && suppliers.length > 0
+                                    ? "All suppliers mapped"
+                                    : "No suppliers found"
+                                  }
+                                </div>
+                              ) : (
+                                filteredSuppliers.map(supplier => (
+                                  <button
+                                    key={supplier.id}
+                                    type="button"
+                                    onClick={() => handleSelectSupplier(supplier.id)}
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-teal-50 flex flex-col"
+                                  >
+                                    <span className="font-medium text-slate-900">{supplier.name}</span>
+                                    {supplier.email && (
+                                      <span className="text-xs text-slate-500">{supplier.email}</span>
+                                    )}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
