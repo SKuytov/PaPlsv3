@@ -4,27 +4,36 @@ import { Mail, Copy, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react
 /**
  * EmailTemplateGenerator Component
  * Generates professional email templates with Quote ID for easy tracking
+ * Now supports multiple items with full descriptions, part numbers, and SKU/IDs
  */
-const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '', showCopyOnly = false }) => {
+const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '', showCopyOnly = false, items = [] }) => {
   const [copied, setCopied] = useState(false);
   const [emailFormat, setEmailFormat] = useState('professional');
 
+  // Determine if we have multiple items (array) or single item (object)
+  const isMultipleItems = Array.isArray(items) && items.length > 0;
+
   // Generate email subject with Quote ID - memoized
   const subject = useMemo(() => {
-    if (!quoteData || !supplierData) return '';
-    const partName = partData?.name || 'Part';
-    const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
+    if (!supplierData) return '';
+    
+    let subjectText = 'Quote Request';
+    
+    if (isMultipleItems) {
+      subjectText = `Quote Request: ${items.length} items`;
+    } else if (partData?.name) {
+      const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
+      subjectText = `Quote Request: ${quantity}x ${partData.name}`;
+    }
+    
     const idPart = quoteId ? ` [${quoteId}]` : '';
-    return `Quote Request: ${quantity}x ${partName}${idPart}`;
-  }, [partData, quoteData, supplierData, quoteId]);
+    return `${subjectText}${idPart}`;
+  }, [partData, quoteData, supplierData, quoteId, isMultipleItems, items.length]);
 
   // Generate email body based on format - memoized
   const emailBody = useMemo(() => {
     if (!quoteData || !supplierData) return '';
     
-    const partName = partData?.name || 'Unknown Part';
-    const partSku = partData?.sku || 'N/A';
-    const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
     const deliveryNeed = quoteData.deliveryDate || 'As soon as possible';
     const specialNotes = quoteData.request_notes || quoteData.specialNotes || '';
     const budgetExpectation = quoteData.budgetExpectation || '';
@@ -36,17 +45,67 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
 
     const quoteIdSection = quoteId ? `\nQuote Request ID: ${quoteId}\n` : '';
 
+    // Build items section
+    let itemsSection = '';
+    
+    if (isMultipleItems) {
+      itemsSection = '\n------- REQUESTED ITEMS -------\n\n';
+      items.forEach((item, index) => {
+        const itemName = item.part?.name || item.name || 'Unknown Item';
+        const itemPartNumber = item.part?.part_number || item.partNumber || 'N/A';
+        const itemSKU = item.part?.barcode || item.sku || item.barcode || 'N/A';
+        const itemQuantity = item.quantity || 1;
+        const itemDescription = item.part?.description || item.description || 'No description provided';
+        const itemManufacturer = item.part?.manufacturer || item.manufacturer || '';
+        const supplierPartInfo = item.supplier_sku || item.supplierSKU || '';
+        const supplierPartNumber = item.supplier_part_number || item.supplierPartNumber || '';
+        
+        itemsSection += `Item ${index + 1}:\n`;
+        itemsSection += `  Part Name: ${itemName}\n`;
+        itemsSection += `  Part Number (OEM): ${itemPartNumber}\n`;
+        itemsSection += `  SKU/Internal ID: ${itemSKU}\n`;
+        
+        if (itemManufacturer) {
+          itemsSection += `  Manufacturer: ${itemManufacturer}\n`;
+        }
+        
+        if (supplierPartNumber) {
+          itemsSection += `  Supplier Part Number: ${supplierPartNumber}\n`;
+        }
+        
+        if (supplierPartInfo) {
+          itemsSection += `  Supplier SKU: ${supplierPartInfo}\n`;
+        }
+        
+        itemsSection += `  Quantity: ${itemQuantity} units\n`;
+        itemsSection += `  Description: ${itemDescription}\n\n`;
+      });
+    } else if (partData) {
+      const partName = partData?.name || 'Unknown Part';
+      const partNumber = partData?.part_number || 'N/A';
+      const partSku = partData?.barcode || 'N/A';
+      const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
+      const description = partData?.description || partData?.notes || 'No description provided';
+      const manufacturer = partData?.manufacturer || '';
+      
+      itemsSection = `\n------- REQUESTED ITEM -------\n
+`;
+      itemsSection += `  Part Name: ${partName}\n`;
+      itemsSection += `  Part Number (OEM): ${partNumber}\n`;
+      itemsSection += `  SKU/Internal ID: ${partSku}\n`;
+      
+      if (manufacturer) {
+        itemsSection += `  Manufacturer: ${manufacturer}\n`;
+      }
+      
+      itemsSection += `  Quantity: ${quantity} units\n`;
+      itemsSection += `  Description: ${description}\n`;
+    }
+
     const baseInfo = `Dear ${supplierData.name || 'Supplier'},
 
-We are reaching out regarding a quote request for the following item:
-${quoteIdSection}
-------- QUOTE REQUEST DETAILS -------
-
-Part Information:
-  • Part Name: ${partName}
-  • Part SKU: ${partSku}
-  • Quantity Needed: ${quantity} units
-
+We are reaching out regarding a quote request for the following items:
+${quoteIdSection}` + itemsSection + `
 Delivery Requirements:
   • Requested Delivery Date: ${deliveryNeed}
   • Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
@@ -66,10 +125,10 @@ ${requesterPhone ? `Phone: ${requesterPhone}\n` : ''}${companyName}\n\n`;
     if (emailFormat === 'professional') {
       return (
         baseInfo +
-        `\n${specialNotesSection}\n` +
+        `${specialNotesSection}` +
         closingInfo +
         `We would appreciate your detailed quotation including:\n` +
-        `  • Unit price and total cost
+        `  • Unit price and total cost for each item
   • Availability and lead time
   • Delivery terms and freight cost (if applicable)
   • Payment terms
@@ -94,17 +153,14 @@ Quote Generated: ${date}`
       return (
         `Hi ${supplierData.name || 'there'},
 
-Hope you're doing well! We're looking for a quote on a part and thought of you.
-${quoteIdSection}
-**What We Need:**
-• Part: ${partName} (SKU: ${partSku})
-• Quantity: ${quantity} units
-• Needed by: ${deliveryNeed}
-
+Hope you're doing well! We're looking for a quote on some parts and thought of you.
+${quoteIdSection}` +
+        itemsSection +
+        `Delivery Needed By: ${deliveryNeed}
 ${specialNotesSection}` +
         closingInfo +
         `Could you send us your best quote? We're looking for:
-• Your pricing
+• Your pricing for each item
 • How quickly you can deliver
 • Any bulk discounts
 • Your payment terms
@@ -123,16 +179,15 @@ ${requesterPhone ? `${requesterPhone}\n` : ''}`
     if (emailFormat === 'technical') {
       return (
         baseInfo +
-        `\nTechnical Requirements:\n` +
-        `  • Part SKU/Model: ${partSku}
-  • Quantity: ${quantity} units
-  • Target Delivery: ${deliveryNeed}
+        `\nTechnical Requirements:
+${itemsSection}` +
+        `Delivery Target: ${deliveryNeed}
 ${specialNotesSection}` +
         closingInfo +
         `Expected Quotation Elements:
 ` +
-        `  1. Unit cost breakdown
-  2. Lead time and availability
+        `  1. Unit cost breakdown per item
+  2. Lead time and availability per item
   3. Shipping terms and cost
   4. Quality certifications/specs
   5. Payment terms (Net 30/60/90)
@@ -152,7 +207,7 @@ Generated via PartPulse
 Date: ${date}`
       );
     }
-  }, [emailFormat, quoteData, supplierData, partData, quoteId]);
+  }, [emailFormat, quoteData, supplierData, partData, quoteId, isMultipleItems, items]);
 
   const handleCopyToClipboard = () => {
     const fullEmail = `SUBJECT: ${subject}\n\n${emailBody}`;
@@ -307,7 +362,7 @@ Date: ${date}`
       {!showCopyOnly && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <p className="text-xs text-blue-700 dark:text-blue-300">
-            <strong>💡 Tip:</strong> The Quote ID ({quoteId}) is included in the email subject for easy tracking.
+            <strong>💡 Tip:</strong> The Quote ID ({quoteId}) is included in the email subject for easy tracking. All item details including Part Numbers and SKUs are included in the email body.
           </p>
         </div>
       )}
