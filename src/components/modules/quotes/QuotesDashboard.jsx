@@ -641,7 +641,7 @@ const QuotesDashboard = () => {
   );
 };
 
-// Quote Details Modal Component - ENHANCED
+// Quote Details Modal Component - ENHANCED WITH FILE DOWNLOADS
 const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const [updating, setUpdating] = useState(false);
   const [newStatus, setNewStatus] = useState(quote.status);
@@ -650,6 +650,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
     response: !!quote.supplier_response,
     files: true,
   });
+  const [downloadingFiles, setDownloadingFiles] = useState({});
   const { toast } = useToast();
 
   const handleStatusUpdate = async () => {
@@ -685,6 +686,44 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  // Download file from Supabase Storage
+  const downloadFile = async (file) => {
+    try {
+      setDownloadingFiles(prev => ({ ...prev, [file.id]: true }));
+
+      if (!file.path || !file.url) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'File path not available'
+        });
+        return;
+      }
+
+      // Create a temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: '📥 Download Started',
+        description: `${file.name} is downloading`
+      });
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to download file'
+      });
+    } finally {
+      setDownloadingFiles(prev => ({ ...prev, [file.id]: false }));
+    }
   };
 
   const daysAgo = Math.floor((new Date() - new Date(quote.created_at)) / (1000 * 60 * 60 * 24));
@@ -930,7 +969,7 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
             </div>
           )}
 
-          {/* Files Section */}
+          {/* Files Section - WITH DOWNLOAD FUNCTIONALITY */}
           {(responseAttachments.length > 0 || requestAttachments.length > 0) && (
             <div className="border rounded-lg overflow-hidden border-amber-200">
               <button
@@ -952,27 +991,26 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                         Supplier Response Files ({responseAttachments.length})
                       </p>
                       <div className="space-y-2">
-                        {responseAttachments.map((file, idx) => (
-                          <div key={idx} className="p-2 bg-white rounded border border-amber-200 flex items-center justify-between group">
-                            <div className="flex items-center gap-2">
-                              <File className="h-4 w-4 text-amber-600" />
-                              <div>
+                        {responseAttachments.map((file) => (
+                          <div key={file.id} className="p-3 bg-white rounded border border-amber-200 flex items-center justify-between group hover:border-amber-400 transition-colors">
+                            <div className="flex items-center gap-3 flex-1">
+                              <File className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                              <div className="flex-1">
                                 <p className="text-sm font-semibold text-slate-900">{file.name}</p>
                                 <p className="text-xs text-slate-600">{(safeNumber(file.size) / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <button
-                              onClick={() => {
-                                // Handle file download
-                                toast({
-                                  title: 'Download',
-                                  description: `Downloading: ${file.name}`
-                                });
-                              }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:text-amber-700 p-1"
+                              onClick={() => downloadFile(file)}
+                              disabled={downloadingFiles[file.id]}
+                              className="ml-2 p-1 text-amber-600 hover:text-amber-700 hover:bg-amber-100 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                               title="Download file"
                             >
-                              <Download className="h-4 w-4" />
+                              {downloadingFiles[file.id] ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
                             </button>
                           </div>
                         ))}
@@ -987,27 +1025,26 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                         Request Files ({requestAttachments.length})
                       </p>
                       <div className="space-y-2">
-                        {requestAttachments.map((file, idx) => (
-                          <div key={idx} className="p-2 bg-white rounded border border-amber-200 flex items-center justify-between group">
-                            <div className="flex items-center gap-2">
-                              <File className="h-4 w-4 text-amber-600" />
-                              <div>
+                        {requestAttachments.map((file) => (
+                          <div key={file.id} className="p-3 bg-white rounded border border-amber-200 flex items-center justify-between group hover:border-amber-400 transition-colors">
+                            <div className="flex items-center gap-3 flex-1">
+                              <File className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                              <div className="flex-1">
                                 <p className="text-sm font-semibold text-slate-900">{file.name}</p>
                                 <p className="text-xs text-slate-600">{(safeNumber(file.size) / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <button
-                              onClick={() => {
-                                // Handle file download
-                                toast({
-                                  title: 'Download',
-                                  description: `Downloading: ${file.name}`
-                                });
-                              }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:text-amber-700 p-1"
+                              onClick={() => downloadFile(file)}
+                              disabled={downloadingFiles[file.id]}
+                              className="ml-2 p-1 text-amber-600 hover:text-amber-700 hover:bg-amber-100 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                               title="Download file"
                             >
-                              <Download className="h-4 w-4" />
+                              {downloadingFiles[file.id] ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
                             </button>
                           </div>
                         ))}
