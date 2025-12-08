@@ -567,19 +567,15 @@ Quote Generated: ${date}`;
                               </div>
                               <Input
                                 type="text"
-                                value={currentItem.supplierPartNumber}
+                                value={currentItem.supplierPartNumber || (supplierMapping?.supplier_part_number || '')}
                                 onChange={(e) => setCurrentItem({ 
                                   ...currentItem, 
                                   supplierPartNumber: e.target.value 
                                 })}
-                                placeholder={
-                                  supplierMapping?.supplier_part_number 
-                                    ? supplierMapping.supplier_part_number
-                                    : "Enter part number..."
-                                }
+                                placeholder="Enter part number..."
                                 className={`${
                                   supplierMapping?.supplier_part_number && !currentItem.supplierPartNumber
-                                    ? 'border-green-300 bg-green-50 text-slate-500'
+                                    ? 'border-green-300 bg-green-50'
                                     : currentItem.supplierPartNumber
                                     ? 'border-slate-300'
                                     : 'border-amber-300 bg-amber-50'
@@ -611,19 +607,15 @@ Quote Generated: ${date}`;
                               </div>
                               <Input
                                 type="text"
-                                value={currentItem.supplierSku}
+                                value={currentItem.supplierSku || (supplierMapping?.supplier_sku || '')}
                                 onChange={(e) => setCurrentItem({ 
                                   ...currentItem, 
                                   supplierSku: e.target.value 
                                 })}
-                                placeholder={
-                                  supplierMapping?.supplier_sku 
-                                    ? supplierMapping.supplier_sku
-                                    : "Enter SKU..."
-                                }
+                                placeholder="Enter SKU..."
                                 className={`${
                                   supplierMapping?.supplier_sku && !currentItem.supplierSku
-                                    ? 'border-green-300 bg-green-50 text-slate-500'
+                                    ? 'border-green-300 bg-green-50'
                                     : currentItem.supplierSku
                                     ? 'border-slate-300'
                                     : 'border-amber-300 bg-amber-50'
