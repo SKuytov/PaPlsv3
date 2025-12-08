@@ -31,6 +31,10 @@ import {
   FileCheck,
   Truck,
   Plus,
+  File,
+  Paperclip,
+  TrendingDown,
+  ArrowRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -637,10 +641,15 @@ const QuotesDashboard = () => {
   );
 };
 
-// Quote Details Modal Component
+// Quote Details Modal Component - ENHANCED
 const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
   const [updating, setUpdating] = useState(false);
   const [newStatus, setNewStatus] = useState(quote.status);
+  const [expandedSections, setExpandedSections] = useState({
+    items: true,
+    response: !!quote.supplier_response,
+    files: true,
+  });
   const { toast } = useToast();
 
   const handleStatusUpdate = async () => {
@@ -671,17 +680,26 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
     }
   };
 
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   const daysAgo = Math.floor((new Date() - new Date(quote.created_at)) / (1000 * 60 * 60 * 24));
   const hasResponse = quote.supplier_response;
   const supplierName = quote.suppliers?.name || 'Unknown';
   const supplierEmail = quote.suppliers?.email || '-';
+  const responseAttachments = quote.response_attachments || [];
+  const requestAttachments = quote.request_attachments || [];
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-auto">
-      <Card className="w-full max-w-2xl my-4">
-        <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+      <Card className="w-full max-w-4xl my-4">
+        <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-slate-50 to-blue-50">
           <div>
-            <CardTitle className="text-xl">Quote Details</CardTitle>
+            <CardTitle className="text-2xl">📋 Quote Details</CardTitle>
             <p className="text-xs text-slate-600 mt-1 font-mono">{quote.quote_id}</p>
           </div>
           <button
@@ -692,71 +710,303 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
           </button>
         </CardHeader>
 
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Header Info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-600 font-semibold uppercase">Supplier</p>
-              <p className="text-lg font-bold text-slate-900 mt-2">{supplierName}</p>
-              <p className="text-sm text-slate-600">{supplierEmail}</p>
+              <p className="text-sm font-bold text-slate-900 mt-1">{supplierName}</p>
+              <p className="text-xs text-slate-600">{supplierEmail}</p>
             </div>
-            <div>
+            <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-600 font-semibold uppercase">Project</p>
-              <p className="text-lg font-bold text-slate-900 mt-2">{quote.project_name || 'N/A'}</p>
+              <p className="text-sm font-bold text-slate-900 mt-1">{quote.project_name || 'N/A'}</p>
             </div>
-          </div>
-
-          {/* Status & Timeline */}
-          <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
-            <div>
-              <p className="text-xs text-slate-600 font-semibold uppercase">Status</p>
-              <p className="text-sm font-bold text-slate-900 mt-2">{quote.status}</p>
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-700 font-semibold uppercase">Status</p>
+              <p className="text-sm font-bold text-blue-900 mt-1">{quote.status}</p>
             </div>
-            <div>
+            <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-600 font-semibold uppercase">Created</p>
-              <p className="text-sm font-bold text-slate-900 mt-2">{new Date(quote.created_at).toLocaleDateString()}</p>
+              <p className="text-sm font-bold text-slate-900 mt-1">{new Date(quote.created_at).toLocaleDateString()}</p>
             </div>
-            <div>
-              <p className="text-xs text-slate-600 font-semibold uppercase">Days Ago</p>
-              <p className="text-sm font-bold text-slate-900 mt-2">{daysAgo} days</p>
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs text-slate-600 font-semibold uppercase">Days Elapsed</p>
+              <p className="text-sm font-bold text-slate-900 mt-1">{daysAgo} days</p>
+            </div>
+            <div className="p-3 bg-teal-50 rounded-lg border border-teal-200">
+              <p className="text-xs text-teal-700 font-semibold uppercase">Total Items</p>
+              <p className="text-sm font-bold text-teal-900 mt-1">{quote.total_items || 0} items</p>
             </div>
           </div>
 
-          {/* Items */}
+          {/* Items Section */}
           {quote.items && quote.items.length > 0 && (
-            <div>
-              <h4 className="font-bold text-slate-900 mb-3">Items ({quote.items.length})</h4>
-              <div className="space-y-2">
-                {quote.items.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.part_name || 'N/A'}</p>
-                      <p className="text-xs text-slate-600 mt-1">Qty: {item.quantity || 0}</p>
-                    </div>
-                    {item.unit_price && (
-                      <div className="text-right">
-                        <p className="font-bold text-teal-600">€{((item.unit_price || 0) * (item.quantity || 0)).toFixed(2)}</p>
-                        <p className="text-xs text-slate-600">@ €{(item.unit_price || 0).toFixed(2)}</p>
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleSection('items')}
+                className="w-full px-4 py-3 bg-gradient-to-r from-teal-50 to-teal-100 border-b border-teal-200 flex items-center justify-between hover:from-teal-100 hover:to-teal-150 transition-colors"
+              >
+                <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Items in Quote ({quote.items.length})
+                </h4>
+                <ChevronDown className={`h-4 w-4 transition-transform ${expandedSections.items ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedSections.items && (
+                <div className="p-4 space-y-2">
+                  {quote.items.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between border border-slate-200">
+                      <div>
+                        <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
+                        <p className="text-xs text-slate-600 mt-1">Qty: {item.quantity || 0}</p>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      {item.unit_price && (
+                        <div className="text-right">
+                          <p className="font-bold text-teal-600">€{((item.unit_price || 0) * (item.quantity || 0)).toFixed(2)}</p>
+                          <p className="text-xs text-slate-600">@ €{(item.unit_price || 0).toFixed(2)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Total */}
-          <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-between">
-            <p className="font-semibold text-teal-900">Estimated Total</p>
-            <p className="text-2xl font-bold text-teal-600">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</p>
+          {/* Total Section */}
+          <div className="p-4 bg-gradient-to-r from-teal-50 to-teal-100 border border-teal-200 rounded-lg flex items-center justify-between">
+            <p className="font-semibold text-teal-900 flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Estimated Total
+            </p>
+            <p className="text-3xl font-bold text-teal-700">€{parseFloat(quote.estimated_total || 0).toFixed(2)}</p>
           </div>
 
-          {/* Approval Info if exists */}
+          {/* Supplier Response Section */}
+          {hasResponse && (
+            <div className="border rounded-lg overflow-hidden border-blue-200">
+              <button
+                onClick={() => toggleSection('response')}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 flex items-center justify-between hover:from-blue-100 hover:to-blue-150 transition-colors"
+              >
+                <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  📧 Supplier Response
+                </h4>
+                <ChevronDown className={`h-4 w-4 transition-transform ${expandedSections.response ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedSections.response && (
+                <div className="p-4 space-y-4 bg-blue-50">
+                  {/* Response Item Pricing */}
+                  {quote.supplier_response?.item_prices && quote.supplier_response.item_prices.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 mb-2">Item-Level Pricing:</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-blue-100 border-b border-blue-300">
+                            <tr>
+                              <th className="px-2 py-1 text-left">Item</th>
+                              <th className="px-2 py-1 text-center">Qty</th>
+                              <th className="px-2 py-1 text-right">Unit Price</th>
+                              <th className="px-2 py-1 text-right">Line Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quote.supplier_response.item_prices.map((item, idx) => (
+                              <tr key={idx} className="border-b border-blue-200 bg-white">
+                                <td className="px-2 py-1 font-semibold">{item.part_name}</td>
+                                <td className="px-2 py-1 text-center">{item.quantity}</td>
+                                <td className="px-2 py-1 text-right">€{(item.unit_price || 0).toFixed(2)}</td>
+                                <td className="px-2 py-1 text-right font-semibold">€{(item.line_total || 0).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pricing Breakdown */}
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-white rounded-lg border border-blue-200">
+                    <div>
+                      <p className="text-xs text-blue-700 font-semibold">Subtotal</p>
+                      <p className="text-lg font-bold text-blue-900">€{(quote.supplier_response?.quoted_price_subtotal || 0).toFixed(2)}</p>
+                    </div>
+                    {quote.supplier_response?.total_charges > 0 && (
+                      <div>
+                        <p className="text-xs text-orange-700 font-semibold">Charges</p>
+                        <p className="text-lg font-bold text-orange-900">€{(quote.supplier_response?.total_charges || 0).toFixed(2)}</p>
+                      </div>
+                    )}
+                    <div className="col-span-2 pt-2 border-t border-blue-200 flex justify-between">
+                      <p className="font-semibold text-slate-900">Total Quoted</p>
+                      <p className="text-lg font-bold text-teal-700">€{(quote.supplier_response?.quoted_price_total || 0).toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  {/* Charges Breakdown */}
+                  {quote.supplier_response?.charges && Object.values(quote.supplier_response.charges).some(v => v) && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-sm font-semibold text-orange-900 mb-2">Additional Charges:</p>
+                      <div className="space-y-1 text-sm">
+                        {quote.supplier_response.charges.transport > 0 && (
+                          <div className="flex justify-between">
+                            <span>Transport:</span>
+                            <span className="font-semibold">€{quote.supplier_response.charges.transport.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {quote.supplier_response.charges.minimum_order_charge > 0 && (
+                          <div className="flex justify-between">
+                            <span>Minimum Order:</span>
+                            <span className="font-semibold">€{quote.supplier_response.charges.minimum_order_charge.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {quote.supplier_response.charges.other_charge_amount > 0 && (
+                          <div className="flex justify-between">
+                            <span>{quote.supplier_response.charges.other_charge_description || 'Other'}:</span>
+                            <span className="font-semibold">€{quote.supplier_response.charges.other_charge_amount.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Delivery & Terms */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-2 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold">Delivery Date</p>
+                      <p className="text-sm font-bold text-slate-900">{ quote.supplier_response?.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold">Payment Terms</p>
+                      <p className="text-sm font-bold text-slate-900">{quote.supplier_response?.payment_terms || 'N/A'}</p>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold">Lead Time</p>
+                      <p className="text-sm font-bold text-slate-900">{quote.supplier_response?.lead_time_days || 'N/A'} days</p>
+                    </div>
+                    <div className="p-2 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold">Per Unit</p>
+                      <p className="text-sm font-bold text-teal-700">€{(quote.supplier_response?.quoted_price_per_unit || 0).toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  {/* Quality Notes */}
+                  {quote.supplier_response?.quality_notes && (
+                    <div className="p-3 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold mb-1">Quality & Certifications:</p>
+                      <p className="text-sm text-slate-700">{quote.supplier_response.quality_notes}</p>
+                    </div>
+                  )}
+
+                  {/* Special Conditions */}
+                  {quote.supplier_response?.special_conditions && (
+                    <div className="p-3 bg-white rounded border border-slate-200">
+                      <p className="text-xs text-slate-600 font-semibold mb-1">Special Conditions:</p>
+                      <p className="text-sm text-slate-700">{quote.supplier_response.special_conditions}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Files Section */}
+          {(responseAttachments.length > 0 || requestAttachments.length > 0) && (
+            <div className="border rounded-lg overflow-hidden border-amber-200">
+              <button
+                onClick={() => toggleSection('files')}
+                className="w-full px-4 py-3 bg-gradient-to-r from-amber-50 to-amber-100 border-b border-amber-200 flex items-center justify-between hover:from-amber-100 hover:to-amber-150 transition-colors"
+              >
+                <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Attachments ({responseAttachments.length + requestAttachments.length})
+                </h4>
+                <ChevronDown className={`h-4 w-4 transition-transform ${expandedSections.files ? 'rotate-180' : ''}`} />
+              </button>
+              {expandedSections.files && (
+                <div className="p-4 space-y-4 bg-amber-50">
+                  {responseAttachments.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Supplier Response Files ({responseAttachments.length})
+                      </p>
+                      <div className="space-y-2">
+                        {responseAttachments.map((file, idx) => (
+                          <div key={idx} className="p-2 bg-white rounded border border-amber-200 flex items-center justify-between group">
+                            <div className="flex items-center gap-2">
+                              <File className="h-4 w-4 text-amber-600" />
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{file.name}</p>
+                                <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                // Handle file download
+                                toast({
+                                  title: 'Download',
+                                  description: `Downloading: ${file.name}`
+                                });
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:text-amber-700 p-1"
+                              title="Download file"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {requestAttachments.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Request Files ({requestAttachments.length})
+                      </p>
+                      <div className="space-y-2">
+                        {requestAttachments.map((file, idx) => (
+                          <div key={idx} className="p-2 bg-white rounded border border-amber-200 flex items-center justify-between group">
+                            <div className="flex items-center gap-2">
+                              <File className="h-4 w-4 text-amber-600" />
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{file.name}</p>
+                                <p className="text-xs text-slate-600">{(file.size / 1024).toFixed(1)} KB</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                // Handle file download
+                                toast({
+                                  title: 'Download',
+                                  description: `Downloading: ${file.name}`
+                                });
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:text-amber-700 p-1"
+                              title="Download file"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Approval Info */}
           {quote.approval_comments && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
               <h4 className="font-bold text-green-900 flex items-center gap-2">
                 <CheckCircle className="h-4 w-4" />
-                Approval
+                ✅ Approval
               </h4>
               <p className="text-sm text-green-800"><strong>Comments:</strong> {quote.approval_comments}</p>
               {quote.approval_date && (
@@ -765,51 +1015,24 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
             </div>
           )}
 
-          {/* Response Info if exists */}
-          {hasResponse && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
-              <h4 className="font-bold text-slate-900 text-blue-900">📧 Supplier Response</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-blue-700 font-semibold">Quoted Price</p>
-                  <p className="font-bold text-blue-900 mt-1">€{(quote.supplier_response?.quoted_price_total || 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 font-semibold">Delivery Date</p>
-                  <p className="font-bold text-blue-900 mt-1">
-                    {quote.supplier_response?.delivery_date ? new Date(quote.supplier_response.delivery_date).toLocaleDateString() : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 font-semibold">Payment Terms</p>
-                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response?.payment_terms || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-blue-700 font-semibold">Lead Time</p>
-                  <p className="font-bold text-blue-900 mt-1">{quote.supplier_response?.lead_time_days || 'N/A'} days</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* PO Info if exists */}
+          {/* PO Info */}
           {quote.po_number && (
             <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2">
               <h4 className="font-bold text-indigo-900 flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                Purchase Order
+                📋 Purchase Order
               </h4>
               <p className="text-sm text-indigo-800"><strong>PO Number:</strong> {quote.po_number}</p>
               <p className="text-xs text-indigo-700">Status: {quote.po_status || 'Draft'}</p>
             </div>
           )}
 
-          {/* Delivery Info if exists */}
+          {/* Delivery Info */}
           {quote.delivery_status && quote.delivery_status !== 'pending' && (
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
               <h4 className="font-bold text-emerald-900 flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Delivery
+                <Truck className="h-4 w-4" />
+                🚚 Delivery
               </h4>
               <p className="text-sm text-emerald-800"><strong>Status:</strong> {quote.delivery_status}</p>
               {quote.actual_delivery_date && (
@@ -821,8 +1044,8 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
           {/* Notes */}
           {quote.request_notes && (
             <div>
-              <h4 className="font-bold text-slate-900 mb-2">Notes</h4>
-              <p className="text-slate-700 whitespace-pre-wrap text-sm p-3 bg-slate-50 rounded-lg">
+              <h4 className="font-bold text-slate-900 mb-2">📝 Notes</h4>
+              <p className="text-slate-700 whitespace-pre-wrap text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
                 {quote.request_notes}
               </p>
             </div>
@@ -844,20 +1067,29 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                 <option value="received">✔️ Received</option>
                 <option value="rejected">❌ Rejected</option>
               </select>
-              <Button
-                onClick={handleStatusUpdate}
-                disabled={updating || newStatus === quote.status}
-                className="w-full bg-teal-600 hover:bg-teal-700"
-              >
-                {updating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  'Update Status'
-                )}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={updating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleStatusUpdate}
+                  disabled={updating || newStatus === quote.status}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  {updating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Status'
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
