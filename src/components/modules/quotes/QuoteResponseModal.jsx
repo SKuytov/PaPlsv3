@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Upload, Loader2, AlertCircle, CheckCircle, DollarSign, Calendar, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Upload, Loader2, AlertCircle, CheckCircle, DollarSign, Calendar, FileText, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 
 /**
- * QuoteResponseModal - Record supplier's response/quote
- * Allows capturing supplier's pricing, delivery date, terms, and conditions
+ * QuoteResponseModal - Record supplier's response/quote with item-level pricing
+ * Allows capturing per-item pricing, charges, and auto-calculation
  */
 const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,28 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
   const supplierName = supplier?.name || quote.suppliers?.name || 'Unknown Supplier';
   const supplierEmail = supplier?.email || quote.suppliers?.email || '-';
 
+  // Initialize item prices from quote items
+  const [itemPrices, setItemPrices] = useState(() => {
+    if (quote.items && quote.items.length > 0) {
+      return quote.items.map((item, idx) => ({
+        id: idx,
+        part_name: item.part_name || 'Unknown Part',
+        quantity: item.quantity || 0,
+        unit_price: '',
+        line_total: 0
+      }));
+    }
+    return [];
+  });
+
+  const [charges, setCharges] = useState({
+    transport: '',
+    minimum_order_charge: '',
+    other_charge_description: '',
+    other_charge_amount: ''
+  });
+
   const [response, setResponse] = useState({
-    quoted_price_total: '',
     quoted_price_per_unit: '',
     delivery_date: '',
     payment_terms: 'Net 30',
@@ -31,16 +51,40 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
     attachments: []
   });
 
-  // Calculate per-unit price if total price is entered
-  const handleTotalPriceChange = (e) => {
-    const total = e.target.value;
-    setResponse({ ...response, quoted_price_total: total });
-    
-    if (total && quote.total_items) {
-      const perUnit = (parseFloat(total) / quote.total_items).toFixed(2);
+  // Calculate line total for an item
+  const calculateLineTotal = (quantity, unitPrice) => {
+    if (!quantity || !unitPrice) return 0;
+    return (parseFloat(quantity) * parseFloat(unitPrice)).toFixed(2);
+  };
+
+  // Handle item price change
+  const handleItemPriceChange = (idx, unitPrice) => {
+    const updated = [...itemPrices];
+    updated[idx].unit_price = unitPrice;
+    updated[idx].line_total = calculateLineTotal(updated[idx].quantity, unitPrice);
+    setItemPrices(updated);
+  };
+
+  // Calculate subtotal from items
+  const subtotal = itemPrices.reduce((sum, item) => sum + (parseFloat(item.line_total) || 0), 0).toFixed(2);
+
+  // Calculate total charges
+  const totalCharges = (
+    (parseFloat(charges.transport) || 0) +
+    (parseFloat(charges.minimum_order_charge) || 0) +
+    (parseFloat(charges.other_charge_amount) || 0)
+  ).toFixed(2);
+
+  // Calculate grand total
+  const grandTotal = (parseFloat(subtotal) + parseFloat(totalCharges)).toFixed(2);
+
+  // Update quoted_price_per_unit based on grand total
+  useEffect(() => {
+    if (grandTotal && quote.total_items) {
+      const perUnit = (parseFloat(grandTotal) / quote.total_items).toFixed(2);
       setResponse(prev => ({ ...prev, quoted_price_per_unit: perUnit }));
     }
-  };
+  }, [grandTotal, quote.total_items]);
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files || []);
@@ -59,11 +103,11 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
 
   const handleSubmit = async () => {
     // Validation
-    if (!response.quoted_price_total) {
+    if (itemPrices.length === 0 || itemPrices.every(item => !item.unit_price)) {
       toast({
         variant: 'destructive',
-        title: 'Missing Price',
-        description: 'Please enter the quoted price'
+        title: 'Missing Pricing',
+        description: 'Please enter unit prices for at least one item'
       });
       return;
     }
@@ -85,8 +129,17 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
         .update({
           status: 'responded',
           supplier_response: {
-            quoted_price_total: parseFloat(response.quoted_price_total),
-            quoted_price_per_unit: parseFloat(response.quoted_price_per_unit || 0),
+            item_prices: itemPrices,
+            quoted_price_subtotal: parseFloat(subtotal),
+            charges: {
+              transport: parseFloat(charges.transport) || 0,
+              minimum_order_charge: parseFloat(charges.minimum_order_charge) || 0,
+              other_charge_description: charges.other_charge_description,
+              other_charge_amount: parseFloat(charges.other_charge_amount) || 0
+            },
+            total_charges: parseFloat(totalCharges),
+            quoted_price_total: parseFloat(grandTotal),
+            quoted_price_per_unit: parseFloat(response.quoted_price_per_unit),
             delivery_date: response.delivery_date,
             payment_terms: response.payment_terms,
             lead_time_days: parseInt(response.lead_time_days) || null,
@@ -125,7 +178,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-blue-50 to-cyan-50">
           <div>
             <CardTitle className="text-xl">📧 Record Supplier Response</CardTitle>
@@ -147,53 +200,172 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
             <p className="text-sm text-slate-600 mt-1">{supplierEmail}</p>
           </div>
 
-          {/* Quote Items Being Quoted */}
-          <div>
-            <h4 className="font-bold text-slate-900 mb-3">Items in This Quote</h4>
-            <div className="space-y-2">
-              {quote.items && quote.items.slice(0, 3).map((item, idx) => (
-                <div key={idx} className="p-2 bg-slate-50 rounded flex items-center justify-between text-sm">
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
-                    <p className="text-xs text-slate-600">Qty: {item.quantity || 0}</p>
-                  </div>
-                </div>
-              ))}
-              {quote.items && quote.items.length > 3 && (
-                <p className="text-xs text-slate-600 px-2 py-1">... and {quote.items.length - 3} more items</p>
-              )}
-            </div>
-          </div>
-
-          {/* Price Section */}
+          {/* Item-Level Pricing */}
           <div className="space-y-4 p-4 bg-teal-50 border border-teal-200 rounded-lg">
             <h4 className="font-bold text-slate-900 flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
-              Pricing Information
+              Item-Level Pricing
+            </h4>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-teal-100 border-b border-teal-300">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-teal-900">Item</th>
+                    <th className="px-3 py-2 text-center font-semibold text-teal-900">Qty</th>
+                    <th className="px-3 py-2 text-right font-semibold text-teal-900">Unit Price (€)</th>
+                    <th className="px-3 py-2 text-right font-semibold text-teal-900">Line Total (€)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itemPrices.map((item, idx) => (
+                    <tr key={idx} className="border-b border-teal-200 hover:bg-teal-100/50">
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-slate-900">{item.part_name}</p>
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <span className="font-bold text-slate-700">{item.quantity}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.unit_price}
+                          onChange={(e) => handleItemPriceChange(idx, e.target.value)}
+                          placeholder="0.00"
+                          className="text-right font-semibold text-teal-600 bg-white"
+                        />
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <span className="font-bold text-teal-700">€{parseFloat(item.line_total || 0).toFixed(2)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Subtotal */}
+            <div className="flex justify-end pt-4 border-t border-teal-300">
+              <div className="w-full max-w-xs space-y-2">
+                <div className="flex justify-between text-slate-700">
+                  <span className="font-semibold">Subtotal (Items):</span>
+                  <span className="font-bold text-teal-600">€{subtotal}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Optional Charges */}
+          <div className="space-y-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <h4 className="font-bold text-slate-900 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Additional Charges (Optional)
             </h4>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Total Quoted Price (€) *
+                  Transport/Shipping Charge (€)
                 </label>
                 <Input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={response.quoted_price_total}
-                  onChange={handleTotalPriceChange}
-                  placeholder="e.g., 1500.00"
-                  className="text-lg font-bold text-teal-600"
+                  value={charges.transport}
+                  onChange={(e) => setCharges({ ...charges, transport: e.target.value })}
+                  placeholder="0.00"
+                  className="text-right font-semibold"
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Price Per Unit (€)
+                  Minimum Order Charge (€)
                 </label>
-                <div className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-lg font-bold text-teal-600">
-                  {response.quoted_price_per_unit ? `€${parseFloat(response.quoted_price_per_unit).toFixed(2)}` : '-'}
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={charges.minimum_order_charge}
+                  onChange={(e) => setCharges({ ...charges, minimum_order_charge: e.target.value })}
+                  placeholder="0.00"
+                  className="text-right font-semibold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Other Charge Description
+              </label>
+              <Input
+                type="text"
+                value={charges.other_charge_description}
+                onChange={(e) => setCharges({ ...charges, other_charge_description: e.target.value })}
+                placeholder="e.g., Handling fee, Rush fee, Packaging"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Other Charge Amount (€)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={charges.other_charge_amount}
+                onChange={(e) => setCharges({ ...charges, other_charge_amount: e.target.value })}
+                placeholder="0.00"
+                className="text-right font-semibold"
+              />
+            </div>
+
+            {/* Charges Summary */}
+            <div className="flex justify-end pt-4 border-t border-orange-300">
+              <div className="w-full max-w-xs space-y-2">
+                {parseFloat(charges.transport) > 0 && (
+                  <div className="flex justify-between text-sm text-slate-700">
+                    <span>Transport:</span>
+                    <span className="font-semibold">€{parseFloat(charges.transport).toFixed(2)}</span>
+                  </div>
+                )}
+                {parseFloat(charges.minimum_order_charge) > 0 && (
+                  <div className="flex justify-between text-sm text-slate-700">
+                    <span>Minimum Order:</span>
+                    <span className="font-semibold">€{parseFloat(charges.minimum_order_charge).toFixed(2)}</span>
+                  </div>
+                )}
+                {parseFloat(charges.other_charge_amount) > 0 && (
+                  <div className="flex justify-between text-sm text-slate-700">
+                    <span>{charges.other_charge_description || 'Other'}:</span>
+                    <span className="font-semibold">€{parseFloat(charges.other_charge_amount).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-semibold text-orange-700 border-t border-orange-300 pt-2">
+                  <span>Total Charges:</span>
+                  <span>€{totalCharges}</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Grand Total */}
+          <div className="p-4 bg-gradient-to-r from-teal-100 to-teal-50 border border-teal-300 rounded-lg">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs text-teal-700 font-semibold uppercase">Items Subtotal</p>
+                <p className="text-2xl font-bold text-teal-700 mt-2">€{subtotal}</p>
+              </div>
+              <div>
+                <p className="text-xs text-orange-700 font-semibold uppercase">Additional Charges</p>
+                <p className="text-2xl font-bold text-orange-700 mt-2">€{totalCharges}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-teal-200">
+                <p className="text-xs text-teal-700 font-semibold uppercase">Grand Total</p>
+                <p className="text-3xl font-bold text-teal-700 mt-2">€{grandTotal}</p>
+                <p className="text-xs text-teal-600 mt-1 font-mono">({response.quoted_price_per_unit} per unit)</p>
               </div>
             </div>
           </div>
@@ -328,34 +500,12 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
             )}
           </div>
 
-          {/* Summary */}
-          <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border border-slate-200">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-xs text-slate-600 font-semibold uppercase">Quoted Total</p>
-                <p className="text-xl font-bold text-teal-600 mt-1">
-                  €{response.quoted_price_total ? parseFloat(response.quoted_price_total).toFixed(2) : '0.00'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 font-semibold uppercase">Delivery</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  {response.delivery_date ? new Date(response.delivery_date).toLocaleDateString() : 'Not set'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-600 font-semibold uppercase">Payment Terms</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">{response.payment_terms}</p>
-              </div>
-            </div>
-          </div>
-
           {/* Info Box */}
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex gap-3">
             <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="font-semibold">💡 Pro Tip:</p>
-              <p>Once saved, this response will appear in the Quote Comparison view. You'll be able to compare this supplier's offer with others side-by-side.</p>
+              <p>All pricing information including item-level prices and charges will be saved. You'll be able to compare this supplier's offer with others side-by-side in the Quote Comparison view.</p>
             </div>
           </div>
 
