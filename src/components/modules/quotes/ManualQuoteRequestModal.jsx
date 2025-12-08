@@ -24,8 +24,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   const [attachments, setAttachments] = useState([]);
   const [quoteId, setQuoteId] = useState('');
   const [sendMethod, setSendMethod] = useState('system');
-  const [items, setItems] = useState([]); // Multi-item support
+  const [items, setItems] = useState([]);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [supplierPartMappings, setSupplierPartMappings] = useState({});
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -45,6 +46,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     quantity: '',
     unitPrice: '',
     notes: '',
+    supplierPartNumber: '',
+    supplierSku: '',
   });
 
   const [selectedSupplier, setSelectedSupplier] = useState(null);
@@ -52,11 +55,53 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   // Generate unique quote ID with format: QT-YY-XXXXX
   const generateQuoteId = () => {
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
-    quoteCounter++; // Increment global counter
-    const sequentialNumber = quoteCounter.toString().padStart(5, '0'); // Pad to 5 digits
+    const year = now.getFullYear().toString().slice(-2);
+    quoteCounter++;
+    const sequentialNumber = quoteCounter.toString().padStart(5, '0');
     return `QT-${year}-${sequentialNumber}`;
   };
+
+  // Load supplier part mappings when part or supplier changes
+  useEffect(() => {
+    const loadSupplierMappings = async () => {
+      if (!currentItem.part || !selectedSupplier?.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('supplier_part_mappings')
+          .select('supplier_part_number, supplier_sku')
+          .eq('part_id', currentItem.part.id)
+          .eq('supplier_id', selectedSupplier.id)
+          .single();
+
+        if (data) {
+          setSupplierPartMappings(prev => ({
+            ...prev,
+            [currentItem.part.id]: data
+          }));
+          // Auto-fill if found
+          if (data.supplier_part_number || data.supplier_sku) {
+            setCurrentItem(prev => ({
+              ...prev,
+              supplierPartNumber: data.supplier_part_number || '',
+              supplierSku: data.supplier_sku || ''
+            }));
+          }
+        } else if (!error) {
+          // No mapping found - keep fields empty for manual entry
+          setCurrentItem(prev => ({
+            ...prev,
+            supplierPartNumber: '',
+            supplierSku: ''
+          }));
+        }
+      } catch (err) {
+        console.log('No supplier mapping found (optional):', err);
+      }
+    };
+
+    loadSupplierMappings();
+  }, [currentItem.part?.id, selectedSupplier?.id]);
 
   // Generate unique quote ID on mount
   useEffect(() => {
@@ -87,6 +132,8 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       quantity: '',
       unitPrice: '',
       notes: '',
+      supplierPartNumber: '',
+      supplierSku: '',
     });
     setSelectedSupplier(null);
     setAttachments([]);
@@ -94,6 +141,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     setSendMethod('system');
     setItems([]);
     setEditingItemIndex(null);
+    setSupplierPartMappings({});
   };
 
   const addOrUpdateItem = () => {
@@ -116,7 +164,6 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     }
 
     if (editingItemIndex !== null) {
-      // Update existing item
       const updatedItems = [...items];
       updatedItems[editingItemIndex] = { ...currentItem };
       setItems(updatedItems);
@@ -126,7 +173,6 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
         description: `${currentItem.part.name} updated`
       });
     } else {
-      // Add new item
       setItems([...items, { ...currentItem }]);
       toast({
         title: "Item Added",
@@ -134,12 +180,13 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       });
     }
 
-    // Reset form
     setCurrentItem({
       part: null,
       quantity: '',
       unitPrice: '',
       notes: '',
+      supplierPartNumber: '',
+      supplierSku: '',
     });
   };
 
@@ -209,14 +256,13 @@ Delivery Date: ${deliveryNeed}
 
 `;
 
-    // Items Section with new format
     items.forEach((item, index) => {
       const itemName = item.part?.name || 'Unknown Item';
       const itemSKU = item.part?.barcode || 'N/A';
       const itemQuantity = item.quantity || 1;
       const itemDescription = item.part?.description || 'No description provided';
-      const supplierPartNumber = item.part?.supplier_part_mappings?.[0]?.supplier_part_number || 'N/A';
-      const supplierPartInfo = item.part?.supplier_part_mappings?.[0]?.supplier_sku || 'N/A';
+      const supplierPartNumber = item.supplierPartNumber || 'N/A';
+      const supplierPartSku = item.supplierSku || 'N/A';
       
       emailBody += `Item ${index + 1}:
 `;
@@ -224,7 +270,7 @@ Delivery Date: ${deliveryNeed}
 `;
       emailBody += `  Supplier Part Number: ${supplierPartNumber}
 `;
-      emailBody += `  Supplier SKU: ${supplierPartInfo}
+      emailBody += `  Supplier SKU: ${supplierPartSku}
 `;
       emailBody += `  SKU/Internal ID: ${itemSKU}
 `;
@@ -281,13 +327,10 @@ Quote Generated: ${date}`;
       const emailBody = generateEmailBody();
       const subject = generateEmailSubject();
       
-      // Try to use the native Outlook protocol if available
       if (window.navigator.msLaunchUri) {
-        // Microsoft Edge / IE
         const outlookUri = `ms-outlook:compose?to=${encodeURIComponent(selectedSupplier.email || '')}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
         window.navigator.msLaunchUri(outlookUri);
       } else {
-        // Fallback to mailto (works on most systems)
         const mailtoLink = `mailto:${selectedSupplier.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
         window.location.href = mailtoLink;
       }
@@ -314,6 +357,8 @@ Quote Generated: ${date}`;
             part_name: item.part.name,
             quantity: parseInt(item.quantity),
             unit_price: item.unitPrice ? parseFloat(item.unitPrice) : null,
+            supplier_part_number: item.supplierPartNumber || null,
+            supplier_sku: item.supplierSku || null,
             notes: item.notes || null
           })),
           total_items: items.length,
@@ -337,9 +382,7 @@ Quote Generated: ${date}`;
       const createdQuoteData = data[0];
       setCreatedQuote(createdQuoteData);
 
-      // If sending via Outlook, open email client AFTER database insert
       if (sendMethod === 'outlook') {
-        // Small delay to ensure DB write completes
         setTimeout(() => {
           handleOutlookOpen();
           setStep(3);
@@ -485,7 +528,7 @@ Quote Generated: ${date}`;
                       <button
                         onClick={() => {
                           setEditingItemIndex(null);
-                          setCurrentItem({ part: null, quantity: '', unitPrice: '', notes: '' });
+                          setCurrentItem({ part: null, quantity: '', unitPrice: '', notes: '', supplierPartNumber: '', supplierSku: '' });
                         }}
                         className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors"
                       >
@@ -509,8 +552,41 @@ Quote Generated: ${date}`;
                           value={currentItem.part}
                           onChange={(part) => setCurrentItem({ ...currentItem, part })}
                           supplierFilter={selectedSupplier?.id}
+                          selectedSupplier={selectedSupplier}
                         />
                       </div>
+
+                      {/* Supplier Part Fields - Auto-populated or allow manual entry */}
+                      {currentItem.part && selectedSupplier && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-semibold block mb-2">Supplier Part Number</label>
+                            <Input
+                              type="text"
+                              value={currentItem.supplierPartNumber}
+                              onChange={(e) => setCurrentItem({ ...currentItem, supplierPartNumber: e.target.value })}
+                              placeholder="Auto-loaded or enter manually"
+                              className={!currentItem.supplierPartNumber ? 'border-amber-300 bg-amber-50' : ''}
+                            />
+                            {!currentItem.supplierPartNumber && !supplierPartMappings[currentItem.part.id] && (
+                              <p className="text-xs text-amber-700 mt-1">⚠️ Not found - you can enter it manually</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold block mb-2">Supplier SKU</label>
+                            <Input
+                              type="text"
+                              value={currentItem.supplierSku}
+                              onChange={(e) => setCurrentItem({ ...currentItem, supplierSku: e.target.value })}
+                              placeholder="Auto-loaded or enter manually"
+                              className={!currentItem.supplierSku ? 'border-amber-300 bg-amber-50' : ''}
+                            />
+                            {!currentItem.supplierSku && !supplierPartMappings[currentItem.part.id] && (
+                              <p className="text-xs text-amber-700 mt-1">⚠️ Not found - you can enter it manually</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Part Details Grid */}
                       <div className="grid grid-cols-3 gap-4">
@@ -606,6 +682,9 @@ Quote Generated: ${date}`;
                                       <div>
                                         <p className="font-semibold text-slate-900">{item.part.name}</p>
                                         <p className="text-xs text-slate-500">SKU: {item.part.barcode || 'N/A'}</p>
+                                        {item.supplierPartNumber && (
+                                          <p className="text-xs text-teal-600 font-semibold mt-0.5">Supplier #: {item.supplierPartNumber}</p>
+                                        )}
                                         {item.notes && <p className="text-xs text-amber-600 mt-1">📝 {item.notes}</p>}
                                       </div>
                                     </td>
