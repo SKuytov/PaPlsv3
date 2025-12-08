@@ -42,6 +42,7 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
     const requesterPhone = quoteData.requesterPhone || '';
     const companyName = quoteData.companyName || 'PartPulse Industrial';
     const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const deliveryLocation = '155 Blvd. Lipnik, 7005 Ruse, Bulgaria';
 
     // Quote Details Section
     const quoteDetailsSection = `------- QUOTE REQUEST DETAILS -------
@@ -93,7 +94,7 @@ Delivery Date: ${deliveryNeed}
 We are reaching out regarding a quote request for the following items:
 
 ${quoteDetailsSection}` + itemsSection + `
-Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
+Delivery Location: ${deliveryLocation}
 
 Budget & Preferences:
 ${budgetExpectation ? `  • Budget Expectation: ${budgetExpectation}\n` : ''}`;
@@ -142,7 +143,7 @@ Hope you're doing well! We're looking for a quote on some parts and thought of y
 
 ${quoteDetailsSection}` +
         itemsSection +
-        `Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
+        `Delivery Location: ${deliveryLocation}
 ${specialNotesSection}` +
         closingInfo +
         `Could you send us your best quote? We're looking for:
@@ -168,7 +169,7 @@ ${requesterPhone ? `${requesterPhone}\n` : ''}`
 
 ${quoteDetailsSection}` +
         itemsSection +
-        `Delivery Location: ${quoteData.deliveryLocation || 'To be confirmed'}
+        `Delivery Location: ${deliveryLocation}
 ${specialNotesSection}` +
         closingInfo +
         `Expected Quotation Elements:
