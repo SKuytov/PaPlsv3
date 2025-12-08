@@ -52,53 +52,33 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
       itemsSection = '\n------- REQUESTED ITEMS -------\n\n';
       items.forEach((item, index) => {
         const itemName = item.part?.name || item.name || 'Unknown Item';
-        const itemPartNumber = item.part?.part_number || item.partNumber || 'N/A';
         const itemSKU = item.part?.barcode || item.sku || item.barcode || 'N/A';
         const itemQuantity = item.quantity || 1;
         const itemDescription = item.part?.description || item.description || 'No description provided';
-        const itemManufacturer = item.part?.manufacturer || item.manufacturer || '';
-        const supplierPartInfo = item.supplier_sku || item.supplierSKU || '';
-        const supplierPartNumber = item.supplier_part_number || item.supplierPartNumber || '';
+        const supplierPartNumber = item.supplier_part_number || item.supplierPartNumber || 'N/A';
+        const supplierPartInfo = item.supplier_sku || item.supplierSKU || 'N/A';
         
         itemsSection += `Item ${index + 1}:\n`;
         itemsSection += `  Part Name: ${itemName}\n`;
-        itemsSection += `  Part Number (OEM): ${itemPartNumber}\n`;
+        itemsSection += `  Supplier Part Number: ${supplierPartNumber}\n`;
+        itemsSection += `  Supplier SKU: ${supplierPartInfo}\n`;
         itemsSection += `  SKU/Internal ID: ${itemSKU}\n`;
-        
-        if (itemManufacturer) {
-          itemsSection += `  Manufacturer: ${itemManufacturer}\n`;
-        }
-        
-        if (supplierPartNumber) {
-          itemsSection += `  Supplier Part Number: ${supplierPartNumber}\n`;
-        }
-        
-        if (supplierPartInfo) {
-          itemsSection += `  Supplier SKU: ${supplierPartInfo}\n`;
-        }
-        
-        itemsSection += `  Quantity: ${itemQuantity} units\n`;
+        itemsSection += `\n  Quantity: ${itemQuantity} units\n`;
         itemsSection += `  Description: ${itemDescription}\n\n`;
       });
     } else if (partData) {
       const partName = partData?.name || 'Unknown Part';
-      const partNumber = partData?.part_number || 'N/A';
       const partSku = partData?.barcode || 'N/A';
       const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
       const description = partData?.description || partData?.notes || 'No description provided';
-      const manufacturer = partData?.manufacturer || '';
       
-      itemsSection = `\n------- REQUESTED ITEM -------\n
-`;
+      itemsSection = `\n------- REQUESTED ITEM -------\n\n`;
+      itemsSection += `Item 1:\n`;
       itemsSection += `  Part Name: ${partName}\n`;
-      itemsSection += `  Part Number (OEM): ${partNumber}\n`;
+      itemsSection += `  Supplier Part Number: N/A\n`;
+      itemsSection += `  Supplier SKU: N/A\n`;
       itemsSection += `  SKU/Internal ID: ${partSku}\n`;
-      
-      if (manufacturer) {
-        itemsSection += `  Manufacturer: ${manufacturer}\n`;
-      }
-      
-      itemsSection += `  Quantity: ${quantity} units\n`;
+      itemsSection += `\n  Quantity: ${quantity} units\n`;
       itemsSection += `  Description: ${description}\n`;
     }
 
