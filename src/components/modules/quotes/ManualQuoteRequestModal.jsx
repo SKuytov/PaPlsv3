@@ -49,13 +49,13 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
-  // Generate unique quote ID with format: QR-YY-XXXXX
+  // Generate unique quote ID with format: QT-YY-XXXXX
   const generateQuoteId = () => {
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
     quoteCounter++; // Increment global counter
     const sequentialNumber = quoteCounter.toString().padStart(5, '0'); // Pad to 5 digits
-    return `QR-${year}-${sequentialNumber}`;
+    return `QT-${year}-${sequentialNumber}`;
   };
 
   // Generate unique quote ID on mount
@@ -187,18 +187,14 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     }, 0);
   };
 
-  // Generate professional email body
+  // Generate professional email body with new format
   const generateEmailBody = () => {
     const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const deliveryNeed = formData.deliveryDate ? new Date(formData.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' }) : 'As soon as possible';
-    const specialNotes = formData.request_notes || '';
-    const budgetExpectation = formData.budgetExpectation || '';
     const requesterName = formData.requesterName || 'Procurement Team';
     const requesterEmail = formData.requesterEmail || user?.email || 'noreply@partpulse.eu';
     const requesterPhone = formData.requesterPhone || '';
-    const companyName = 'PartPulse Industrial';
 
-    // Quote Details Section
     let emailBody = `Dear ${selectedSupplier.name || 'Supplier'},
 
 We are reaching out regarding a quote request for the following items:
@@ -208,13 +204,12 @@ We are reaching out regarding a quote request for the following items:
 Quote ID: ${quoteId}
 Date: ${date}
 Delivery Date: ${deliveryNeed}
-`;
 
-    // Items Section
-    emailBody += `
 ------- REQUESTED ITEMS -------
 
 `;
+
+    // Items Section with new format
     items.forEach((item, index) => {
       const itemName = item.part?.name || 'Unknown Item';
       const itemSKU = item.part?.barcode || 'N/A';
@@ -223,34 +218,34 @@ Delivery Date: ${deliveryNeed}
       const supplierPartNumber = item.part?.supplier_part_mappings?.[0]?.supplier_part_number || 'N/A';
       const supplierPartInfo = item.part?.supplier_part_mappings?.[0]?.supplier_sku || 'N/A';
       
-      emailBody += `Item ${index + 1}:\n`;
-      emailBody += `  Part Name: ${itemName}\n`;
-      emailBody += `  Supplier Part Number: ${supplierPartNumber}\n`;
-      emailBody += `  Supplier SKU: ${supplierPartInfo}\n`;
-      emailBody += `  SKU/Internal ID: ${itemSKU}\n`;
-      emailBody += `\n  Quantity: ${itemQuantity} units\n`;
-      emailBody += `  Description: ${itemDescription}\n\n`;
+      emailBody += `Item ${index + 1}:
+`;
+      emailBody += `  Part Name: ${itemName}
+`;
+      emailBody += `  Supplier Part Number: ${supplierPartNumber}
+`;
+      emailBody += `  Supplier SKU: ${supplierPartInfo}
+`;
+      emailBody += `  SKU/Internal ID: ${itemSKU}
+`;
+      emailBody += `  
+`;
+      emailBody += `  Quantity: ${itemQuantity} units
+`;
+      emailBody += `  Description: ${itemDescription}
+\n`;
     });
 
-    emailBody += `Delivery Location: To be confirmed
+    emailBody += `Delivery Location: 155 Blvd. Lipnik, 7005 Ruse, Bulgaria
 
-Budget & Preferences:
-${budgetExpectation ? `  • Budget Expectation: €${budgetExpectation}\n` : ''}`;
-
-    if (specialNotes) {
-      emailBody += `\nSpecial Instructions & Notes:\n  ${specialNotes}\n`;
-    }
-
-    emailBody += `
 ------- REQUESTOR INFORMATION -------
 
 ${requesterName}
 ${requesterEmail}
-${requesterPhone ? `Phone: ${requesterPhone}\n` : ''}${companyName}
+${requesterPhone ? `${requesterPhone}\n` : ''}PartPulse Industrial
+www.partpulse.eu
 
-`;
-
-    emailBody += `We would appreciate your detailed quotation including:
+We would appreciate your detailed quotation including:
   • Unit price and total cost for each item
   • Availability and lead time
   • Delivery terms and freight cost (if applicable)
@@ -264,10 +259,9 @@ Thank you for your prompt attention to this request.
 
 Best regards,
 ${requesterName}
-${companyName}
+PartPulse Industrial
 ${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}
-www.partpulse.eu
+${requesterPhone ? `${requesterPhone}\n` : ''}www.partpulse.eu
 
 Quote Generated: ${date}`;
 
