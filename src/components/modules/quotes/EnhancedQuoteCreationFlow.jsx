@@ -20,9 +20,9 @@ const generateSimpleQuoteId = () => {
   return `QT-${year}-${random}`;
 };
 
-const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
-  const [step, setStep] = useState(1);
-  const [mode, setMode] = useState(null);
+const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, initialItems = [], onCreateComplete }) => {
+  const [step, setStep] = useState(isReorderMode ? 2 : 1); // Skip step 1 if reorder mode
+  const [mode, setMode] = useState(isReorderMode ? 'manual' : null);
   const [items, setItems] = useState([]);
   const [currentItem, setCurrentItem] = useState({ 
     part: null, 
@@ -77,6 +77,43 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     loadSuppliers();
   }, []);
 
+  // 🔥 NEW: Load initial items from Reorder Mode
+  useEffect(() => {
+    if (isReorderMode && initialItems && initialItems.length > 0) {
+      // Transform reorder items to internal format and load them
+      const transformedItems = initialItems.map((item) => ({
+        part_id: item.part_id,
+        part_name: item.part_name,
+        part_number: item.part_number,
+        supplier_id: item.supplier_id,
+        supplier_name: item.supplier_name,
+        part: {
+          id: item.part_id,
+          name: item.part_name,
+          part_number: item.part_number
+        },
+        supplier: {
+          id: item.supplier_id,
+          name: item.supplier_name
+        },
+        supplierPartNumber: item.supplierPartNumber || item.supplierPartId,
+        supplierPartId: item.supplierPartId || '',
+        quantity: item.quantity.toString(),
+        notes: item.notes || '',
+        isCustom: false,
+        customPartName: ''
+      }));
+      
+      setItems(transformedItems);
+      
+      toast({
+        title: '✅ Items Loaded from Reorder',
+        description: `${transformedItems.length} item${transformedItems.length !== 1 ? 's' : ''} ready to customize and send`,
+        duration: 3000
+      });
+    }
+  }, [isReorderMode, initialItems]);
+
   const handlePartSelected = (part) => {
     setCurrentItem(prev => ({
       ...prev,
@@ -114,7 +151,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   const getItemsBySupplier = () => {
     const grouped = {};
     items.forEach(item => {
-      const supplierId = item.supplier?.id || 'no-supplier';
+      const supplierId = item.supplier?.id || item.supplier_id || 'no-supplier';
       if (!grouped[supplierId]) {
         grouped[supplierId] = { supplier: item.supplier, items: [] };
       }
@@ -123,8 +160,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
     return grouped;
   };
 
-  // Mode Selection Step
-  if (step === 1) {
+  // Mode Selection Step (Skip in Reorder Mode)
+  if (step === 1 && !isReorderMode) {
     return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto">
@@ -223,7 +260,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
   }
 
   // Creation Step
-  if (step === 2 && mode === 'manual') {
+  if (step === 2) {
     const itemsBySupplier = getItemsBySupplier();
     const uniqueSuppliers = Object.values(itemsBySupplier).filter(g => g.supplier);
 
@@ -232,8 +269,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
         <Card className="w-full max-w-5xl my-4">
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-teal-50 to-teal-100">
             <div>
-              <CardTitle className="text-2xl">Create Quote Request</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 2 of 3: Add Items (separate quotes will be created per supplier)</p>
+              <CardTitle className="text-2xl">Create Quote Request {isReorderMode && '(from Reorder)'}</CardTitle>
+              <p className="text-sm text-slate-600 mt-1">Step {isReorderMode ? '1' : '2'} of 3: Add Items (separate quotes will be created per supplier)</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -241,6 +278,19 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
           </CardHeader>
 
           <CardContent className="p-6 space-y-6">
+            {/* Reorder Mode Info Banner */}
+            {isReorderMode && (
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg flex gap-3">
+                <AlertCircle className="h-5 w-5 text-teal-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-teal-900">📦 Loaded from Reorder Management</p>
+                  <p className="text-sm text-teal-700 mt-1">
+                    {items.length} item{items.length !== 1 ? 's' : ''} pre-loaded with suppliers and quantities. You can customize before sending.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Summary Bar */}
             {items.length > 0 && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -251,211 +301,213 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             )}
 
             {/* Add Item Form */}
-            <div className="space-y-3">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Plus className="h-5 w-5 text-teal-600" />
-                Add Quote Item
-              </h3>
+            {!isReorderMode && (
+              <div className="space-y-3">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-teal-600" />
+                  Add Quote Item
+                </h3>
 
-              <Card className="bg-slate-50 border-slate-200">
-                <CardContent className="p-4 space-y-4">
-                  {/* Toggle: Existing Part or Custom */}
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setCurrentItem({ ...currentItem, isCustom: false, customPartName: '', part: null, supplier: null })}
-                      className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
-                        !currentItem.isCustom
-                          ? 'bg-teal-600 text-white'
-                          : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
-                      }`}
-                    >
-                      📦 Existing Part
-                    </button>
-                    <button
-                      onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null, supplier: null })}
-                      className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
-                        currentItem.isCustom
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
-                      }`}
-                    >
-                      ✏️ Free Text
-                    </button>
-                  </div>
+                <Card className="bg-slate-50 border-slate-200">
+                  <CardContent className="p-4 space-y-4">
+                    {/* Toggle: Existing Part or Custom */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setCurrentItem({ ...currentItem, isCustom: false, customPartName: '', part: null, supplier: null })}
+                        className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
+                          !currentItem.isCustom
+                            ? 'bg-teal-600 text-white'
+                            : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
+                        }`}
+                      >
+                        📦 Existing Part
+                      </button>
+                      <button
+                        onClick={() => setCurrentItem({ ...currentItem, isCustom: true, part: null, supplier: null })}
+                        className={`flex-1 px-3 py-2 rounded text-sm font-semibold transition-colors ${
+                          currentItem.isCustom
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
+                        }`}
+                      >
+                        ✏️ Free Text
+                      </button>
+                    </div>
 
-                  {/* Item Input Section */}
-                  {!currentItem.isCustom ? (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-sm font-semibold block mb-2">Part * (with Smart Supplier Detection)</label>
-                        <SearchablePartSelector
-                          value={currentItem.part}
-                          onChange={handlePartSelected}
-                        />
+                    {/* Item Input Section */}
+                    {!currentItem.isCustom ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-semibold block mb-2">Part * (with Smart Supplier Detection)</label>
+                          <SearchablePartSelector
+                            value={currentItem.part}
+                            onChange={handlePartSelected}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-sm font-semibold block mb-2">Item Description *</label>
-                      <Input
-                        type="text"
-                        value={currentItem.customPartName}
-                        onChange={(e) => setCurrentItem({ ...currentItem, customPartName: e.target.value })}
-                        placeholder="e.g., Custom Bracket, Installation Service, Tech Support"
-                      />
-                    </div>
-                  )}
-
-                  {/* Supplier Selection */}
-                  {(currentItem.part || currentItem.customPartName) && (
-                    <div>
-                      <label className="text-sm font-semibold block mb-2">
-                        Supplier *
-                        {currentItem.supplier && (
-                          <span className={`text-xs font-normal ml-2 px-2 py-0.5 rounded ${
-                            currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
-                              ? 'bg-teal-100 text-teal-700 font-semibold'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
-                              ? '⭐ Auto-Loaded'
-                              : '✓ Selected'}
-                          </span>
-                        )}
-                      </label>
-                      <SearchableSupplierSelector
-                        value={currentItem.supplier}
-                        onChange={(supplier) => setCurrentItem({ ...currentItem, supplier })}
-                      />
-                    </div>
-                  )}
-
-                  {/* ✅ SUPPLIER PART ID WITH AUTO-MAPPING FIX & FIXED LOADING STATE */}
-                  {(currentItem.part || currentItem.customPartName) && currentItem.supplier && !currentItem.isCustom && (
-                    <div className="space-y-4">
-                      {/* 🔧 FIXED: Only show loading if mapping is still loading AND we don't have data yet */}
-                      {mappingLoading && !supplierMapping?.supplier_part_number && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                          <div className="animate-spin text-blue-600">⟳</div>
-                          <div>
-                            <p className="text-sm font-semibold text-blue-900">Loading supplier info...</p>
-                            <p className="text-xs text-blue-700 mt-0.5">
-                              Checking for part number from {currentItem.supplier.name}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Supplier Part ID Field */}
+                    ) : (
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-semibold text-slate-900">Supplier Part ID/SKU</label>
-                          {supplierMapping?.supplier_part_number && (
-                            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
-                              ✓ Found
-                            </span>
-                          )}
-                        </div>
+                        <label className="text-sm font-semibold block mb-2">Item Description *</label>
                         <Input
                           type="text"
-                          value={currentItem.supplierPartId || (supplierMapping?.supplier_part_number || '')}
-                          onChange={(e) => setCurrentItem({ ...currentItem, supplierPartId: e.target.value })}
-                          placeholder="e.g., SKU-12345, PART-ABC, their internal ID"
-                          className={`${
-                            supplierMapping?.supplier_part_number && !currentItem.supplierPartId
-                              ? 'border-green-300 bg-green-50'
-                              : currentItem.supplierPartId
-                              ? 'border-slate-300'
-                              : 'border-amber-300 bg-amber-50'
-                          }`}
+                          value={currentItem.customPartName}
+                          onChange={(e) => setCurrentItem({ ...currentItem, customPartName: e.target.value })}
+                          placeholder="e.g., Custom Bracket, Installation Service, Tech Support"
                         />
-                        {!supplierMapping?.supplier_part_number && !mappingLoading && (
-                          <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
-                            <span>⚠️</span>
-                            <span>Not found - enter manually or create mapping in Suppliers</span>
-                          </p>
-                        )}
-                        {supplierMapping?.supplier_part_number && !currentItem.supplierPartId && (
-                          <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
-                            <span>✓</span>
-                            <span>Auto-populated from supplier data</span>
-                          </p>
-                        )}
                       </div>
+                    )}
 
-                      {/* Info Box if mapping exists */}
-                      {supplierMapping && (
-                        <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
-                          <p className="text-xs text-teal-900 font-semibold">✓ Supplier part data found in system</p>
-                          {supplierMapping.lead_time_days && (
-                            <p className="text-xs text-teal-700 mt-1">Lead time: {supplierMapping.lead_time_days} days</p>
+                    {/* Supplier Selection */}
+                    {(currentItem.part || currentItem.customPartName) && (
+                      <div>
+                        <label className="text-sm font-semibold block mb-2">
+                          Supplier *
+                          {currentItem.supplier && (
+                            <span className={`text-xs font-normal ml-2 px-2 py-0.5 rounded ${
+                              currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
+                                ? 'bg-teal-100 text-teal-700 font-semibold'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {currentItem.part?.preferred_supplier?.id === currentItem.supplier.id
+                                ? '⭐ Auto-Loaded'
+                                : '✓ Selected'}
+                            </span>
+                          )}
+                        </label>
+                        <SearchableSupplierSelector
+                          value={currentItem.supplier}
+                          onChange={(supplier) => setCurrentItem({ ...currentItem, supplier })}
+                        />
+                      </div>
+                    )}
+
+                    {/* ✅ SUPPLIER PART ID WITH AUTO-MAPPING FIX & FIXED LOADING STATE */}
+                    {(currentItem.part || currentItem.customPartName) && currentItem.supplier && !currentItem.isCustom && (
+                      <div className="space-y-4">
+                        {/* 🔧 FIXED: Only show loading if mapping is still loading AND we don't have data yet */}
+                        {mappingLoading && !supplierMapping?.supplier_part_number && (
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                            <div className="animate-spin text-blue-600">⟳</div>
+                            <div>
+                              <p className="text-sm font-semibold text-blue-900">Loading supplier info...</p>
+                              <p className="text-xs text-blue-700 mt-0.5">
+                                Checking for part number from {currentItem.supplier.name}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Supplier Part ID Field */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-semibold text-slate-900">Supplier Part ID/SKU</label>
+                            {supplierMapping?.supplier_part_number && (
+                              <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                ✓ Found
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            type="text"
+                            value={currentItem.supplierPartId || (supplierMapping?.supplier_part_number || '')}
+                            onChange={(e) => setCurrentItem({ ...currentItem, supplierPartId: e.target.value })}
+                            placeholder="e.g., SKU-12345, PART-ABC, their internal ID"
+                            className={`${
+                              supplierMapping?.supplier_part_number && !currentItem.supplierPartId
+                                ? 'border-green-300 bg-green-50'
+                                : currentItem.supplierPartId
+                                ? 'border-slate-300'
+                                : 'border-amber-300 bg-amber-50'
+                            }`}
+                          />
+                          {!supplierMapping?.supplier_part_number && !mappingLoading && (
+                            <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                              <span>⚠️</span>
+                              <span>Not found - enter manually or create mapping in Suppliers</span>
+                            </p>
+                          )}
+                          {supplierMapping?.supplier_part_number && !currentItem.supplierPartId && (
+                            <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
+                              <span>✓</span>
+                              <span>Auto-populated from supplier data</span>
+                            </p>
                           )}
                         </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* Quantity */}
-                  {(currentItem.part || currentItem.customPartName) && (
-                    <div className="grid grid-cols-2 gap-3">
+                        {/* Info Box if mapping exists */}
+                        {supplierMapping && (
+                          <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                            <p className="text-xs text-teal-900 font-semibold">✓ Supplier part data found in system</p>
+                            {supplierMapping.lead_time_days && (
+                              <p className="text-xs text-teal-700 mt-1">Lead time: {supplierMapping.lead_time_days} days</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Quantity */}
+                    {(currentItem.part || currentItem.customPartName) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm font-semibold block mb-2">Quantity *</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={currentItem.quantity}
+                            onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
+                            placeholder="10"
+                          />
+                        </div>
+                        <div className="flex flex-col justify-end">
+                          <button
+                            onClick={() => {
+                              if (!currentItem.part && !currentItem.customPartName) {
+                                toast({ variant: 'destructive', title: 'Missing item' });
+                                return;
+                              }
+                              if (!currentItem.supplier) {
+                                toast({ variant: 'destructive', title: 'Missing supplier' });
+                                return;
+                              }
+                              if (!currentItem.quantity) {
+                                toast({ variant: 'destructive', title: 'Missing quantity' });
+                                return;
+                              }
+                              if (editingIndex !== null) {
+                                const newItems = [...items];
+                                newItems[editingIndex] = currentItem;
+                                setItems(newItems);
+                                setEditingIndex(null);
+                              } else {
+                                setItems([...items, currentItem]);
+                              }
+                              setCurrentItem({ part: null, supplier: null, quantity: '', notes: '', supplierPartId: '', isCustom: false, customPartName: '' });
+                            }}
+                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors text-sm h-10"
+                          >
+                            {editingIndex !== null ? 'Update' : 'Add Item'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {(currentItem.part || currentItem.customPartName) && (
                       <div>
-                        <label className="text-sm font-semibold block mb-2">Quantity *</label>
+                        <label className="text-sm font-semibold block mb-2">Notes (Optional)</label>
                         <Input
-                          type="number"
-                          min="1"
-                          value={currentItem.quantity}
-                          onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
-                          placeholder="10"
+                          type="text"
+                          value={currentItem.notes}
+                          onChange={(e) => setCurrentItem({ ...currentItem, notes: e.target.value })}
+                          placeholder="Special requirements, certifications, etc."
                         />
                       </div>
-                      <div className="flex flex-col justify-end">
-                        <button
-                          onClick={() => {
-                            if (!currentItem.part && !currentItem.customPartName) {
-                              toast({ variant: 'destructive', title: 'Missing item' });
-                              return;
-                            }
-                            if (!currentItem.supplier) {
-                              toast({ variant: 'destructive', title: 'Missing supplier' });
-                              return;
-                            }
-                            if (!currentItem.quantity) {
-                              toast({ variant: 'destructive', title: 'Missing quantity' });
-                              return;
-                            }
-                            if (editingIndex !== null) {
-                              const newItems = [...items];
-                              newItems[editingIndex] = currentItem;
-                              setItems(newItems);
-                              setEditingIndex(null);
-                            } else {
-                              setItems([...items, currentItem]);
-                            }
-                            setCurrentItem({ part: null, supplier: null, quantity: '', notes: '', supplierPartId: '', isCustom: false, customPartName: '' });
-                          }}
-                          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors text-sm h-10"
-                        >
-                          {editingIndex !== null ? 'Update' : 'Add Item'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Notes */}
-                  {(currentItem.part || currentItem.customPartName) && (
-                    <div>
-                      <label className="text-sm font-semibold block mb-2">Notes (Optional)</label>
-                      <Input
-                        type="text"
-                        value={currentItem.notes}
-                        onChange={(e) => setCurrentItem({ ...currentItem, notes: e.target.value })}
-                        placeholder="Special requirements, certifications, etc."
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Items List - Grouped by Supplier */}
             {items.length > 0 && (
@@ -479,11 +531,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                             <div className="flex-1 space-y-1">
                               <div className="flex items-center gap-2">
                                 <p className="font-semibold text-slate-900">
-                                  {item.isCustom ? item.customPartName : item.part?.name}
+                                  {item.isCustom ? item.customPartName : (item.part?.name || item.part_name)}
                                 </p>
                                 {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
                               </div>
-                              {item.supplierPartId && <p className="text-xs text-blue-600">🏷️ {item.supplier?.name} SKU: {item.supplierPartId}</p>}
+                              {item.supplierPartId && <p className="text-xs text-blue-600">🏷️ {item.supplier?.name || item.supplier_name} SKU: {item.supplierPartId}</p>}
                               <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
                               {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
                             </div>
@@ -562,13 +614,15 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
 
             {/* Navigation */}
             <div className="flex gap-3 pt-4 border-t">
-              <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
-                Back
-              </Button>
+              {!isReorderMode && (
+                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
+                  Back
+                </Button>
+              )}
               <Button
                 onClick={() => setStep(3)}
                 disabled={items.length === 0}
-                className="flex-1 bg-teal-600 hover:bg-teal-700"
+                className={isReorderMode ? 'flex-1 bg-teal-600 hover:bg-teal-700' : 'flex-1 bg-teal-600 hover:bg-teal-700'}
               >
                 Review & Send
               </Button>
@@ -589,8 +643,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
         <Card className="w-full max-w-4xl my-4">
           <CardHeader className="flex flex-row items-center justify-between pb-3 border-b bg-gradient-to-r from-green-50 to-green-100">
             <div>
-              <CardTitle className="text-2xl">Review & Send Quote</CardTitle>
-              <p className="text-sm text-slate-600 mt-1">Step 3 of 3: Confirm and send to suppliers</p>
+              <CardTitle className="text-2xl">Review & Send Quote {isReorderMode && '(from Reorder)'}</CardTitle>
+              <p className="text-sm text-slate-600 mt-1">Step {isReorderMode ? '2' : '3'} of 3: Confirm and send to suppliers</p>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
               <X className="h-6 w-6" />
@@ -632,7 +686,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       <div className="space-y-1">
                         {group.items.map((item, idx) => (
                           <p key={idx} className="text-sm text-slate-700">
-                            • {item.isCustom ? item.customPartName : item.part?.name} (Qty: {item.quantity}){item.supplierPartId ? ` - SKU: ${item.supplierPartId}` : ''}
+                            • {item.isCustom ? item.customPartName : (item.part?.name || item.part_name)} (Qty: {item.quantity}){item.supplierPartId ? ` - SKU: ${item.supplierPartId}` : ''}
                           </p>
                         ))}
                       </div>
@@ -671,9 +725,9 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                       const quoteId = generateSimpleQuoteId();
 
                       const itemsForDB = group.items.map(i => ({
-                        part_id: i.isCustom ? null : (i.part?.id || null),
-                        part_name: i.isCustom ? i.customPartName : (i.part?.name || ''),
-                        part_number: i.isCustom ? null : (i.part?.part_number || ''),
+                        part_id: i.isCustom ? null : (i.part?.id || i.part_id || null),
+                        part_name: i.isCustom ? i.customPartName : (i.part?.name || i.part_name || ''),
+                        part_number: i.isCustom ? null : (i.part?.part_number || i.part_number || ''),
                         description: i.isCustom ? null : (i.part?.description || ''),
                         supplier_part_id: i.supplierPartId || null,
                         quantity: parseInt(i.quantity),
@@ -783,7 +837,13 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                   <Button
                     variant="outline"
                     className="flex-1"
-                    onClick={onClose}
+                    onClick={() => {
+                      if (isReorderMode && onCreateComplete) {
+                        onCreateComplete();
+                      } else {
+                        onClose();
+                      }
+                    }}
                   >
                     Close
                   </Button>
@@ -808,7 +868,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
             metadata={distributionData.metadata}
             onClose={() => {
               setShowDistribution(false);
-              onClose();
+              if (isReorderMode && onCreateComplete) {
+                onCreateComplete();
+              } else {
+                onClose();
+              }
             }}
             onSent={(data) => {
               toast({
@@ -816,7 +880,11 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose }) => {
                 description: `${data.count} quote${data.count !== 1 ? 's' : ''} sent successfully`
               });
               setShowDistribution(false);
-              onClose();
+              if (isReorderMode && onCreateComplete) {
+                onCreateComplete();
+              } else {
+                onClose();
+              }
             }}
           />
         )}
