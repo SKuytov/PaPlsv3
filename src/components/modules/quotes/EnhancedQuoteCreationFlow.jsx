@@ -77,32 +77,42 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
     loadSuppliers();
   }, []);
 
-  // 🔥 NEW: Load initial items from Reorder Mode
+  // 🔥 NEW: Load initial items from Reorder Mode - FIXED AUTO-LOADING
   useEffect(() => {
     if (isReorderMode && initialItems && initialItems.length > 0) {
-      // Transform reorder items to internal format and load them
-      const transformedItems = initialItems.map((item) => ({
-        part_id: item.part_id,
-        part_name: item.part_name,
-        part_number: item.part_number,
-        supplier_id: item.supplier_id,
-        supplier_name: item.supplier_name,
-        part: {
-          id: item.part_id,
-          name: item.part_name,
-          part_number: item.part_number
-        },
-        supplier: {
+      // Transform reorder items to internal format
+      const transformedItems = initialItems.map((item) => {
+        // Find full supplier object from allSuppliers
+        const fullSupplier = allSuppliers.find(s => s.id === item.supplier_id) || {
           id: item.supplier_id,
           name: item.supplier_name
-        },
-        supplierPartNumber: item.supplierPartNumber || item.supplierPartId,
-        supplierPartId: item.supplierPartId || '',
-        quantity: item.quantity.toString(),
-        notes: item.notes || '',
-        isCustom: false,
-        customPartName: ''
-      }));
+        };
+        
+        // Find full part object if needed
+        let fullPart = null;
+        if (item.part_id) {
+          fullPart = {
+            id: item.part_id,
+            name: item.part_name,
+            part_number: item.part_number
+          };
+        }
+
+        return {
+          part_id: item.part_id,
+          part_name: item.part_name,
+          part_number: item.part_number,
+          part: fullPart,
+          supplier_id: item.supplier_id,
+          supplier_name: item.supplier_name,
+          supplier: fullSupplier,
+          supplierPartId: item.supplierPartId || item.supplierPartNumber || '', // ✅ KEY FIX
+          quantity: item.quantity.toString(),
+          notes: item.notes || '',
+          isCustom: false,
+          customPartName: ''
+        };
+      });
       
       setItems(transformedItems);
       
@@ -112,7 +122,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
         duration: 3000
       });
     }
-  }, [isReorderMode, initialItems]);
+  }, [isReorderMode, initialItems, allSuppliers]);
 
   const handlePartSelected = (part) => {
     setCurrentItem(prev => ({
@@ -300,8 +310,8 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
               </div>
             )}
 
-            {/* Add Item Form */}
-            {!isReorderMode && (
+            {/* Add Item Form - ONLY if NOT in Reorder mode with pre-loaded items */}
+            {!(isReorderMode && items.length > 0) && (
               <div className="space-y-3">
                 <h3 className="font-bold text-slate-900 flex items-center gap-2">
                   <Plus className="h-5 w-5 text-teal-600" />
@@ -535,7 +545,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                                 </p>
                                 {item.isCustom && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Custom</span>}
                               </div>
-                              {item.supplierPartId && <p className="text-xs text-blue-600">🏷️ {item.supplier?.name || item.supplier_name} SKU: {item.supplierPartId}</p>}
+                              {item.supplierPartId && <p className="text-xs text-blue-600">🏷️ {item.supplier?.name || item.supplier_name} Part ID: {item.supplierPartId}</p>}
                               <p className="text-sm text-slate-600">📦 Qty: {item.quantity}</p>
                               {item.notes && <p className="text-xs text-amber-600 mt-2">📝 {item.notes}</p>}
                             </div>
@@ -686,7 +696,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                       <div className="space-y-1">
                         {group.items.map((item, idx) => (
                           <p key={idx} className="text-sm text-slate-700">
-                            • {item.isCustom ? item.customPartName : (item.part?.name || item.part_name)} (Qty: {item.quantity}){item.supplierPartId ? ` - SKU: ${item.supplierPartId}` : ''}
+                            • {item.isCustom ? item.customPartName : (item.part?.name || item.part_name)} (Qty: {item.quantity}){item.supplierPartId ? ` - Part ID: ${item.supplierPartId}` : ''}
                           </p>
                         ))}
                       </div>
@@ -729,7 +739,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                         part_name: i.isCustom ? i.customPartName : (i.part?.name || i.part_name || ''),
                         part_number: i.isCustom ? null : (i.part?.part_number || i.part_number || ''),
                         description: i.isCustom ? null : (i.part?.description || ''),
-                        supplier_part_id: i.supplierPartId || null,
+                        supplier_part_id: i.supplierPartId || null, // ✅ KEY: Map supplierPartId to supplier_part_id
                         quantity: parseInt(i.quantity),
                         unit_of_measure: i.part?.unit_of_measure || 'pcs',
                         notes: i.notes || '',
