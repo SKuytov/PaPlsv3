@@ -719,8 +719,9 @@ useEffect(() => {
          </Card>
 
          {/* Full Details Modal */}
-         {detailsModalOpen && activePart && (
+         {activePart && (
              <PartDetailsModal 
+                 open={detailsModalOpen}
                  part={activePart.part} 
                  onClose={() => setDetailsModalOpen(false)}
                  onDeleteRequest={() => {}}
