@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, CheckCircle, AlertCircle, Loader2, Copy, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CheckCircle, AlertCircle, Loader2, Copy, Download, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -7,22 +7,75 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import EnhancedQuoteCreationFlow from './EnhancedQuoteCreationFlow';
 
 const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuccess }) => {
-  const [step, setStep] = useState(1); // 1: Review, 2: Sending, 3: Confirmation
+  const [step, setStep] = useState(1); // 1: Mode Selection, 2: Quick Create Flow
+  const [selectedMode, setSelectedMode] = useState(null); // 'quick-create' | 'legacy'
   const [submitting, setSubmitting] = useState(false);
   const [createdQuotes, setCreatedQuotes] = useState([]);
   const [errors, setErrors] = useState([]);
+  const [showEnhancedFlow, setShowEnhancedFlow] = useState(false);
+  const [bulkItems, setBulkItems] = useState([]);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Prepare items for Quick Create flow
+  useEffect(() => {
+    if (selectedParts && selectedParts.length > 0) {
+      // Transform reorder parts into Quick Create item format
+      const items = selectedParts.map((part) => {
+        const supplier = part.suppliers?.find(s => s.is_preferred) || part.suppliers?.[0];
+        const quantityNeeded = Math.max(0, part.reorder_point - part.current_quantity);
+        
+        return {
+          part_id: part.id,
+          part_name: part.name,
+          part_number: part.part_number,
+          supplier_id: supplier?.id,
+          supplier_name: supplier?.name,
+          supplierPartNumber: supplier?.supplier_part_number || '',
+          supplierPartId: supplier?.supplier_sku || '',
+          quantity: quantityNeeded,
+          unit_price: supplier?.unit_price,
+          notes: `Auto-loaded from Reorder Management - Reorder Point: ${part.reorder_point}, Current: ${part.current_quantity}`,
+          source: 'reorder'
+        };
+      });
+      setBulkItems(items);
+    }
+  }, [selectedParts]);
 
   const handleOpenChange = (newOpen) => {
     if (!newOpen) {
       setStep(1);
+      setSelectedMode(null);
       setCreatedQuotes([]);
       setErrors([]);
+      setShowEnhancedFlow(false);
     }
     onOpenChange(newOpen);
+  };
+
+  const handleStartQuickCreate = () => {
+    setSelectedMode('quick-create');
+    setShowEnhancedFlow(true);
+  };
+
+  const handleStartLegacy = () => {
+    setSelectedMode('legacy');
+    setStep(2);
+  };
+
+  const handleEnhancedFlowSuccess = () => {
+    toast({
+      title: "Success!",
+      description: "Quote requests created and ready to send to suppliers!"
+    });
+    handleOpenChange(false);
+    if (onSuccess) {
+      onSuccess();
+    }
   };
 
   const handleCreateQuoteRequests = async () => {
@@ -31,7 +84,7 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
     const newQuotes = [];
 
     try {
-      // Create quote requests for each part
+      // Create quote requests for each part using legacy method
       for (const part of selectedParts) {
         const supplier = part.suppliers?.find(s => s.is_preferred) || part.suppliers?.[0];
         const quantityNeeded = Math.max(0, part.reorder_point - part.current_quantity);
@@ -136,6 +189,42 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
     });
   };
 
+  // If showing Enhanced Flow, render that instead
+  if (showEnhancedFlow && selectedMode === 'quick-create') {
+    return (
+      <>
+        <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <Dialog.Content className="w-full max-w-5xl bg-white rounded-2xl shadow-lg max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b">
+                  <Dialog.Title className="text-2xl font-bold text-slate-900">
+                    Create Quote Requests - Quick Create Flow
+                  </Dialog.Title>
+                  <button
+                    onClick={() => handleOpenChange(false)}
+                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto">
+                  <EnhancedQuoteCreationFlow
+                    isReorderMode={true}
+                    initialItems={bulkItems}
+                    onCreateComplete={handleEnhancedFlowSuccess}
+                  />
+                </div>
+              </Dialog.Content>
+            </div>
+          </Dialog.Portal>
+        </Dialog.Root>
+      </>
+    );
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
@@ -155,37 +244,83 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
               </button>
             </div>
 
-            {/* Step Indicator */}
-            <div className="flex gap-2 mb-6">
-              {[1, 2, 3].map((stepNum) => (
-                <div key={stepNum} className="flex items-center flex-1">
-                  <div
-                    className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                      step >= stepNum
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {step > stepNum ? <CheckCircle className="h-5 w-5" /> : stepNum}
-                  </div>
-                  <div className="text-xs text-slate-600 ml-2">
-                    {stepNum === 1 && 'Review Items'}
-                    {stepNum === 2 && 'Sending'}
-                    {stepNum === 3 && 'Complete'}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Step 1: Review */}
+            {/* Step 1: Mode Selection */}
             {step === 1 && (
               <div className="space-y-6">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
                   <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-blue-900">Bulk Quote Request</p>
+                    <p className="font-semibold text-blue-900">Choose Your Method</p>
                     <p className="text-sm text-blue-800 mt-1">
-                      {selectedParts.length} quote request{selectedParts.length !== 1 ? 's' : ''} will be created and sent to suppliers.
+                      Select how you want to create quote requests for {selectedParts.length} item{selectedParts.length !== 1 ? 's' : ''}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Quick Create Option */}
+                  <button
+                    onClick={handleStartQuickCreate}
+                    className="p-6 border-2 border-slate-200 rounded-lg hover:border-teal-500 hover:bg-teal-50 transition-all text-left group"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg text-slate-900 group-hover:text-teal-700">⚡ Quick Create (NEW)</h3>
+                        <p className="text-xs text-slate-600 mt-1">Recommended</p>
+                      </div>
+                      <Badge className="bg-teal-600 text-white">Recommended</Badge>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Load all items with suppliers and part numbers into the Quick Create form. Edit and customize before sending.
+                    </p>
+                    <ul className="text-xs text-slate-600 space-y-2 mb-4">
+                      <li>✓ Auto-loads suppliers and part numbers</li>
+                      <li>✓ Full customization available</li>
+                      <li>✓ Review before sending</li>
+                      <li>✓ Professional email templates</li>
+                    </ul>
+                    <div className="flex items-center gap-2 text-teal-600 font-semibold text-sm group-hover:gap-3 transition-all">
+                      Start <ArrowRight className="h-4 w-4" />
+                    </div>
+                  </button>
+
+                  {/* Legacy Option */}
+                  <button
+                    onClick={handleStartLegacy}
+                    className="p-6 border-2 border-slate-200 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition-all text-left group"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg text-slate-900">📋 Direct Creation</h3>
+                        <p className="text-xs text-slate-600 mt-1">Legacy method</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Directly create quote requests without the full form. Faster for experienced users.
+                    </p>
+                    <ul className="text-xs text-slate-600 space-y-2 mb-4">
+                      <li>✓ Quick creation</li>
+                      <li>✓ Simple confirmation</li>
+                      <li>✓ Instant sending</li>
+                      <li>• No customization</li>
+                    </ul>
+                    <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm group-hover:gap-3 transition-all">
+                      Start <ArrowRight className="h-4 w-4" />
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Review (Legacy Mode) */}
+            {step === 2 && selectedMode === 'legacy' && (
+              <div className="space-y-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-blue-900">Direct Quote Request Creation</p>
+                    <p className="text-sm text-blue-800 mt-1">
+                      {selectedParts.length} quote request{selectedParts.length !== 1 ? 's' : ''} will be created and sent to suppliers immediately.
                     </p>
                   </div>
                 </div>
@@ -252,6 +387,13 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
                     </Button>
                   </Dialog.Close>
                   <Button
+                    onClick={() => setStep(1)}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Back
+                  </Button>
+                  <Button
                     onClick={handleCreateQuoteRequests}
                     className="flex-1 bg-teal-600 hover:bg-teal-700"
                     disabled={submitting || selectedParts.length === 0}
@@ -269,8 +411,8 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
               </div>
             )}
 
-            {/* Step 3: Confirmation */}
-            {step === 3 && (
+            {/* Step 3: Confirmation (Legacy Mode) */}
+            {step === 3 && selectedMode === 'legacy' && (
               <div className="space-y-6">
                 <div className="text-center py-6">
                   <div className="flex justify-center mb-4">
