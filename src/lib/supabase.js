@@ -553,6 +553,12 @@ export const dbService = {
     }
     return { data: part, error };
   },
+  
+  // FIX: Add missing createSparePart method
+  async createSparePart(partData) {
+    return handleRequest(supabase.from('spare_parts').insert(partData).select().single());
+  },
+  
   async createSparePartFull(partData, suppliers, machines, equivalents) {
     let partId = null;
     try {
@@ -642,8 +648,7 @@ export const dbService = {
   
   async getMachineDetails(id) {
     const { data, error } = await handleRequest(supabase.from('machines')
-      .select(`*, building:buildings(name), warehouse:warehouses(name), downtime_events(*, technician:users(full_name)), part_associations(*, part:spare_parts(*))`)
-      .eq('id', id)
+      .select(`*, building:buildings(name), warehouse:warehouses(name), downtime_events(*, technician:users(full_name)), part_associations(*, part:spare_parts(*))`)     .eq('id', id)
       .single());
     
     if (data && data.downtime_events) {
