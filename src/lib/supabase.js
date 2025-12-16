@@ -648,7 +648,8 @@ export const dbService = {
   
   async getMachineDetails(id) {
     const { data, error } = await handleRequest(supabase.from('machines')
-      .select(`*, building:buildings(name), warehouse:warehouses(name), downtime_events(*, technician:users(full_name)), part_associations(*, part:spare_parts(*))`)     .eq('id', id)
+      .select(`*, building:buildings(name), warehouse:warehouses(name), downtime_events(*, technician:users(full_name)), part_associations(*, part:spare_parts(*))`)
+      .eq('id', id)
       .single());
     
     if (data && data.downtime_events) {
@@ -840,3 +841,6 @@ export const dbService = {
   }
   // #endregion
 };
+
+// Export supabase instance
+export { supabase };
