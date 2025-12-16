@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, FileText, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase';
 
 const BOMGenerator = ({ machineId, selectedAssembly, onPartSelect }) => {
   const [bomData, setBomData] = useState([]);
