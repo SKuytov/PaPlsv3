@@ -171,8 +171,11 @@ const MachineCatalogSidebar = ({ machineId, machineName, userRole }) => {
   // Brand color - customize here
   const BRAND_COLOR = 'rgba(59, 130, 246, 0.2)'; // Your brand primary with transparency
 
-  // Check if user is admin
-  const isAdmin = ['God Admin', 'Admin', 'Technical Director'].includes(userRole);
+  // ================================================================
+  // Check if user is admin - updated for your roles table
+  // Support: God Admin, Technical Director, Head Technician
+  // ================================================================
+  const isAdmin = ['God Admin', 'Technical Director', 'Head Technician'].includes(userRole);
 
   useEffect(() => {
     loadCatalogData();
