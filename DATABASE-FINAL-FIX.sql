@@ -1,5 +1,5 @@
 -- ============================================
--- DATABASE FINAL FIX SCRIPT
+-- DATABASE FINAL FIX SCRIPT - CORRECTED
 -- ============================================
 -- Copy ALL of this and run in Supabase SQL Editor
 -- This will:
@@ -19,7 +19,7 @@ DROP TABLE IF EXISTS machine_assemblies CASCADE;
 -- STEP 2: Create machine_assemblies table
 -- ============================================
 CREATE TABLE machine_assemblies (
-  id BIGINT PRIMARY KEY DEFAULT gen_random_bigint(),
+  id BIGSERIAL PRIMARY KEY,
   machine_id UUID NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
@@ -31,7 +31,7 @@ CREATE TABLE machine_assemblies (
 CREATE INDEX idx_machine_assemblies_machine_id ON machine_assemblies(machine_id);
 
 COMMENT ON TABLE machine_assemblies IS 'Main assemblies for machines';
-COMMENT ON COLUMN machine_assemblies.id IS 'Unique assembly ID';
+COMMENT ON COLUMN machine_assemblies.id IS 'Unique assembly ID (auto-incrementing)';
 COMMENT ON COLUMN machine_assemblies.machine_id IS 'Reference to machines table';
 COMMENT ON COLUMN machine_assemblies.name IS 'Assembly name (e.g., Spindle System)';
 COMMENT ON COLUMN machine_assemblies.position IS 'Display order';
@@ -40,7 +40,7 @@ COMMENT ON COLUMN machine_assemblies.position IS 'Display order';
 -- STEP 3: Create machine_sub_assemblies table
 -- ============================================
 CREATE TABLE machine_sub_assemblies (
-  id BIGINT PRIMARY KEY DEFAULT gen_random_bigint(),
+  id BIGSERIAL PRIMARY KEY,
   assembly_id BIGINT NOT NULL REFERENCES machine_assemblies(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
@@ -52,6 +52,7 @@ CREATE TABLE machine_sub_assemblies (
 CREATE INDEX idx_sub_assemblies_assembly_id ON machine_sub_assemblies(assembly_id);
 
 COMMENT ON TABLE machine_sub_assemblies IS 'Sub-assemblies within main assemblies';
+COMMENT ON COLUMN machine_sub_assemblies.id IS 'Unique sub-assembly ID (auto-incrementing)';
 COMMENT ON COLUMN machine_sub_assemblies.assembly_id IS 'Reference to machine_assemblies';
 COMMENT ON COLUMN machine_sub_assemblies.name IS 'Sub-assembly name (e.g., Bearings)';
 
@@ -59,7 +60,7 @@ COMMENT ON COLUMN machine_sub_assemblies.name IS 'Sub-assembly name (e.g., Beari
 -- STEP 4: Create assembly_parts table (BOM)
 -- ============================================
 CREATE TABLE assembly_parts (
-  id BIGINT PRIMARY KEY DEFAULT gen_random_bigint(),
+  id BIGSERIAL PRIMARY KEY,
   assembly_id BIGINT NOT NULL REFERENCES machine_assemblies(id) ON DELETE CASCADE,
   sub_assembly_id BIGINT REFERENCES machine_sub_assemblies(id) ON DELETE SET NULL,
   part_id UUID NOT NULL REFERENCES spare_parts(id) ON DELETE CASCADE,
@@ -75,6 +76,7 @@ CREATE INDEX idx_assembly_parts_sub_assembly_id ON assembly_parts(sub_assembly_i
 CREATE INDEX idx_assembly_parts_part_id ON assembly_parts(part_id);
 
 COMMENT ON TABLE assembly_parts IS 'Bill of Materials (BOM) - links parts to assemblies';
+COMMENT ON COLUMN assembly_parts.id IS 'Unique BOM entry ID (auto-incrementing)';
 COMMENT ON COLUMN assembly_parts.assembly_id IS 'Reference to assembly';
 COMMENT ON COLUMN assembly_parts.sub_assembly_id IS 'Reference to sub-assembly (optional)';
 COMMENT ON COLUMN assembly_parts.part_id IS 'Reference to spare_parts';
