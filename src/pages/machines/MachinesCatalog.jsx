@@ -57,7 +57,7 @@ const MachinesCatalogPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const { data, error: queryError } = await dbService.query('machines');
+      const { data, error: queryError } = await dbService.getMachines({}, 0, 1000);
       if (queryError) throw queryError;
       setMachines(data || []);
     } catch (err) {
