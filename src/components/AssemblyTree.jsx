@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Package, Box, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase';
 
 const AssemblyTree = ({ machineId, onAssemblySelect, onPartSelect, selectedAssembly }) => {
   const [assemblies, setAssemblies] = useState([]);
