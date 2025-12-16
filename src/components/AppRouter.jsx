@@ -11,6 +11,7 @@ import Dashboard from '@/pages/Dashboard';
 import ExecutiveOverview from '@/components/dashboards/ExecutiveOverview';
 import SpareParts from '@/components/modules/SpareParts';
 import Machines from '@/components/modules/Machines';
+import MachinesCatalogPage from '@/pages/machines/MachinesCatalog';
 import Suppliers from '@/components/modules/Suppliers';
 import Orders from '@/components/modules/Orders';
 import Reports from '@/components/modules/Reports';
@@ -94,6 +95,12 @@ const AppRouter = () => {
       <Route path="/machines" element={
         <PrivateRoute>
           <Machines />
+        </PrivateRoute>
+      } />
+
+      <Route path="/catalogue" element={
+        <PrivateRoute>
+          <MachinesCatalogPage />
         </PrivateRoute>
       } />
 
