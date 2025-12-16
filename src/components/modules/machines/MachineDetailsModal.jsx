@@ -14,9 +14,12 @@ import { dbService } from '@/lib/supabase';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { formatCurrency } from '@/utils/calculations';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
+import MachineCatalogSidebar from './MachineCatalogSidebar';
 import TransactionDetailsModal from './TransactionDetailsModal';
 
 const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
+  const { userRole } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [transactions, setTransactions] = useState([]);
   const [machineAssemblies, setMachineAssemblies] = useState([]); // Parts currently on machine
@@ -139,11 +142,12 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4 text-xs sm:text-sm">
+            <TabsList className="grid w-full grid-cols-5 text-xs sm:text-sm">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="info">Info</TabsTrigger>
               <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
               <TabsTrigger value="cost">Cost</TabsTrigger>
+              <TabsTrigger value="catalog">Catalogue</TabsTrigger>
             </TabsList>
 
             {/* === OVERVIEW TAB === */}
@@ -462,6 +466,15 @@ const MachineDetailsModal = ({ machine, open, onOpenChange }) => {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* === MACHINES CATALOGUE TAB (NEW) === */}
+            <TabsContent value="catalog" className="space-y-4">
+              <MachineCatalogSidebar
+                machineId={machine.id}
+                machineName={machine.name}
+                userRole={userRole?.name}
+              />
             </TabsContent>
           </Tabs>
 
