@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle2, AlertCircle, Zap } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase';
 
 const PartDetailPanel = ({ part, onClose }) => {
   const [machineUsage, setMachineUsage] = useState([]);
