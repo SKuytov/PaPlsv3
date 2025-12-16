@@ -68,15 +68,8 @@ const AppRouter = () => {
   };
 
   return (
-<Route path="/machinery" element={
-  <PrivateRoute>
-    <EnhancedMachineCatalogueUI />
-  </PrivateRoute>
-} />
-    
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-   
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
@@ -108,6 +101,13 @@ const AppRouter = () => {
       <Route path="/catalogue" element={
         <PrivateRoute>
           <MachinesCatalogPage />
+        </PrivateRoute>
+      } />
+
+      {/* ✅ NEW MACHINERY CATALOGUE ROUTE */}
+      <Route path="/machinery" element={
+        <PrivateRoute>
+          <EnhancedMachineCatalogueUI />
         </PrivateRoute>
       } />
 
