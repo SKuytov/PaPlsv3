@@ -11,7 +11,6 @@ import Dashboard from '@/pages/Dashboard';
 import ExecutiveOverview from '@/components/dashboards/ExecutiveOverview';
 import SpareParts from '@/components/modules/SpareParts';
 import Machines from '@/components/modules/Machines';
-import MachinesCatalogPage from '@/pages/machines/MachinesCatalog';
 import Suppliers from '@/components/modules/Suppliers';
 import Orders from '@/components/modules/Orders';
 import Reports from '@/components/modules/Reports';
@@ -21,7 +20,6 @@ import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import QuotesDashboard from '@/components/modules/quotes/QuotesDashboard';
 import WelcomeMessage from '@/components/WelcomeMessage';
-import EnhancedMachineCatalogueUI from '@/components/EnhancedMachineCatalogueUI';
 
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
@@ -70,6 +68,7 @@ const AppRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+   
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
@@ -95,19 +94,6 @@ const AppRouter = () => {
       <Route path="/machines" element={
         <PrivateRoute>
           <Machines />
-        </PrivateRoute>
-      } />
-
-      <Route path="/catalogue" element={
-        <PrivateRoute>
-          <MachinesCatalogPage />
-        </PrivateRoute>
-      } />
-
-      {/* ✅ NEW MACHINERY CATALOGUE ROUTE */}
-      <Route path="/machinery" element={
-        <PrivateRoute>
-          <EnhancedMachineCatalogueUI />
         </PrivateRoute>
       } />
 
