@@ -12,12 +12,11 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Search, ChevronRight, Wrench, AlertTriangle
 } from 'lucide-react';
 import { dbService } from '@/lib/supabase';
-import MachineCatalogSidebar from '@/components/modules/machines/MachineCatalogSidebar';
+import EnhancedMachineCatalog from '@/components/modules/machines/EnhancedMachineCatalog';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -82,7 +81,7 @@ const MachinesCatalogPage = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <LoadingSpinner message="Loading machines..." />
+        <LoadingSpinner message="Loading catalogue..." />
       </div>
     );
   }
@@ -92,8 +91,8 @@ const MachinesCatalogPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Machines Catalogue</h1>
-          <p className="text-slate-600 mt-1">Interactive machine diagrams and parts explorer</p>
+          <h1 className="text-3xl font-bold text-slate-900">Industrial Spare Parts Catalogue</h1>
+          <p className="text-slate-600 mt-1">Multi-level assembly system with interactive diagrams</p>
         </div>
         <Badge variant="outline" className="text-sm">
           <Wrench className="w-4 h-4 mr-2" />
@@ -117,7 +116,7 @@ const MachinesCatalogPage = () => {
       )}
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-220px)]">
         {/* Left Sidebar - Machine Selector */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           {/* Search */}
@@ -144,7 +143,7 @@ const MachinesCatalogPage = () => {
                   onClick={() => setSelectedMachineId(machine.id)}
                   className={`w-full text-left px-3 py-2 rounded-md transition-all ${
                     selectedMachineId === machine.id
-                      ? 'bg-teal-100 border-l-4 border-teal-600 text-teal-900 font-semibold'
+                      ? 'bg-gradient-to-r from-blue-100 to-blue-50 border-l-4 border-blue-600 text-blue-900 font-semibold shadow-sm'
                       : 'hover:bg-slate-100 text-slate-900'
                   }`}
                 >
@@ -164,7 +163,7 @@ const MachinesCatalogPage = () => {
 
           {/* Info Card */}
           {selectedMachine && (
-            <Card className="border-teal-200 bg-teal-50">
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-25">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Selected Machine</CardTitle>
               </CardHeader>
@@ -186,40 +185,20 @@ const MachinesCatalogPage = () => {
           )}
         </div>
 
-        {/* Right Content - Catalog View */}
+        {/* Right Content - Enhanced Catalog */}
         <div className="lg:col-span-3 flex flex-col">
           {selectedMachine ? (
-            <Card className="flex-1 flex flex-col border-slate-200 shadow-lg">
-              <CardHeader className="border-b pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Wrench className="w-5 h-5 text-teal-600" />
-                      {selectedMachine.name}
-                    </CardTitle>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Interactive diagram with clickable parts
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-4">
-                {/* Full-Screen Catalog Component */}
-                <div className="h-full overflow-auto rounded-lg border border-slate-200 bg-white">
-                  <MachineCatalogSidebar
-                    machineId={selectedMachine.id}
-                    machineName={selectedMachine.name}
-                    userRole={userRole?.name}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <EnhancedMachineCatalog
+              machineId={selectedMachine.id}
+              machineName={selectedMachine.name}
+              userRole={userRole?.name}
+            />
           ) : (
-            <Card className="flex-1 flex items-center justify-center">
+            <Card className="flex-1 flex items-center justify-center border-2 border-dashed">
               <div className="text-center text-slate-500">
                 <Wrench className="w-12 h-12 mx-auto mb-4 opacity-30" />
                 <p>No machine selected</p>
-                <p className="text-sm mt-1">Select a machine from the list to view its catalog</p>
+                <p className="text-sm mt-1">Select a machine from the list to view its complete catalogue</p>
               </div>
             </Card>
           )}
