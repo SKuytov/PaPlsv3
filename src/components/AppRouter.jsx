@@ -21,6 +21,7 @@ import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import QuotesDashboard from '@/components/modules/quotes/QuotesDashboard';
 import WelcomeMessage from '@/components/WelcomeMessage';
+import EnhancedMachineCatalogueUI from '@/components/EnhancedMachineCatalogueUI';
 
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
@@ -67,6 +68,12 @@ const AppRouter = () => {
   };
 
   return (
+<Route path="/machinery" element={
+  <PrivateRoute>
+    <EnhancedMachineCatalogueUI />
+  </PrivateRoute>
+} />
+    
     <Routes>
       <Route path="/login" element={<LoginPage />} />
    
