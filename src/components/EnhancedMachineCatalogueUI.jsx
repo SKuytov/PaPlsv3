@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Package, Grid, Layers, Settings, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase';
 import AssemblyTree from './AssemblyTree';
 import BOMGenerator from './BOMGenerator';
 import PartDetailPanel from './PartDetailPanel';
