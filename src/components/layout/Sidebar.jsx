@@ -94,6 +94,8 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
               Open Documentation
             </NavLink>
           </div>
+
+<NavLink to="/machinery">Machinery Catalogue</NavLink>
           
           <button 
             onClick={signOut}
