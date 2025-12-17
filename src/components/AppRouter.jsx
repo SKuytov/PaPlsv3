@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import RFIDLoginPage from '@/pages/RFIDLoginPage';
 import Sidebar from '@/components/layout/Sidebar';
 import TopNavigation from '@/components/layout/TopNavigation';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -68,6 +69,8 @@ const AppRouter = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* RFID Technician Login - Does NOT require authentication */}
+      <Route path="/technician-login" element={<RFIDLoginPage />} />
    
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
