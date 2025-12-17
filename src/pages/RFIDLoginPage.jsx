@@ -66,7 +66,7 @@ const RFIDLoginPage = () => {
                 Technician Session Active
               </p>
               <p className="text-xs text-blue-700 mt-1">
-                ID: {technicianInfo?.id} | Card: {technicianInfo?.rfid_card_id}
+                Name: {technicianInfo?.name} | Card: {technicianInfo?.rfid_card_id}
               </p>
             </div>
           </CardContent>
@@ -88,6 +88,7 @@ const RFIDLoginPage = () => {
             <MaintenanceScanner 
               onLogout={handleLogout}
               technicianName={technicianInfo?.name}
+              technicianId={technicianInfo?.id}
             />
           </TabsContent>
 
@@ -96,6 +97,7 @@ const RFIDLoginPage = () => {
             <MaintenanceSpareParts 
               onLogout={handleLogout}
               technicianName={technicianInfo?.name}
+              technicianId={technicianInfo?.id}
             />
           </TabsContent>
         </Tabs>
