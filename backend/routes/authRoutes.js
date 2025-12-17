@@ -30,8 +30,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  *     "name": "John Doe",
  *     "email": "john@example.com",
  *     "rfid_card_id": "00001234567890"
- *   },
- *   "session": { ... } // Supabase session
+ *   }
  * }
  */
 router.post('/auth/rfid-login', async (req, res) => {
@@ -63,28 +62,37 @@ router.post('/auth/rfid-login', async (req, res) => {
       });
     }
 
-    // Step 2: Look up technician
+    // Step 2: Look up technician and join with roles
     const { data: technician, error: techError } = await supabase
       .from('users')
       .select(`
         id,
         email,
         full_name,
+        role_id,
         role:roles(id, name)
       `)
       .eq('id', cardRecord.user_id)
-      .eq('role:roles.name', 'technician')
       .single();
 
     if (techError || !technician) {
-      console.warn(`[RFID Auth] Technician not found or wrong role: ${cardRecord.user_id}`);
+      console.warn(`[RFID Auth] User not found: ${cardRecord.user_id}`);
       return res.status(401).json({
-        error: 'User not found or does not have technician role',
+        error: 'User not found',
         code: 'USER_NOT_FOUND'
       });
     }
 
-    // Step 3: Log successful RFID login attempt
+    // Step 3: Verify user has technician role
+    if (!technician.role || technician.role.name !== 'technician') {
+      console.warn(`[RFID Auth] User does not have technician role: ${cardRecord.user_id}`);
+      return res.status(401).json({
+        error: 'User does not have technician role',
+        code: 'INVALID_ROLE'
+      });
+    }
+
+    // Step 4: Log successful RFID login attempt
     const { error: auditError } = await supabase
       .from('rfid_login_audit')
       .insert({
@@ -100,22 +108,8 @@ router.post('/auth/rfid-login', async (req, res) => {
       // Don't fail the request, just warn
     }
 
-    // Step 4: Create Supabase session token
-    // Since this is a backend route, we'll generate a JWT session
-    // In production, you might want to use Supabase's signInWithPassword or similar
-    
-    const { data: sessionData, error: sessionError } = await supabase.auth.admin.createSession({
-      user_id: technician.id,
-      // Note: This creates a session but the client still needs to handle session
-      // For this use case, we'll return the user info and let frontend handle auth state
-    });
-
-    if (sessionError) {
-      console.warn('[RFID Auth] Failed to create session:', sessionError);
-      // Don't fail, just return user info
-    }
-
-    // Step 5: Return success response
+    // Step 5: Return success response with technician info
+    // Frontend will handle setting up the Supabase session
     res.status(200).json({
       success: true,
       technician: {
@@ -125,7 +119,6 @@ router.post('/auth/rfid-login', async (req, res) => {
         rfid_card_id: trimmedCardId,
         role: technician.role?.name || 'technician'
       },
-      session: sessionData?.session || null,
       message: `Welcome ${technician.full_name}`
     });
 
@@ -144,7 +137,7 @@ router.post('/auth/rfid-login', async (req, res) => {
  * 
  * Log out technician and record logout attempt
  */
-router.post('/auth/rfid-logout', async (req, res) => {
+router.post('/api/auth/rfid-logout', async (req, res) => {
   try {
     const { user_id, rfid_card_id } = req.body;
 
@@ -166,9 +159,6 @@ router.post('/auth/rfid-logout', async (req, res) => {
         });
     }
 
-    // Sign out
-    await supabase.auth.admin.signOut(user_id);
-
     res.status(200).json({
       success: true,
       message: 'Logged out successfully'
@@ -189,7 +179,7 @@ router.post('/auth/rfid-logout', async (req, res) => {
  * Admin endpoint to list all RFID cards (for management)
  * Requires admin authentication
  */
-router.get('/auth/rfid-cards', async (req, res) => {
+router.get('/api/auth/rfid-cards', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('rfid_cards')
