@@ -30,6 +30,12 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const { toast } = useToast();
    const { user } = useAuth();
    
+   // DEBUG LOGGING
+   console.log('[MaintenanceScanner] Props received:');
+   console.log('  - technicianName:', technicianName);
+   console.log('  - technicianId:', technicianId);
+   console.log('  - user?.id:', user?.id);
+   
    // --- State Management ---
    const [mode, setMode] = useState('camera'); // 'camera' | 'manual'
    const [scanStep, setScanStep] = useState('scan'); // 'scan' | 'menu' | 'transaction'
@@ -60,6 +66,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
    // Determine which user ID to use for performed_by
    const performedByUserId = technicianId || user?.id;
+   
+   console.log('[MaintenanceScanner] performedByUserId:', performedByUserId);
 
    // Fetch Machines for dropdown
    useEffect(() => {
@@ -230,9 +238,12 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       }
       
       if (!performedByUserId) {
+         console.error('[MaintenanceScanner] No performedByUserId available!');
          toast({ variant: "destructive", title: "Error", description: "No technician logged in" });
          return;
       }
+      
+      console.log('[MaintenanceScanner] Creating transaction with performed_by:', performedByUserId);
       
       setLoading(true);
       try {
@@ -250,7 +261,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          }
 
          // Insert transaction - ALWAYS "usage" type with technician ID
-         const { error: txError } = await supabase.from('inventory_transactions').insert({
+         const txData = {
             part_id: activePart.part.id,
             machine_id: txMachineId === 'none' ? null : txMachineId,
             transaction_type: 'usage', // TECHNICIAN: ALWAYS USAGE
@@ -259,7 +270,11 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             notes: txNotes,
             performed_by: performedByUserId,  // ✅ NOW USING TECHNICIAN ID FROM RFID LOGIN
             performed_by_role: 'technician' // Track that this was a technician
-         });
+         };
+         
+         console.log('[MaintenanceScanner] Transaction data:', txData);
+         
+         const { error: txError } = await supabase.from('inventory_transactions').insert(txData);
 
          if (txError) throw txError;
 
