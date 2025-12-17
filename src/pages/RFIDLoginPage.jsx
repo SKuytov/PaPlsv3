@@ -18,6 +18,8 @@ const RFIDLoginPage = () => {
 
   const handleLoginSuccess = async (technician) => {
     console.log('[RFIDLoginPage] Login successful:', technician);
+    console.log('[RFIDLoginPage] Technician ID:', technician?.id);
+    console.log('[RFIDLoginPage] Technician Name:', technician?.name);
     setTechnicianInfo(technician);
     setIsLoggedIn(true);
   };
@@ -66,7 +68,7 @@ const RFIDLoginPage = () => {
                 Technician Session Active
               </p>
               <p className="text-xs text-blue-700 mt-1">
-                Name: {technicianInfo?.name} | Card: {technicianInfo?.rfid_card_id}
+                Name: {technicianInfo?.name} | ID: {technicianInfo?.id} | Card: {technicianInfo?.rfid_card_id}
               </p>
             </div>
           </CardContent>
@@ -85,20 +87,30 @@ const RFIDLoginPage = () => {
 
           {/* Scanner Tab */}
           <TabsContent value="scanner" className="mt-0">
-            <MaintenanceScanner 
-              onLogout={handleLogout}
-              technicianName={technicianInfo?.name}
-              technicianId={technicianInfo?.id}
-            />
+            {technicianInfo?.id && (
+              <MaintenanceScanner 
+                onLogout={handleLogout}
+                technicianName={technicianInfo?.name}
+                technicianId={technicianInfo?.id}
+              />
+            )}
+            {!technicianInfo?.id && (
+              <div className="text-center text-red-600 font-bold">Error: No technician ID found</div>
+            )}
           </TabsContent>
 
           {/* Spare Parts Tab */}
           <TabsContent value="parts" className="mt-0">
-            <MaintenanceSpareParts 
-              onLogout={handleLogout}
-              technicianName={technicianInfo?.name}
-              technicianId={technicianInfo?.id}
-            />
+            {technicianInfo?.id && (
+              <MaintenanceSpareParts 
+                onLogout={handleLogout}
+                technicianName={technicianInfo?.name}
+                technicianId={technicianInfo?.id}
+              />
+            )}
+            {!technicianInfo?.id && (
+              <div className="text-center text-red-600 font-bold">Error: No technician ID found</div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
