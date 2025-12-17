@@ -1,4 +1,5 @@
 import express from 'express';
+import https from 'https';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
@@ -237,27 +238,71 @@ app.use((req, res) => {
 });
 
 // ============================================================
-// START SERVER
+// START SERVER (WITH HTTPS SUPPORT)
 // ============================================================
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`✅ Backend server running on port ${PORT}`);
-  console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
-  console.log(`🏆 API ready at http://localhost:${PORT}/api`);
-  console.log(`\n📋 Available Endpoints:`);
-  console.log(`   GET    /api/health                          - Health check`);
-  console.log(`   POST   /api/parts                           - Create new part`);
-  console.log(`   GET    /api/parts?q=search                  - Search parts`);
-  console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
-  console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
-  console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
-  console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
-  console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
-  console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
-  console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
-  console.log(`${'='.repeat(60)}\n`);
-});
+const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
+
+// Try to load SSL certificates
+let httpsOptions = null;
+const certPath = '/etc/letsencrypt/live/partpulse.eu/fullchain.pem';
+const keyPath = '/etc/letsencrypt/live/partpulse.eu/privkey.pem';
+
+if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+  try {
+    httpsOptions = {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath)
+    };
+    console.log(`✅ SSL certificates loaded from Let's Encrypt`);
+  } catch (err) {
+    console.warn(`⚠️  Could not load SSL certificates: ${err.message}`);
+    console.warn(`⚠️  Backend will run on HTTP`);
+  }
+}
+
+// Start server
+if (httpsOptions && protocol === 'https') {
+  https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`✅ Backend server running on HTTPS port ${PORT}`);
+    console.log(`🔒 SSL Certificate: Let's Encrypt`);
+    console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
+    console.log(`🏆 API ready at https://partpulse.eu:${PORT}/api`);
+    console.log(`\n📋 Available Endpoints:`);
+    console.log(`   GET    /api/health                          - Health check`);
+    console.log(`   POST   /api/parts                           - Create new part`);
+    console.log(`   GET    /api/parts?q=search                  - Search parts`);
+    console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
+    console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
+    console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
+    console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
+    console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
+    console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
+    console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
+    console.log(`${'='.repeat(60)}\n`);
+  });
+} else {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`✅ Backend server running on HTTP port ${PORT}`);
+    console.log(`⚠️  WARNING: Running without SSL! Use HTTPS in production!`);
+    console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
+    console.log(`🏆 API ready at http://partpulse.eu:${PORT}/api`);
+    console.log(`\n📋 Available Endpoints:`);
+    console.log(`   GET    /api/health                          - Health check`);
+    console.log(`   POST   /api/parts                           - Create new part`);
+    console.log(`   GET    /api/parts?q=search                  - Search parts`);
+    console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
+    console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
+    console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
+    console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
+    console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
+    console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
+    console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
+    console.log(`${'='.repeat(60)}\n`);
+  });
+}
 
 export default app;
