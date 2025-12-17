@@ -63,28 +63,37 @@ router.post('/auth/rfid-login', async (req, res) => {
       });
     }
 
-    // Step 2: Look up technician
+    // Step 2: Look up technician and join with roles
     const { data: technician, error: techError } = await supabase
       .from('users')
       .select(`
         id,
         email,
         full_name,
+        role_id,
         role:roles(id, name)
       `)
       .eq('id', cardRecord.user_id)
-      .eq('role:roles.name', 'technician')
       .single();
 
     if (techError || !technician) {
-      console.warn(`[RFID Auth] Technician not found or wrong role: ${cardRecord.user_id}`);
+      console.warn(`[RFID Auth] User not found: ${cardRecord.user_id}`);
       return res.status(401).json({
-        error: 'User not found or does not have technician role',
+        error: 'User not found',
         code: 'USER_NOT_FOUND'
       });
     }
 
-    // Step 3: Log successful RFID login attempt
+    // Step 3: Verify user has technician role
+    if (!technician.role || technician.role.name !== 'technician') {
+      console.warn(`[RFID Auth] User does not have technician role: ${cardRecord.user_id}`);
+      return res.status(401).json({
+        error: 'User does not have technician role',
+        code: 'INVALID_ROLE'
+      });
+    }
+
+    // Step 4: Log successful RFID login attempt
     const { error: auditError } = await supabase
       .from('rfid_login_audit')
       .insert({
@@ -100,7 +109,7 @@ router.post('/auth/rfid-login', async (req, res) => {
       // Don't fail the request, just warn
     }
 
-    // Step 4: Create Supabase session token
+    // Step 5: Create Supabase session token
     // Since this is a backend route, we'll generate a JWT session
     // In production, you might want to use Supabase's signInWithPassword or similar
     
@@ -115,7 +124,7 @@ router.post('/auth/rfid-login', async (req, res) => {
       // Don't fail, just return user info
     }
 
-    // Step 5: Return success response
+    // Step 6: Return success response
     res.status(200).json({
       success: true,
       technician: {
