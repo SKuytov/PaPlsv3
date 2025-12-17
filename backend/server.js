@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import quoteRoutes from './routes/quoteRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -92,7 +93,9 @@ app.get('/api/health', (req, res) => {
     services: {
       express: 'running',
       multer: 'configured',
-      quote_api: 'active'
+      quote_api: 'active',
+      auth_api: 'active',
+      rfid_auth: 'enabled'
     }
   });
 });
@@ -102,6 +105,7 @@ app.get('/api/health', (req, res) => {
 // ============================================================
 
 app.use('/api', quoteRoutes);
+app.use('/api', authRoutes);
 
 // ============================================================
 // LEGACY DOCUMENT ENDPOINTS (KEPT FOR COMPATIBILITY)
@@ -246,6 +250,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GET    /api/health                          - Health check`);
   console.log(`   POST   /api/parts                           - Create new part`);
   console.log(`   GET    /api/parts?q=search                  - Search parts`);
+  console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
+  console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
+  console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
   console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
   console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
   console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
