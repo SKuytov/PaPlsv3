@@ -30,7 +30,8 @@ const Scanner = ({
    onScanComplete,
    selectedMachineId,
    batchMode = false,
-   onBatchAdd
+   onBatchAdd,
+   technicianId // NEW: RFID technician ID
 }) => {
    const { toast } = useToast();
    const { user } = useAuth();
@@ -63,6 +64,9 @@ const Scanner = ({
    const [txNotes, setTxNotes] = useState('');
    const [machines, setMachines] = useState([]);
    const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+
+   // Determine which user ID to use for performed_by
+   const performedByUserId = technicianId || user?.id;
 
    // Fetch Machines for dropdown
    useEffect(() => {
@@ -186,7 +190,7 @@ const Scanner = ({
               setTimeout(() => {
                   scanActiveRef.current = true;
                   setLoading(false);
-              }, 500);
+               }, 500);
           } else {
               // Single Scan Mode: Go to Menu
               setActivePart(scanData);
@@ -301,6 +305,11 @@ const Scanner = ({
          return;
       }
       
+      if (!performedByUserId) {
+         toast({ variant: "destructive", title: "Error", description: "No technician logged in" });
+         return;
+      }
+      
       setLoading(true);
       try {
          const isUsage = txType === 'usage';
@@ -317,7 +326,7 @@ const Scanner = ({
             return;
          }
 
-         // Insert transaction
+         // Insert transaction with performed_by set to the RFID technician ID
          const { error: txError } = await supabase.from('inventory_transactions').insert({
             part_id: activePart.part.id,
             machine_id: txMachineId === 'none' ? null : txMachineId,
@@ -325,7 +334,7 @@ const Scanner = ({
             quantity: quantityChange,
             unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
-            performed_by: user?.id
+            performed_by: performedByUserId  // ✅ NOW USING TECHNICIAN ID FROM RFID LOGIN
          });
 
          if (txError) throw txError;
