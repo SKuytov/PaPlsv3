@@ -18,6 +18,22 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
   const [technicianInfo, setTechnicianInfo] = useState(null);
   const rfidReaderRef = useRef(null);
 
+  // Get API base URL from environment or construct from current domain
+  const getApiUrl = () => {
+    // Priority:
+    // 1. VITE_API_URL environment variable (if set)
+    // 2. Same domain as frontend on port 5000
+    // 3. Fallback to localhost
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    // Get current domain and use port 5000
+    const domain = window.location.hostname;
+    return `http://${domain}:5000`;
+  };
+
+  const apiUrl = getApiUrl();
+
   useEffect(() => {
     // Initialize RFID reader
     const rfidReader = new RFIDReader({
@@ -63,7 +79,8 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
 
     try {
       // Call backend endpoint to verify RFID card and create session
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/rfid-login`, {
+      console.log('[RFIDLogin] Calling API at:', apiUrl);
+      const response = await fetch(`${apiUrl}/api/auth/rfid-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
