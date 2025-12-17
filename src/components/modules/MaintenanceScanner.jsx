@@ -26,7 +26,7 @@ const DEBOUNCE_DELAY_MS = 500;
 const MAX_BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
 
-const MaintenanceScanner = ({ onLogout, technicianName }) => {
+const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const { toast } = useToast();
    const { user } = useAuth();
    
@@ -57,6 +57,9 @@ const MaintenanceScanner = ({ onLogout, technicianName }) => {
    const [txNotes, setTxNotes] = useState('');
    const [machines, setMachines] = useState([]);
    const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+
+   // Determine which user ID to use for performed_by
+   const performedByUserId = technicianId || user?.id;
 
    // Fetch Machines for dropdown
    useEffect(() => {
@@ -226,6 +229,11 @@ const MaintenanceScanner = ({ onLogout, technicianName }) => {
          return;
       }
       
+      if (!performedByUserId) {
+         toast({ variant: "destructive", title: "Error", description: "No technician logged in" });
+         return;
+      }
+      
       setLoading(true);
       try {
          // TECHNICIAN: Always USAGE (negative quantity)
@@ -241,7 +249,7 @@ const MaintenanceScanner = ({ onLogout, technicianName }) => {
             return;
          }
 
-         // Insert transaction - ALWAYS "usage" type
+         // Insert transaction - ALWAYS "usage" type with technician ID
          const { error: txError } = await supabase.from('inventory_transactions').insert({
             part_id: activePart.part.id,
             machine_id: txMachineId === 'none' ? null : txMachineId,
@@ -249,7 +257,7 @@ const MaintenanceScanner = ({ onLogout, technicianName }) => {
             quantity: quantityChange,
             unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
-            performed_by: user?.id,
+            performed_by: performedByUserId,  // ✅ NOW USING TECHNICIAN ID FROM RFID LOGIN
             performed_by_role: 'technician' // Track that this was a technician
          });
 
