@@ -130,7 +130,7 @@ window.fetch = function(...args) {
 			return response;
 		})
 		.catch(error => {
-			if (!url.match(/\.html?$/i)) {
+			if (!url.match(/\\.html?$/i)) {
 				console.error(error);
 			}
 
@@ -254,6 +254,9 @@ export default defineConfig({
 		},
 	},
 	build: {
+		copybundle: true,
+		outDir: 'dist',
+		copyPublicDir: true,
 		rollupOptions: {
 			external: [
 				'@babel/parser',
