@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { AlertCircle, Lock, Loader2, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Lock, Loader2, CheckCircle2, Globe } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import RFIDReader from '@/utils/rfidReader';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
   const { toast } = useToast();
+  const { t, language, setLanguage } = useTranslation();
   const [isReading, setIsReading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [cardId, setCardId] = useState('');
@@ -68,7 +70,7 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
     setIsReading(false);
     toast({
       variant: 'destructive',
-      title: 'RFID Read Error',
+      title: t('errors.error') || 'RFID Read Error',
       description: err.message
     });
   };
@@ -93,7 +95,7 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed');
+        throw new Error(data.error || t('errors.error'));
       }
 
       // Success: Store session/token if provided
@@ -105,8 +107,8 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
       setTechnicianInfo(data.technician);
       
       toast({
-        title: 'Login Successful',
-        description: `Welcome ${data.technician.name}!`,
+        title: t('common.success') || 'Success',
+        description: `${t('scanner.title') || 'Welcome'} ${data.technician.name}!`,
         variant: 'default'
       });
 
@@ -117,13 +119,13 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
 
     } catch (err) {
       console.error('[RFIDLogin] Auth error:', err);
-      const errorMsg = err.message || 'Card not recognized. Please try again.';
+      const errorMsg = err.message || t('errors.error') || 'Card not recognized. Please try again.';
       setError(errorMsg);
       setCardId('');
       
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: t('common.error') || 'Error',
         description: errorMsg
       });
 
@@ -138,22 +140,87 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!cardId.trim()) {
-      setError('Please enter a card ID');
+      setError(t('forms.validation.required') || 'Please enter a card ID');
       return;
     }
     await authenticateCard(cardId.trim());
   };
 
+  const translations = {
+    en: {
+      title: 'Technician Login',
+      descriptionScan: 'Hold your RFID card near the reader',
+      descriptionManual: 'Enter your RFID card ID',
+      reading: 'Reading card...',
+      ready: 'Ready to scan',
+      holdCard: 'Hold RFID card near the reader',
+      verifying: 'Verifying card...',
+      cardIdLabel: 'Card ID',
+      cardIdPlaceholder: 'Enter card ID...',
+      login: 'Login',
+      verifyingBtn: 'Verifying...',
+      toggleReader: 'Back to RFID Reader',
+      toggleManual: 'Manual Entry',
+      footer: 'RFID technician authentication system • Connected to Supabase'
+    },
+    bg: {
+      title: 'Вход на техник',
+      descriptionScan: 'Поставете вашата RFID карта близо до четеца',
+      descriptionManual: 'Въведете вашия код на RFID карта',
+      reading: 'Четене на карта...',
+      ready: 'Готово за сканиране',
+      holdCard: 'Поставете RFID карта близо до четеца',
+      verifying: 'Проверка на карта...',
+      cardIdLabel: 'Код на карта',
+      cardIdPlaceholder: 'Въведете код на карта...',
+      login: 'Вход',
+      verifyingBtn: 'Проверка...',
+      toggleReader: 'Назад към RFID четец',
+      toggleManual: 'Ръчно въвеждане',
+      footer: 'Система за RFID автентификация на техници • Свързано със Supabase'
+    }
+  };
+
+  const lang = language === 'bg' ? 'bg' : 'en';
+  const txt = translations[lang];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+      {/* Language Switcher - Top Right */}
+      <div className="absolute top-4 right-4">
+        <div className="flex gap-2 bg-slate-800/50 backdrop-blur-sm rounded-lg p-2 border border-slate-700">
+          <button
+            onClick={() => setLanguage('en')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-all flex items-center gap-1 ${
+              language === 'en'
+                ? 'bg-teal-600 text-white shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            EN
+          </button>
+          <button
+            onClick={() => setLanguage('bg')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
+              language === 'bg'
+                ? 'bg-teal-600 text-white shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            БГ
+          </button>
+        </div>
+      </div>
+
       <Card className="w-full max-w-md shadow-2xl border-slate-700 bg-slate-950">
         <CardHeader className="space-y-3 pb-4">
           <div className="flex items-center justify-center w-12 h-12 rounded-full bg-teal-500/20 mx-auto mb-2">
             <Lock className="w-6 h-6 text-teal-400" />
           </div>
-          <CardTitle className="text-center text-2xl text-slate-100">Technician Login</CardTitle>
+          <CardTitle className="text-center text-2xl text-slate-100">{txt.title}</CardTitle>
           <CardDescription className="text-center text-slate-400">
-            {manualMode ? 'Enter your RFID card ID' : 'Hold your RFID card near the reader'}
+            {manualMode ? txt.descriptionManual : txt.descriptionScan}
           </CardDescription>
         </CardHeader>
 
@@ -174,10 +241,10 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
                   </div>
                 </div>
                 <p className="text-slate-300 font-medium">
-                  {isReading ? 'Reading card...' : 'Ready to scan'}
+                  {isReading ? txt.reading : txt.ready}
                 </p>
                 <p className="text-xs text-slate-500">
-                  Hold RFID card near the reader
+                  {txt.holdCard}
                 </p>
               </div>
 
@@ -191,7 +258,7 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
               {isVerifying && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
                   <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                  <span className="text-sm text-blue-300">Verifying card...</span>
+                  <span className="text-sm text-blue-300">{txt.verifying}</span>
                 </div>
               )}
 
@@ -208,11 +275,11 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
           {manualMode && (
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="card-id" className="text-slate-300">Card ID</Label>
+                <Label htmlFor="card-id" className="text-slate-300">{txt.cardIdLabel}</Label>
                 <Input
                   id="card-id"
                   type="text"
-                  placeholder="Enter card ID..."
+                  placeholder={txt.cardIdPlaceholder}
                   value={cardId}
                   onChange={(e) => setCardId(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-teal-500 focus:ring-teal-500"
@@ -236,10 +303,10 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
                 {isVerifying ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Verifying...
+                    {txt.verifyingBtn}
                   </>
                 ) : (
-                  'Login'
+                  txt.login
                 )}
               </Button>
             </form>
@@ -256,7 +323,7 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
               setCardId('');
             }}
           >
-            {manualMode ? 'Back to RFID Reader' : 'Manual Entry'}
+            {manualMode ? txt.toggleReader : txt.toggleManual}
           </Button>
         </CardContent>
       </Card>
@@ -264,7 +331,7 @@ const RFIDLogin = ({ onLoginSuccess, onLoginError }) => {
       {/* Footer Info */}
       <div className="absolute bottom-4 left-4 right-4">
         <p className="text-xs text-slate-500 text-center">
-          RFID technician authentication system • Connected to Supabase
+          {txt.footer}
         </p>
       </div>
     </div>
