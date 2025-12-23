@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
+import { useTranslation } from '@/hooks/useTranslation';
 import { 
   Search, 
   AlertCircle, 
@@ -11,7 +12,8 @@ import {
   ChevronRight, 
   RefreshCw, 
   Loader2,
-  LogOut 
+  LogOut,
+  Globe
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import ImageWithFallback from '@/components/common/ImageWithFallback';
@@ -20,6 +22,7 @@ import PartDetailsModal from '@/components/modules/spare-parts/PartDetailsModal'
 
 const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
   const { toast } = useToast();
+  const { language, setLanguage } = useTranslation();
   
   const [parts, setParts] = useState([]);
   const [filteredParts, setFilteredParts] = useState([]);
@@ -28,6 +31,67 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
   const [selectedPart, setSelectedPart] = useState(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState('name'); // 'name', 'stock', 'cost'
+
+  // Translation dictionary for technician spare parts
+  const translations = {
+    en: {
+      title: 'Spare Parts Catalog',
+      loggedInAs: 'Logged in as',
+      readOnlyView: 'Read-Only View',
+      logout: 'Logout',
+      searchPlaceholder: 'Search by name, part number, or barcode...',
+      sortBy: 'Sort by',
+      name: 'Name',
+      stock: 'Stock',
+      cost: 'Cost',
+      refresh: 'Refresh',
+      showing: 'Showing',
+      of: 'of',
+      parts: 'parts',
+      loading: 'Loading spare parts...',
+      noPartsFound: 'No parts found',
+      tryDifferentSearch: 'Try a different search',
+      loadingParts: 'Loading parts...',
+      minStock: 'Min Stock',
+      avgCost: 'Avg Cost',
+      outOfStock: 'Out of Stock',
+      lowStock: 'Low Stock',
+      inStock: 'In Stock',
+      viewDetails: 'View Details',
+      errorLoading: 'Error loading spare parts',
+      failedLoadParts: 'Failed to load spare parts'
+    },
+    bg: {
+      title: 'Каталог на резервни части',
+      loggedInAs: 'Вход като',
+      readOnlyView: 'Преглед само за четене',
+      logout: 'Изход',
+      searchPlaceholder: 'Търсене по име, номер на част или баркод...',
+      sortBy: 'Сортирай по',
+      name: 'Име',
+      stock: 'Наличност',
+      cost: 'Цена',
+      refresh: 'Обновяване',
+      showing: 'Показва се',
+      of: 'от',
+      parts: 'части',
+      loading: 'Зареждане на резервни части...',
+      noPartsFound: 'Намерени са 0 части',
+      tryDifferentSearch: 'Опитайте друго търсене',
+      loadingParts: 'Зареждане на части...',
+      minStock: 'Мин. наличност',
+      avgCost: 'Среда. цена',
+      outOfStock: 'Няма наличност',
+      lowStock: 'Ниска наличност',
+      inStock: 'В наличност',
+      viewDetails: 'Преглед детайли',
+      errorLoading: 'Грешка при зареждане',
+      failedLoadParts: 'Неуспешно зареждане на резервни части'
+    }
+  };
+
+  const lang = language === 'bg' ? 'bg' : 'en';
+  const t = translations[lang];
 
   // Fetch all spare parts (read-only for technician)
   useEffect(() => {
@@ -56,8 +120,8 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
       console.error('[MaintenanceSpareParts] Error fetching parts:', error);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load spare parts'
+        title: t.errorLoading,
+        description: t.failedLoadParts
       });
     } finally {
       setLoading(false);
@@ -103,12 +167,12 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
 
   const getStockStatus = (part) => {
     if (part.current_quantity === 0) {
-      return { label: 'Out of Stock', variant: 'destructive', icon: '🔴' };
+      return { label: t.outOfStock, variant: 'destructive', icon: '🔴' };
     }
     if (part.current_quantity <= part.min_stock_level) {
-      return { label: 'Low Stock', variant: 'warning', icon: '🟡' };
+      return { label: t.lowStock, variant: 'warning', icon: '🟡' };
     }
-    return { label: 'In Stock', variant: 'success', icon: '🟢' };
+    return { label: t.inStock, variant: 'success', icon: '🟢' };
   };
 
   return (
@@ -120,21 +184,47 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-2xl text-slate-800 flex items-center gap-2">
-                  📦 Spare Parts Catalog
+                  📦 {t.title}
                 </CardTitle>
                 <p className="text-sm text-slate-500 mt-2">
-                  Logged in as: <span className="font-semibold text-slate-700">{technicianName}</span> (Read-Only View)
+                  {t.loggedInAs}: <span className="font-semibold text-slate-700">{technicianName}</span> ({t.readOnlyView})
                 </p>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                onClick={onLogout}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
+              <div className="flex gap-2">
+                {/* Language Switcher */}
+                <div className="flex gap-1 bg-white rounded-lg p-1 border border-slate-200">
+                  <button
+                    onClick={() => setLanguage('en')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      language === 'en'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    EN
+                  </button>
+                  <button
+                    onClick={() => setLanguage('bg')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      language === 'bg'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    БГ
+                  </button>
+                </div>
+                {/* Logout Button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={onLogout}
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  {t.logout}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
@@ -143,7 +233,7 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
             <div className="relative">
               <Search className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
               <Input
-                placeholder="Search by name, part number, or barcode..."
+                placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-11 bg-slate-50 border-slate-200"
@@ -152,7 +242,7 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
 
             {/* Controls */}
             <div className="flex gap-2 flex-wrap items-center">
-              <span className="text-sm text-slate-600 font-medium">Sort by:</span>
+              <span className="text-sm text-slate-600 font-medium">{t.sortBy}:</span>
               <div className="flex gap-1">
                 {['name', 'stock', 'cost'].map(option => (
                   <Button
@@ -162,9 +252,9 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
                     onClick={() => setSortBy(option)}
                     className="capitalize"
                   >
-                    {option === 'name' && 'Name'}
-                    {option === 'stock' && 'Stock'}
-                    {option === 'cost' && 'Cost'}
+                    {option === 'name' && t.name}
+                    {option === 'stock' && t.stock}
+                    {option === 'cost' && t.cost}
                   </Button>
                 ))}
               </div>
@@ -174,6 +264,7 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
                   size="sm"
                   onClick={fetchParts}
                   disabled={loading}
+                  title={t.refresh}
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -186,7 +277,7 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
 
             {/* Results Summary */}
             <div className="text-sm text-slate-600">
-              Showing <span className="font-semibold text-slate-800">{filteredParts.length}</span> of <span className="font-semibold text-slate-800">{parts.length}</span> parts
+              {t.showing} <span className="font-semibold text-slate-800">{filteredParts.length}</span> {t.of} <span className="font-semibold text-slate-800">{parts.length}</span> {t.parts}
             </div>
           </CardContent>
         </Card>
@@ -196,16 +287,16 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin text-teal-600 mx-auto mb-3" />
-              <p className="text-slate-600">Loading spare parts...</p>
+              <p className="text-slate-600">{t.loading}</p>
             </div>
           </div>
         ) : filteredParts.length === 0 ? (
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="py-12 text-center">
               <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-600 font-medium">No parts found</p>
+              <p className="text-slate-600 font-medium">{t.noPartsFound}</p>
               <p className="text-sm text-slate-500 mt-1">
-                {searchQuery ? 'Try a different search' : 'Loading parts...'}
+                {searchQuery ? t.tryDifferentSearch : t.loadingParts}
               </p>
             </CardContent>
           </Card>
@@ -248,11 +339,11 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
                     {/* Info Grid */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="bg-slate-50 p-2 rounded">
-                        <p className="text-slate-500 font-medium mb-0.5">Min Stock</p>
+                        <p className="text-slate-500 font-medium mb-0.5">{t.minStock}</p>
                         <p className="font-semibold text-slate-800">{part.min_stock_level}</p>
                       </div>
                       <div className="bg-slate-50 p-2 rounded">
-                        <p className="text-slate-500 font-medium mb-0.5">Avg Cost</p>
+                        <p className="text-slate-500 font-medium mb-0.5">{t.avgCost}</p>
                         <p className="font-semibold text-slate-800">
                           {part.average_cost ? `$${part.average_cost.toFixed(2)}` : 'N/A'}
                         </p>
@@ -279,7 +370,7 @@ const MaintenanceSpareParts = ({ onLogout, technicianName }) => {
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm h-9"
                     >
                       <Eye className="w-4 h-4 mr-2" />
-                      View Details
+                      {t.viewDetails}
                     </Button>
                   </CardContent>
                 </Card>
