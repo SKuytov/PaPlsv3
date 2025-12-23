@@ -44,7 +44,20 @@
     "or": "or",
     "and": "and",
     "required": "Required",
-    "optional": "Optional"
+    "optional": "Optional",
+    "viewDetails": "View Details",
+    "actions": "Actions",
+    "name": "Name",
+    "description": "Description",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "date": "Date",
+    "time": "Time",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "createdBy": "Created By",
+    "lastModifiedBy": "Last Modified By"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -57,12 +70,18 @@
     "downtime": "Downtime",
     "documentation": "Documentation",
     "scanner": "Scanner",
-    "savings": "Savings",
+    "savings": "Savings Analysis",
     "settings": "Settings",
     "profile": "Profile",
     "logout": "Sign Out",
     "login": "Login",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "help": "Help",
+    "about": "About",
+    "home": "Home",
+    "myProfile": "My Profile",
+    "accountSettings": "Account Settings",
+    "changePassword": "Change Password"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -80,7 +99,10 @@
     "totalParts": "Total Parts",
     "totalSuppliers": "Total Suppliers",
     "activeMachines": "Active Machines",
-    "totalOrders": "Total Orders"
+    "totalOrders": "Total Orders",
+    "lastUpdated": "Last Updated",
+    "systemHealth": "System Health",
+    "performanceMetrics": "Performance Metrics"
   },
   "spareParts": {
     "title": "Spare Parts Management",
@@ -102,11 +124,24 @@
     "unitPrice": "Unit Price",
     "totalValue": "Total Value",
     "status": "Status",
-    "active": "Active",
-    "inactive": "Inactive",
-    "discontinued": "Discontinued",
     "barcode": "Barcode",
-    "qrCode": "QR Code"
+    "qrCode": "QR Code",
+    "minStockLevel": "Minimum Stock Level",
+    "currentQuantity": "Current Quantity",
+    "unitOfMeasure": "Unit of Measure",
+    "averageCost": "Average Cost",
+    "lastRestockedDate": "Last Restocked Date",
+    "photoUrl": "Photo URL",
+    "warehouse": "Warehouse",
+    "location": "Location",
+    "importParts": "Import Parts",
+    "exportParts": "Export Parts",
+    "bulkUpdate": "Bulk Update",
+    "sparePartsAnalytics": "Spare Parts Analytics",
+    "outOfStock": "Out of Stock",
+    "lowStock": "Low Stock",
+    "inStock": "In Stock",
+    "highStock": "High Stock"
   },
   "machines": {
     "title": "Machines Management",
@@ -129,7 +164,15 @@
     "running": "Running",
     "idle": "Idle",
     "downtime": "Downtime",
-    "maintenance": "Maintenance"
+    "maintenance": "Maintenance",
+    "retired": "Retired",
+    "assignedOperator": "Assigned Operator",
+    "installationDate": "Installation Date",
+    "maintenanceHistory": "Maintenance History",
+    "performanceMetrics": "Performance Metrics",
+    "machineHealth": "Machine Health",
+    "predictiveMaintenance": "Predictive Maintenance",
+    "mtbf": "Mean Time Between Failures (MTBF)"
   },
   "suppliers": {
     "title": "Suppliers Management",
@@ -151,8 +194,13 @@
     "leadTime": "Lead Time",
     "rating": "Rating",
     "status": "Status",
-    "active": "Active",
-    "inactive": "Inactive"
+    "taxId": "Tax ID",
+    "bankDetails": "Bank Details",
+    "creditLimit": "Credit Limit",
+    "averageDeliveryDays": "Average Delivery Days",
+    "qualityRating": "Quality Rating",
+    "priceCompetitiveness": "Price Competitiveness",
+    "reliabilityScore": "Reliability Score"
   },
   "orders": {
     "title": "Orders Management",
@@ -173,7 +221,14 @@
     "items": "Items",
     "quantity": "Quantity",
     "unitPrice": "Unit Price",
-    "total": "Total"
+    "total": "Total",
+    "notes": "Notes",
+    "purchaseOrder": "Purchase Order",
+    "inVoiceNumber": "Invoice Number",
+    "expectedDeliveryDate": "Expected Delivery Date",
+    "actualDeliveryDate": "Actual Delivery Date",
+    "trackingNumber": "Tracking Number",
+    "orderHistory": "Order History"
   },
   "quotes": {
     "title": "Quotes Management",
@@ -187,10 +242,14 @@
     "sent": "Sent",
     "accepted": "Accepted",
     "rejected": "Rejected",
+    "expired": "Expired",
     "validUntil": "Valid Until",
     "items": "Items",
     "totalPrice": "Total Price",
-    "notes": "Notes"
+    "notes": "Notes",
+    "terms": "Terms & Conditions",
+    "convertToOrder": "Convert to Order",
+    "compareQuotes": "Compare Quotes"
   },
   "reports": {
     "title": "Reports",
@@ -211,7 +270,10 @@
     "print": "Print",
     "preview": "Preview",
     "schedule": "Schedule Report",
-    "email": "Email Report"
+    "email": "Email Report",
+    "customReport": "Custom Report",
+    "reportBuilder": "Report Builder",
+    "exportData": "Export Data"
   },
   "downtime": {
     "title": "Downtime Management",
@@ -225,11 +287,17 @@
     "mechanical": "Mechanical",
     "electrical": "Electrical",
     "hydraulic": "Hydraulic",
+    "software": "Software",
     "other": "Other",
     "description": "Description",
     "partsUsed": "Parts Used",
     "technician": "Technician",
-    "notes": "Notes"
+    "notes": "Notes",
+    "costOfDowntime": "Cost of Downtime",
+    "resolution": "Resolution",
+    "downtimeAnalysis": "Downtime Analysis",
+    "rootCauseAnalysis": "Root Cause Analysis",
+    "preventiveMeasures": "Preventive Measures"
   },
   "documentation": {
     "title": "Documentation",
@@ -241,9 +309,47 @@
     "schematic": "Schematic",
     "specification": "Specification",
     "procedure": "Procedure",
+    "safetyGuide": "Safety Guide",
     "uploadDate": "Upload Date",
     "fileSize": "File Size",
-    "download": "Download"
+    "download": "Download",
+    "documentCategory": "Document Category",
+    "relatedMachine": "Related Machine",
+    "relatedPart": "Related Part",
+    "version": "Version",
+    "author": "Author",
+    "lastModified": "Last Modified"
+  },
+  "technician": {
+    "title": "Technician Portal",
+    "sessionActive": "Technician Session Active",
+    "spareParts": "Spare Parts",
+    "scanner": "Scanner",
+    "readOnlyView": "Read-Only View",
+    "loggedInAs": "Logged in as",
+    "logout": "Logout",
+    "searchParts": "Search for parts...",
+    "sortBy": "Sort by",
+    "minStock": "Min Stock",
+    "avgCost": "Avg Cost",
+    "outOfStock": "Out of Stock",
+    "lowStock": "Low Stock",
+    "inStock": "In Stock",
+    "noPartsFound": "No parts found",
+    "tryDifferentSearch": "Try a different search",
+    "showingParts": "Showing {{current}} of {{total}} parts",
+    "cardIdLabel": "Card ID",
+    "cardIdPlaceholder": "Enter card ID...",
+    "readingCard": "Reading card...",
+    "readyToScan": "Ready to scan",
+    "holdCard": "Hold RFID card near the reader",
+    "verifyingCard": "Verifying card...",
+    "manualEntry": "Manual Entry",
+    "backToReader": "Back to RFID Reader",
+    "scanItem": "Scan Item",
+    "processTransaction": "Process Transaction",
+    "transactionComplete": "Transaction Complete",
+    "itemScanned": "Item Scanned Successfully"
   },
   "forms": {
     "validation": {
@@ -256,7 +362,14 @@
       "min": "Must be at least {{min}}",
       "max": "Must not exceed {{max}}",
       "pattern": "Invalid format",
-      "invalidEmail": "Email already exists"
+      "invalidEmail": "Email already exists",
+      "passwordMismatch": "Passwords do not match",
+      "weakPassword": "Password is too weak",
+      "invalidDate": "Invalid date format",
+      "dateInPast": "Date cannot be in the past",
+      "dateInFuture": "Date cannot be in the future",
+      "duplicateName": "This name already exists",
+      "invalidUrl": "Invalid URL format"
     },
     "messages": {
       "saved": "{{name}} saved successfully",
@@ -264,7 +377,9 @@
       "deleted": "{{name}} deleted successfully",
       "error": "An error occurred: {{error}}",
       "confirm": "Are you sure you want to {{action}} this {{item}}?",
-      "unsavedChanges": "You have unsaved changes. Do you want to leave?"
+      "unsavedChanges": "You have unsaved changes. Do you want to leave?",
+      "loading": "Loading...",
+      "submitting": "Submitting..."
     }
   },
   "scanner": {
@@ -279,7 +394,11 @@
     "qrCode": "QR Code",
     "barcode": "Barcode",
     "timestamp": "Timestamp",
-    "clearHistory": "Clear History"
+    "clearHistory": "Clear History",
+    "scanHistory": "Scan History",
+    "noScanHistory": "No scan history",
+    "invalidCode": "Invalid code",
+    "cameraPermissionRequired": "Camera permission required"
   },
   "dateTime": {
     "today": "Today",
@@ -290,7 +409,26 @@
     "thisMonth": "This Month",
     "lastMonth": "Last Month",
     "thisYear": "This Year",
-    "lastYear": "Last Year"
+    "lastYear": "Last Year",
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday"
   },
   "errors": {
     "404": "Page not found",
@@ -301,6 +439,59 @@
     "networkError": "Network error. Please check your connection.",
     "loadingError": "Failed to load data. Please try again.",
     "savingError": "Failed to save data. Please try again.",
-    "deletingError": "Failed to delete. Please try again."
+    "deletingError": "Failed to delete. Please try again.",
+    "uploadError": "Failed to upload file. Please try again.",
+    "downloadError": "Failed to download file. Please try again.",
+    "databaseError": "Database error. Please contact support.",
+    "authenticationError": "Authentication failed. Please log in again.",
+    "validationError": "Please check your input and try again."
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "signUp": "Sign Up",
+    "createAccount": "Create Account",
+    "alreadyHaveAccount": "Already have an account?",
+    "noAccount": "Don't have an account?",
+    "resetPassword": "Reset Password",
+    "changePassword": "Change Password",
+    "oldPassword": "Old Password",
+    "newPassword": "New Password",
+    "confirmNewPassword": "Confirm New Password",
+    "accountSettings": "Account Settings",
+    "myProfile": "My Profile",
+    "twoFactorAuth": "Two-Factor Authentication",
+    "rfidCard": "RFID Card",
+    "cardId": "Card ID",
+    "technician": "Technician",
+    "techniciansLogin": "Technician's Login",
+    "unauthorized": "Unauthorized",
+    "sessionExpired": "Your session has expired. Please log in again.",
+    "invalidCredentials": "Invalid email or password",
+    "accountLocked": "Your account has been locked. Please contact support."
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "appearance": "Appearance",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "security": "Security",
+    "language": "Language",
+    "timezone": "Timezone",
+    "currency": "Currency",
+    "dateFormat": "Date Format",
+    "timeFormat": "Time Format",
+    "darkMode": "Dark Mode",
+    "autoLogout": "Auto Logout (minutes)",
+    "sessionTimeout": "Session Timeout",
+    "backupData": "Backup Data",
+    "exportData": "Export Data",
+    "deleteAccount": "Delete Account"
   }
 }
