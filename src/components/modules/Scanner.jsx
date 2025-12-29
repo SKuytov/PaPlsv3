@@ -62,6 +62,7 @@ const Scanner = ({
    // HID Scanner Refs
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
+   const handleScanRef = useRef(null); // Store handleScan in ref to avoid circular dependency
 
    // Transaction Form State
    const [txType, setTxType] = useState('usage');
@@ -87,52 +88,6 @@ const Scanner = ({
    useEffect(() => {
       if (selectedMachineId) setTxMachineId(selectedMachineId);
    }, [selectedMachineId]);
-
-   // --- HID SCANNER SETUP (Always listening) ---
-   useEffect(() => {
-      const handleKeyDown = (event) => {
-         // Only capture HID input when in scan mode and HID mode is active
-         if (scanStep !== 'scan' || mode !== 'hid') return;
-         
-         // Ignore modifier keys and special keys
-         if (event.ctrlKey || event.altKey || event.metaKey) return;
-         if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-         
-         event.preventDefault();
-         
-         // Enter key triggers the scan
-         if (event.key === 'Enter') {
-            if (hidBufferRef.current.length > 0) {
-               handleScan(hidBufferRef.current, 'hid');
-               hidBufferRef.current = '';
-            }
-            return;
-         }
-         
-         // Build up the barcode buffer
-         hidBufferRef.current += event.key;
-         
-         // Clear timeout and restart it
-         if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
-         hidTimeoutRef.current = setTimeout(() => {
-            // If we have accumulated text without Enter, still process it
-            if (hidBufferRef.current.length > 2) {
-               handleScan(hidBufferRef.current, 'hid');
-               hidBufferRef.current = '';
-            } else {
-               hidBufferRef.current = '';
-            }
-         }, HID_SCAN_TIMEOUT_MS);
-      };
-
-      if (scanStep === 'scan' && mode === 'hid') {
-         window.addEventListener('keydown', handleKeyDown);
-         return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
-         };
-      }
-   }, [scanStep, mode, handleScan]);
 
    // --- OPTIMIZED SCAN LOGIC ---
 
@@ -339,6 +294,57 @@ const Scanner = ({
       }
    };
 
+   // Update ref whenever handleScan changes (needed for HID listener)
+   useEffect(() => {
+      handleScanRef.current = handleScan;
+   }, [handleScan]);
+
+   // --- HID SCANNER SETUP (Always listening) ---
+   useEffect(() => {
+      const handleKeyDown = (event) => {
+         // Only capture HID input when in scan mode and HID mode is active
+         if (scanStep !== 'scan' || mode !== 'hid') return;
+         
+         // Ignore modifier keys and special keys
+         if (event.ctrlKey || event.altKey || event.metaKey) return;
+         if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+         
+         event.preventDefault();
+         
+         // Enter key triggers the scan
+         if (event.key === 'Enter') {
+            if (hidBufferRef.current.length > 0) {
+               handleScanRef.current(hidBufferRef.current, 'hid');
+               hidBufferRef.current = '';
+            }
+            return;
+         }
+         
+         // Build up the barcode buffer
+         hidBufferRef.current += event.key;
+         
+         // Clear timeout and restart it
+         if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+         hidTimeoutRef.current = setTimeout(() => {
+            // If we have accumulated text without Enter, still process it
+            if (hidBufferRef.current.length > 2) {
+               handleScanRef.current(hidBufferRef.current, 'hid');
+               hidBufferRef.current = '';
+            } else {
+               hidBufferRef.current = '';
+            }
+         }, HID_SCAN_TIMEOUT_MS);
+      };
+
+      if (scanStep === 'scan' && mode === 'hid') {
+         window.addEventListener('keydown', handleKeyDown);
+         return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+         };
+      }
+   }, [scanStep, mode]); // Removed handleScan from dependency - using ref instead
+
    const handleTransaction = async () => {
       if (!activePart) return;
       if (txQty <= 0) {
@@ -520,7 +526,7 @@ useEffect(() => {
       mounted = false;
       stopCamera();
    };
-}, [scanStep, mode, batchMode, handleScan]); // Correct dependencies
+}, [scanStep, mode, batchMode, handleScan]); // handleScan is safe here - it's in camera effect
 
    const handleManualSubmit = (e) => {
       e.preventDefault();
