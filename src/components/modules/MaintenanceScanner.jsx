@@ -59,7 +59,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    // HID Scanner Refs
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
-   const handleScanRef = useRef(null); // Store handleScan in ref to avoid circular dependency
    const hidActiveFlagRef = useRef(false); // Track if HID is actively listening
 
    // Transaction Form State - TECHNICIAN: ONLY USAGE
@@ -244,7 +243,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
        }
    };
 
-   const handleScan = (code, source = 'hid') => {
+   // ⭐ CRITICAL: Use useCallback to stabilize handleScan across re-renders
+   const handleScan = useCallback((code, source = 'hid') => {
       console.log(`[MaintenanceScanner] handleScan called: ${code} from ${source}, scanActive: ${scanActiveRef.current}`);
       
       if (!scanActiveRef.current) {
@@ -274,25 +274,20 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
-   };
+   }, [scanStep, processQueue]);
 
-   // Update ref whenever handleScan changes (needed for HID listener)
-   useEffect(() => {
-      handleScanRef.current = handleScan;
-   }, [handleScan]);
-
-   // --- HID SCANNER SETUP (Always listening) ---
+   // --- HID SCANNER SETUP (Always listening, stabilized with useCallback) ---
    useEffect(() => {
       console.log(`[MaintenanceScanner] HID useEffect setup: scanStep=${scanStep}, mode=${mode}`);
       
+      // ⭐ CRITICAL: Define handleKeyDown INSIDE useEffect to capture stable refs
       const handleKeyDown = (event) => {
          // Only capture HID input when in scan mode and HID mode is active
          if (scanStep !== 'scan' || mode !== 'hid' || !hidActiveFlagRef.current) {
-            console.log(`[MaintenanceScanner] HID event ignored: scanStep=${scanStep}, mode=${mode}, hidActive=${hidActiveFlagRef.current}`);
             return;
          }
 
-         // 🔒 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
+         // 🔐 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
          if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
             console.log(`[MaintenanceScanner] Blocking modifier key: ctrl=${event.ctrlKey}, alt=${event.altKey}, meta=${event.metaKey}, shift=${event.shiftKey}`);
             event.preventDefault();
@@ -301,7 +296,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
          // Ignore special keys that shouldn't be in barcode
          if (['Escape', 'Tab', 'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
-            console.log(`[MaintenanceScanner] Ignoring special key: ${event.key}`);
             return;
          }
 
@@ -312,7 +306,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             console.log(`[MaintenanceScanner] Enter key pressed, buffer: "${hidBufferRef.current}"`);
             if (hidBufferRef.current.length > 0) {
                console.log(`[MaintenanceScanner] Calling handleScan with: ${hidBufferRef.current}`);
-               handleScanRef.current(hidBufferRef.current, 'hid');
+               handleScan(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
             }
             return;
@@ -329,7 +323,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             // If we have accumulated text without Enter, still process it
             if (hidBufferRef.current.length > 2) {
                console.log(`[MaintenanceScanner] Calling handleScan from timeout with: ${hidBufferRef.current}`);
-               handleScanRef.current(hidBufferRef.current, 'hid');
+               handleScan(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
             } else {
                hidBufferRef.current = '';
@@ -352,7 +346,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          console.log('[MaintenanceScanner] Not setting up HID listener');
          hidActiveFlagRef.current = false;
       }
-   }, [scanStep, mode]);
+   }, [scanStep, mode, handleScan]);
 
    const handleTransaction = async () => {
       if (!activePart) return;
@@ -493,7 +487,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             
             setCameraError(null);
          } catch (err) {
-            console.error("[Camera] Init Error:", err);
+            console.error("[@Camera] Init Error:", err);
             if (mounted) {
                setCameraError("Could not access camera. Please check permissions.");
             }
