@@ -46,8 +46,10 @@ const Scanner = ({
    const [activePart, setActivePart] = useState(null);
    const [showHistory, setShowHistory] = useState(false);
    
-   // --- Refs for Logic Control ---
-   const scanActiveRef = useRef(true); 
+   // ⭐ CRITICAL: isProcessing is STATE not REF - React knows to update it
+   const [isProcessing, setIsProcessing] = useState(false);
+   
+   // Refs for non-visual state
    const zxingReaderRef = useRef(null);
    const videoRef = useRef(null);
    const manualInputRef = useRef(null);
@@ -62,8 +64,6 @@ const Scanner = ({
    // HID Scanner Refs
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
-   const handleScanRef = useRef(null); // Store handleScan in ref to avoid circular dependency
-   const hidActiveFlagRef = useRef(false); // Track if HID is actively listening
 
    // Transaction Form State
    const [txType, setTxType] = useState('usage');
@@ -148,36 +148,38 @@ const Scanner = ({
 
    // Core Processor for a single barcode (from queue)
    const processBarcode = async (code, source) => {
+      console.log(`[Scanner] Processing barcode: ${code} from ${source}`);
+      
       // 1. Check Cache First
       let part = getCachedPart(code);
 
       try {
           // 2. If not in cache, fetch from DB
           if (!part) {
+              console.log(`[Scanner] Fetching from database...`);
               const parts = await fetchWithRetry(code);
               
               if (parts && parts.length > 0) {
                   // If multiple duplicate barcodes exist, take the most recently updated one
                   parts.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
                   part = parts[0];
+                  console.log(`[Scanner] Found part: ${part.name}`);
                   // 3. Cache the result
                   cachePart(code, part);
               }
           }
 
           if (!part) {
+              console.warn(`[Scanner] Part not found for barcode: ${code}`);
               playBeep('error');
               toast({
                   title: "Part Not Found",
                   description: `No part found with barcode: ${code}`,
                   variant: "destructive",
               });
-               // Unlock quickly if not found
-               setTimeout(() => {
-                  scanActiveRef.current = true;
-                  setLoading(false);
-               }, 2000);
-               return;
+              setIsProcessing(false);
+              setLoading(false);
+              return;
           }
 
           // 4. Success Flow
@@ -194,40 +196,37 @@ const Scanner = ({
               // Batch mode: Add to list and immediately unlock for next scan
               onBatchAdd(scanData);
               toast({ title: "Added to Batch", description: `${part.name} added` });
-              // Quick unlock for batch mode
-              setTimeout(() => {
-                  scanActiveRef.current = true;
-                  setLoading(false);
-               }, 500);
+              setIsProcessing(false);
+              setLoading(false);
           } else {
               // Single Scan Mode: Go to Menu
               setActivePart(scanData);
-              setScanStep('menu'); 
+              setScanStep('menu');
               
               // Reset form defaults
               setTxQty(1);
               setTxNotes('');
               setTxMachineId(selectedMachineId || 'none');
               setLoading(false);
-              // Note: scanActiveRef remains false here until user cancels or finishes transaction
+              setIsProcessing(false);
+              console.log('[Scanner] Menu activated');
           }
 
       } catch (error) {
           console.error('[Scanner] Processing Error:', error);
           playBeep('error');
           toast({ title: "Error", description: "Failed to process scan", variant: "destructive" });
-          setTimeout(() => {
-              scanActiveRef.current = true;
-              setLoading(false);
-          }, 2000);
-      } finally {
-          // Decrement active queue or clean up if needed
+          setIsProcessing(false);
+          setLoading(false);
       }
    };
 
    // Queue Manager
    const processQueue = async () => {
-       if (queryInProgressRef.current || scanQueueRef.current.length === 0) return;
+       console.log(`[Scanner] processQueue: queue length=${scanQueueRef.current.length}`);
+       if (queryInProgressRef.current || scanQueueRef.current.length === 0) {
+           return;
+       }
 
        queryInProgressRef.current = true;
        setLoading(true);
@@ -235,129 +234,109 @@ const Scanner = ({
        const currentBatch = [...scanQueueRef.current];
        scanQueueRef.current = []; // Clear queue
 
+       // 🔧 FIX: Don't check scanStep here - process all items in queue
        for (const item of currentBatch) {
-           // Double check gatekeeper for single mode inside the loop just in case
-           if (!batchMode && scanStep !== 'scan') {
-               console.log("Skipping queued scan because user is busy in menu.");
-               continue; 
-           }
-
            await processBarcode(item.code, item.source);
-           
-           // If single mode success, we stop processing the rest of the queue to show the UI
-           if (!batchMode && scanStep === 'menu') break;
+           // Stop processing if menu was activated (found a part)
+           if (activePart) break;
        }
 
        queryInProgressRef.current = false;
-       // If queue filled up again while processing, re-trigger
+       
        if (scanQueueRef.current.length > 0) {
            processQueue();
        } else {
-            // Only turn off loading if we are truly done and not in a blocking UI state
-            if (batchMode || scanStep === 'scan') {
-                setLoading(false);
-            }
+           setLoading(false);
        }
    };
 
-   // Main Entry Point
-   const handleScan = (code, source = 'camera') => {
-      // 1. STRICT GATEKEEPER
-      if (!scanActiveRef.current && !batchMode) {
+   // ⭐ CRITICAL: handleScan depends ONLY on isProcessing state, not refs
+   const handleScan = useCallback((code, source = 'camera') => {
+      console.log(`[Scanner] handleScan called: ${code} from ${source}, isProcessing=${isProcessing}`);
+      
+      if (isProcessing) {
+          console.warn(`[Scanner] Scan blocked - already processing`);
           return;
       }
       
-      console.log(`[Scanner] Received: ${code} from ${source}`);
+      console.log(`[Scanner] Received: ${code}`);
       playBeep('success');
-      
-      // If not batch mode, we lock immediately to prevent UI jitter
-      if (!batchMode) {
-          scanActiveRef.current = false;
-      }
+      setIsProcessing(true); // Lock via STATE
 
-      // 2. Add to Queue
       scanQueueRef.current.push({ code, source });
+      console.log(`[Scanner] Added to queue, length=${scanQueueRef.current.length}`);
 
-      // 3. Debounce / Batch Logic
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
-      const shouldFlushImmediately = scanQueueRef.current.length >= MAX_BATCH_SIZE;
-
-      if (shouldFlushImmediately) {
-          console.log("[Scanner] Max batch size reached, flushing queue...");
+      if (scanQueueRef.current.length >= MAX_BATCH_SIZE) {
           processQueue();
       } else {
-          // Wait for debounce window
           debounceTimerRef.current = setTimeout(() => {
-              console.log("[Scanner] Debounce timer fired, flushing queue...");
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
-   };
+   }, [isProcessing, activePart]);
 
-   // Update ref whenever handleScan changes (needed for HID listener)
+   // Reset processing flag when returning to scan mode
    useEffect(() => {
-      handleScanRef.current = handleScan;
-   }, [handleScan]);
+      if (scanStep === 'scan' && isProcessing) {
+         console.log('[Scanner] Returning to scan mode, unlocking...');
+         setIsProcessing(false);
+      }
+   }, [scanStep]);
 
-   // --- HID SCANNER SETUP (Always listening) ---
+   // --- HID SCANNER SETUP ---
    useEffect(() => {
+      if (scanStep !== 'scan' || mode !== 'hid') return;
+      
+      console.log('[Scanner] Setting up HID listener');
+      
       const handleKeyDown = (event) => {
-         // Only capture HID input when in scan mode and HID mode is active
-         if (scanStep !== 'scan' || mode !== 'hid' || !hidActiveFlagRef.current) return;
+         if (scanStep !== 'scan' || mode !== 'hid') return;
 
-         // 🔒 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
-         // This prevents Ctrl+J (Downloads), Ctrl+K (Search), Ctrl+Shift+J (DevTools), etc.
+         // Block modifier keys
          if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
             event.preventDefault();
             return;
          }
 
-         // Ignore special keys that shouldn't be in barcode
+         // Ignore special keys
          if (['Escape', 'Tab', 'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
             return;
          }
 
          event.preventDefault();
-         
-         // Enter key triggers the scan
+
+         // Enter triggers scan
          if (event.key === 'Enter') {
             if (hidBufferRef.current.length > 0) {
-               handleScanRef.current(hidBufferRef.current, 'hid');
+               handleScan(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
             }
             return;
          }
-         
-         // Build up the barcode buffer
+
+         // Accumulate buffer
          hidBufferRef.current += event.key;
-         
-         // Clear timeout and restart it
+         console.log(`[Scanner] Buffer: "${hidBufferRef.current}"`);
+
+         // Timeout processing
          if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          hidTimeoutRef.current = setTimeout(() => {
-            // If we have accumulated text without Enter, still process it
             if (hidBufferRef.current.length > 2) {
-               handleScanRef.current(hidBufferRef.current, 'hid');
-               hidBufferRef.current = '';
-            } else {
-               hidBufferRef.current = '';
+               console.log(`[Scanner] Timeout -> processing: ${hidBufferRef.current}`);
+               handleScan(hidBufferRef.current, 'hid');
             }
+            hidBufferRef.current = '';
          }, HID_SCAN_TIMEOUT_MS);
       };
 
-      // Set flag when entering HID mode
-      if (scanStep === 'scan' && mode === 'hid') {
-         hidActiveFlagRef.current = true;
-         window.addEventListener('keydown', handleKeyDown, true); // Use capture phase for priority
-         return () => {
-            hidActiveFlagRef.current = false;
-            window.removeEventListener('keydown', handleKeyDown, true);
-            if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
-         };
-      } else {
-         hidActiveFlagRef.current = false;
-      }
-   }, [scanStep, mode]);
+      window.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+         window.removeEventListener('keydown', handleKeyDown, true);
+         if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+      };
+   }, [scanStep, mode, handleScan]);
 
    const handleTransaction = async () => {
       if (!activePart) return;
@@ -387,7 +366,7 @@ const Scanner = ({
             return;
          }
 
-         // Insert transaction with performed_by set to the RFID technician ID
+         // Insert transaction with performed_by set to the technician ID
          const { error: txError } = await supabase.from('inventory_transactions').insert({
             part_id: activePart.part.id,
             machine_id: txMachineId === 'none' ? null : txMachineId,
@@ -395,7 +374,7 @@ const Scanner = ({
             quantity: quantityChange,
             unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
-            performed_by: performedByUserId  // ✅ NOW USING TECHNICIAN ID FROM RFID LOGIN
+            performed_by: performedByUserId  // ✅ USING TECHNICIAN ID
          });
 
          if (txError) throw txError;
@@ -441,119 +420,87 @@ const Scanner = ({
    };
 
    const resetScanner = () => {
-      scanActiveRef.current = false;
+      console.log('[Scanner] Resetting scanner');
+      if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       
       if (zxingReaderRef.current) {
          try {
             if (typeof zxingReaderRef.current.reset === 'function') {
                zxingReaderRef.current.reset();
             }
-         } catch(e) { console.error(e); }
+         } catch(e) {}
          zxingReaderRef.current = null;
       }
 
       safeStopVideoTracks();
-      
       setActivePart(null);
       setDetailsModalOpen(false);
       setLoading(false);
-      setScanStep('scan');
+      hidBufferRef.current = '';
+      setScanStep('scan'); // This will trigger unlock via useEffect
    };
 
-  // --- CAMERA LIFECYCLE (ZXing Only) ---
-useEffect(() => {
-   let reader = null;
-   let mounted = true;
-   
-   const startCamera = async () => {
-      if (scanStep !== 'scan' || mode !== 'camera') return;
-
-      // Small delay to let UI settle
-      await new Promise(r => setTimeout(r, 300));
+   // --- CAMERA LIFECYCLE (ZXing) ---
+   useEffect(() => {
+      let reader = null;
+      let mounted = true;
       
-      if (!mounted || scanStep !== 'scan' || mode !== 'camera') return;
-      if (!videoRef.current) return;
-
-      scanActiveRef.current = true;
-
-      try {
-         const { BrowserMultiFormatReader } = await import('@zxing/browser');
+      const startCamera = async () => {
+         if (scanStep !== 'scan' || mode !== 'camera' || !mounted) return;
          
-         reader = new BrowserMultiFormatReader();
-         zxingReaderRef.current = reader;
+         await new Promise(r => setTimeout(r, 300));
+         if (!mounted || scanStep !== 'scan' || mode !== 'camera' || !videoRef.current) return;
 
-         await reader.decodeFromConstraints(
-            { video: { facingMode: { ideal: "environment" } } },
-            videoRef.current,
-            (result, error) => {
-               // Check mounted state AND scanStep
-               if (!mounted || scanStep !== 'scan' || mode !== 'camera') return;
-               
-               if (result) {
-                  const text = result.getText();
-                  console.log('[ZXing] Detected barcode:', text);
-                  handleScan(text, 'camera');
-               }
-            }
-         );
-         
-         setCameraError(null);
-         console.log('[Camera] Started successfully');
-      } catch (err) {
-         console.error("[Camera] Init Error:", err);
-         if (mounted) {
-            setCameraError("Could not access camera. Please check permissions.");
-         }
-      }
-   };
-
-   const stopCamera = () => {
-      console.log('[Camera] Stopping camera...');
-      scanActiveRef.current = false;
-
-      if (zxingReaderRef.current) {
          try {
-            if (typeof zxingReaderRef.current.reset === 'function') {
-               zxingReaderRef.current.reset();
-            }
-         } catch(e) { 
-            console.warn('[Camera] Error resetting reader:', e);
+            const { BrowserMultiFormatReader } = await import('@zxing/browser');
+            reader = new BrowserMultiFormatReader();
+            zxingReaderRef.current = reader;
+
+            await reader.decodeFromConstraints(
+               { video: { facingMode: { ideal: "environment" } } },
+               videoRef.current,
+               (result) => {
+                  if (mounted && scanStep === 'scan' && mode === 'camera' && result) {
+                     handleScan(result.getText(), 'camera');
+                  }
+               }
+            );
+            
+            setCameraError(null);
+         } catch (err) {
+            console.error("[Camera] Error:", err);
+            if (mounted) setCameraError("Could not access camera.");
          }
-         zxingReaderRef.current = null;
+      };
+
+      const stopCamera = () => {
+         if (zxingReaderRef.current?.reset) {
+            try { zxingReaderRef.current.reset(); } catch(e) {}
+            zxingReaderRef.current = null;
+         }
+         safeStopVideoTracks();
+      };
+
+      if (scanStep === 'scan' && mode === 'camera') {
+         startCamera();
+      } else {
+         stopCamera();
       }
-      
-      safeStopVideoTracks();
-   };
 
-   // Proper lifecycle management
-   if (scanStep === 'scan' && mode === 'camera') {
-      console.log('[Camera] Starting camera for scan...');
-      startCamera();
-   } else {
-      console.log('[Camera] Not in scan mode, stopping...');
-      stopCamera();
-   }
-
-   // Cleanup on unmount or when dependencies change
-   return () => {
-      console.log('[Camera] useEffect cleanup');
-      mounted = false;
-      stopCamera();
-   };
-}, [scanStep, mode, batchMode, handleScan]); // handleScan is safe here - it's in camera effect
+      return () => {
+         mounted = false;
+         stopCamera();
+      };
+   }, [scanStep, mode, handleScan]);
 
    const handleManualSubmit = (e) => {
       e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      const val = formData.get('manualBarcode') || '';
-      
-      if (val.trim()) {
-         handleScan(val.trim(), 'manual');
+      const val = new FormData(e.currentTarget).get('manualBarcode')?.trim() || '';
+      if (val) {
+         handleScan(val, 'manual');
          e.currentTarget.reset();
-         // Re-focus for continuous scanning
-         if (manualInputRef.current) {
-            manualInputRef.current.focus();
-         }
+         manualInputRef.current?.focus();
       }
    };
 
@@ -585,14 +532,17 @@ useEffect(() => {
             </CardHeader>
 
             <CardContent className="p-4">
+               <div className="text-xs text-slate-500 mb-4 p-2 bg-slate-50 rounded border border-dashed">
+                  <p>scanStep: {scanStep} | mode: {mode} | isProcessing: {isProcessing ? '🔒' : '✅'}</p>
+               </div>
                
-               {/* STEP 1: SCANNING (Camera, HID, or Manual) */}
+               {/* STEP 1: SCANNING */}
                {scanStep === 'scan' && (
                   <Tabs value={mode} onValueChange={setMode} className="w-full">
                      <TabsList className="grid w-full grid-cols-3 mb-4">
-                        <TabsTrigger value="camera" className="flex items-center gap-1 text-xs md:text-sm"><Camera className="w-4 h-4" /> <span className="hidden sm:inline">Camera</span></TabsTrigger>
-                        <TabsTrigger value="hid" className="flex items-center gap-1 text-xs md:text-sm"><QrCode className="w-4 h-4" /> <span className="hidden sm:inline">Scanner</span></TabsTrigger>
-                        <TabsTrigger value="manual" className="flex items-center gap-1 text-xs md:text-sm"><Keyboard className="w-4 h-4" /> <span className="hidden sm:inline">Manual</span></TabsTrigger>
+                        <TabsTrigger value="camera"><Camera className="w-4 h-4" /> <span className="hidden sm:inline">Camera</span></TabsTrigger>
+                        <TabsTrigger value="hid"><QrCode className="w-4 h-4" /> <span className="hidden sm:inline">Scanner</span></TabsTrigger>
+                        <TabsTrigger value="manual"><Keyboard className="w-4 h-4" /> <span className="hidden sm:inline">Manual</span></TabsTrigger>
                      </TabsList>
 
                      {/* Camera Tab */}
@@ -602,14 +552,10 @@ useEffect(() => {
                               <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center bg-slate-900">
                                  <AlertTriangle className="w-12 h-12 mb-2 text-yellow-500" />
                                  <p className="text-sm mb-4">{cameraError}</p>
-                                 <Button onClick={() => setMode('manual')} variant="secondary" size="sm">
-                                    Use Manual Entry
-                                 </Button>
                               </div>
                            ) : (
                               <>
                                  <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
-                                 {/* Target Box Overlay */}
                                  <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40">
                                     <div className="w-full h-full border-2 border-white/50 relative">
                                        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-teal-500"></div>
@@ -617,11 +563,6 @@ useEffect(() => {
                                        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-teal-500"></div>
                                        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-teal-500"></div>
                                     </div>
-                                 </div>
-                                 <div className="absolute bottom-4 left-0 right-0 text-center">
-                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-black/50 text-white">
-                                         Point camera at barcode
-                                     </span>
                                  </div>
                               </>
                            )}
@@ -638,37 +579,18 @@ useEffect(() => {
                            <div className="bg-white p-4 rounded border-2 border-dashed border-teal-300 text-center">
                               <p className="text-xs text-slate-500 font-mono">Waiting for scan...</p>
                            </div>
-                           {/* Hidden input to capture HID events but keep focus clear */}
-                           <Input 
-                              type="text"
-                              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-                              tabIndex="-1"
-                           />
                         </div>
                      </TabsContent>
 
                      {/* Manual Entry Tab */}
                      <TabsContent value="manual" className="mt-0">
                         <form onSubmit={handleManualSubmit} className="space-y-4 p-8 bg-slate-50 rounded-lg border border-slate-200">
-                           <div className="flex flex-col items-center">
-                              <Label htmlFor="manual-barcode" className="text-center block text-lg mb-4">Enter Barcode</Label>
-                              <div className="w-full max-w-xs space-y-3">
-                                 <Input
-                                    ref={manualInputRef}
-                                    name="manualBarcode"
-                                    id="manual-barcode"
-                                    type="text"
-                                    placeholder="Type code & press enter..."
-                                    className="text-center text-lg h-12 font-mono"
-                                    autoFocus
-                                    autoComplete="off"
-                                 />
-                                 <Button type="submit" disabled={loading} className="w-full h-12 text-lg">
-                                    {loading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
-                                    {loading ? "Looking up..." : "Look Up"}
-                                 </Button>
-                              </div>
-                           </div>
+                           <Label className="text-center block text-lg mb-4">Enter Barcode</Label>
+                           <Input ref={manualInputRef} name="manualBarcode" type="text" placeholder="Type code & press enter..." className="text-center text-lg h-12 font-mono" autoFocus autoComplete="off" />
+                           <Button type="submit" disabled={loading} className="w-full h-12 text-lg">
+                              {loading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+                              {loading ? "Looking up..." : "Look Up"}
+                           </Button>
                         </form>
                      </TabsContent>
                   </Tabs>
@@ -678,41 +600,26 @@ useEffect(() => {
                {scanStep === 'menu' && activePart && (
                   <div className="animate-in fade-in zoom-in-95 duration-200">
                      <PartSummary part={activePart.part} />
-                     
                      <div className="grid grid-cols-1 gap-3 mb-4">
-                        <Button 
-                           size="lg" 
-                           className="h-16 text-lg font-semibold bg-red-600 hover:bg-red-700 shadow-sm"
-                           onClick={() => {
-                              setTxType('usage');
-                              setScanStep('transaction');
-                           }}
-                        >
+                        <Button size="lg" className="h-16 text-lg font-semibold bg-red-600 hover:bg-red-700" onClick={() => {
+                           setTxType('usage');
+                           setScanStep('transaction');
+                        }}>
                            <MinusCircle className="w-6 h-6 mr-3" />
                            Use Item
                         </Button>
-                        <Button 
-                           size="lg" 
-                           className="h-16 text-lg font-semibold bg-green-600 hover:bg-green-700 shadow-sm"
-                           onClick={() => {
-                              setTxType('restock');
-                              setScanStep('transaction');
-                           }}
-                        >
+                        <Button size="lg" className="h-16 text-lg font-semibold bg-green-600 hover:bg-green-700" onClick={() => {
+                           setTxType('restock');
+                           setScanStep('transaction');
+                        }}>
                            <PlusCircle className="w-6 h-6 mr-3" />
                            Restock Item
                         </Button>
-                        <Button 
-                           size="lg" 
-                           variant="outline"
-                           className="h-16 text-lg font-semibold border-2 hover:bg-slate-50"
-                           onClick={() => setDetailsModalOpen(true)}
-                        >
+                        <Button size="lg" variant="outline" className="h-16 text-lg font-semibold border-2" onClick={() => setDetailsModalOpen(true)}>
                            <Info className="w-6 h-6 mr-3 text-blue-600" />
                            View Details
                         </Button>
                      </div>
-
                      <Button variant="secondary" size="lg" className="w-full font-bold" onClick={resetScanner}>
                         <X className="w-5 h-5 mr-2" /> Cancel / Scan Next
                      </Button>
@@ -726,58 +633,33 @@ useEffect(() => {
                         <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setScanStep('menu')}>
                            <ArrowLeft className="w-4 h-4 mr-1" /> Back
                         </Button>
-                        <h3 className="ml-auto font-semibold text-lg capitalize text-slate-700">
-                           {txType === 'usage' ? 'Consume Stock' : 'Add Stock'}
-                        </h3>
+                        <h3 className="ml-auto font-semibold text-lg">{txType === 'usage' ? 'Consume Stock' : 'Add Stock'}</h3>
                      </div>
-
                      <PartSummary part={activePart.part} />
-
                      <div className="space-y-5 bg-white p-1">
                         <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">
                               <Label>Quantity</Label>
-                              <Input 
-                                 type="number" 
-                                 min="1"
-                                 value={txQty}
-                                 onChange={(e) => setTxQty(parseInt(e.target.value) || 0)}
-                                 className="font-bold text-xl h-12 text-center"
-                              />
+                              <Input type="number" min="1" value={txQty} onChange={(e) => setTxQty(parseInt(e.target.value) || 0)} className="font-bold text-xl h-12 text-center" />
                            </div>
                            {txType === 'usage' && (
                                <div className="space-y-2">
                                   <Label>Machine</Label>
                                   <Select value={txMachineId} onValueChange={setTxMachineId}>
-                                     <SelectTrigger className="h-12">
-                                        <SelectValue placeholder="Select..." />
-                                     </SelectTrigger>
+                                     <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                                      <SelectContent>
                                         <SelectItem value="none">-- General --</SelectItem>
-                                        {machines.map(m => (
-                                           <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                                        ))}
+                                        {machines.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                                      </SelectContent>
                                   </Select>
                                </div>
                            )}
                         </div>
-
                         <div className="space-y-2">
                            <Label>{txType === 'usage' ? 'Reason / Notes' : 'Source / Notes'}</Label>
-                           <Textarea 
-                              placeholder={txType === 'usage' ? "Reason for usage..." : "Received from..."}
-                              value={txNotes}
-                              onChange={(e) => setTxNotes(e.target.value)}
-                              className="resize-none h-24 text-base"
-                           />
+                           <Textarea placeholder={txType === 'usage' ? "Reason for usage..." : "Received from..."} value={txNotes} onChange={(e) => setTxNotes(e.target.value)} className="resize-none h-24" />
                         </div>
-
-                        <Button 
-                           className={`w-full h-14 text-lg font-bold shadow-md ${txType === 'usage' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                           onClick={handleTransaction}
-                           disabled={loading}
-                        >
+                        <Button className={`w-full h-14 text-lg font-bold ${txType === 'usage' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`} onClick={handleTransaction} disabled={loading}>
                            {loading ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <CheckCircle className="w-5 h-5 mr-2" />}
                            Confirm {txType === 'usage' ? 'Usage' : 'Restock'}
                         </Button>
@@ -788,27 +670,16 @@ useEffect(() => {
                {/* Recent Scans History */}
                {scanStep === 'scan' && recentScans.length > 0 && (
                   <div className="mt-6 pt-4 border-t">
-                     <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowHistory(!showHistory)}
-                        className="w-full flex items-center justify-between text-slate-500"
-                     >
-                        <span className="flex items-center gap-2">
-                           <History className="w-4 h-4" />
-                           Recent Activity
-                        </span>
+                     <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)} className="w-full flex items-center justify-between text-slate-500">
+                        <span className="flex items-center gap-2"><History className="w-4 h-4" /> Recent</span>
                         <span>{showHistory ? 'Hide' : 'Show'}</span>
                      </Button>
-
                      {showHistory && (
                         <div className="mt-2 space-y-2">
-                           {recentScans.map((scan, index) => (
-                              <div key={index} className="flex justify-between text-sm p-2 bg-slate-50 rounded border">
-                                 <span className="font-medium truncate flex-1 pr-2">{scan.part.name}</span>
-                                 <span className="text-slate-400 text-xs font-mono pt-0.5">
-                                    {new Date(scan.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                 </span>
+                           {recentScans.map((scan, i) => (
+                              <div key={i} className="flex justify-between text-sm p-2 bg-slate-50 rounded border">
+                                 <span className="font-medium truncate flex-1">{scan.part.name}</span>
+                                 <span className="text-slate-400 text-xs font-mono">{new Date(scan.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                               </div>
                            ))}
                         </div>
@@ -818,17 +689,7 @@ useEffect(() => {
             </CardContent>
          </Card>
 
-         {/* Full Details Modal */}
-         {activePart && (
-             <PartDetailsModal 
-                 open={detailsModalOpen}
-                 part={activePart.part} 
-                 onClose={() => setDetailsModalOpen(false)}
-                 onDeleteRequest={() => {}}
-                 onEditRequest={() => {}}
-             />
-         )}
-
+         {activePart && <PartDetailsModal open={detailsModalOpen} part={activePart.part} onClose={() => setDetailsModalOpen(false)} onDeleteRequest={() => {}} onEditRequest={() => {}} />}
       </ErrorBoundary>
    );
 };
