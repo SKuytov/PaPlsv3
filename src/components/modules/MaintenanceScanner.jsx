@@ -192,7 +192,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    };
 
    const processQueue = async () => {
-       console.log(`[MaintenanceScanner] processQueue: queue length=${scanQueueRef.current.length}`);
+       console.log(`[MaintenanceScanner] processQueue: queue length=${scanQueueRef.current.length}, scanStep=${scanStep}`);
        if (queryInProgressRef.current || scanQueueRef.current.length === 0) {
            return;
        }
@@ -203,17 +203,18 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
        const currentBatch = [...scanQueueRef.current];
        scanQueueRef.current = [];
 
+       // 🔧 FIX: Don't check scanStep here - process all items in queue
        for (const item of currentBatch) {
-           if (scanStep !== 'scan') continue;
            await processBarcode(item.code, item.source);
-           if (scanStep === 'menu') break;
+           // Stop processing if menu was activated (found a part)
+           if (activePart) break;
        }
 
        queryInProgressRef.current = false;
        
        if (scanQueueRef.current.length > 0) {
            processQueue();
-       } else if (scanStep === 'scan') {
+       } else {
            setLoading(false);
        }
    };
@@ -243,7 +244,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
-   }, [isProcessing]);
+   }, [isProcessing, activePart]);
 
    // Reset processing flag when returning to scan mode
    useEffect(() => {
