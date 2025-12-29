@@ -26,6 +26,7 @@ const DEBOUNCE_DELAY_MS = 500;
 const MAX_BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
 const HID_SCAN_TIMEOUT_MS = 300; // 300ms timeout for complete HID scan
+const SCAN_UNLOCK_TIMEOUT_MS = 3000; // Auto-unlock after 3 seconds if something goes wrong
 
 const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const { toast } = useToast();
@@ -59,6 +60,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    // HID Scanner Refs
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
+   const scanUnlockTimeoutRef = useRef(null); // Auto-unlock timer
    const hidActiveFlagRef = useRef(false); // Track if HID is actively listening
 
    // Transaction Form State - TECHNICIAN: ONLY USAGE
@@ -102,6 +104,15 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          timestamp: Date.now()
       });
    };
+
+   // Manual unlock function - call this if scanner gets stuck
+   const manualUnlockScanner = useCallback(() => {
+      console.log('[MaintenanceScanner] MANUAL UNLOCK called');
+      scanActiveRef.current = true;
+      if (scanUnlockTimeoutRef.current) {
+         clearTimeout(scanUnlockTimeoutRef.current);
+      }
+   }, []);
 
    const fetchWithRetry = async (barcode, attempt = 1) => {
        try {
@@ -162,7 +173,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               // Unlock for next scan
               setTimeout(() => {
                   console.log('[MaintenanceScanner] Unlocking scanner after error');
-                  scanActiveRef.current = true;
+                  manualUnlockScanner();
                   setLoading(false);
                }, 2000);
                return;
@@ -194,7 +205,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
           toast({ title: "Error", description: "Failed to process scan", variant: "destructive" });
           setTimeout(() => {
               console.log('[MaintenanceScanner] Unlocking scanner after exception');
-              scanActiveRef.current = true;
+              manualUnlockScanner();
               setLoading(false);
           }, 2000);
       }
@@ -257,6 +268,13 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       scanActiveRef.current = false; // Lock immediately
       console.log('[MaintenanceScanner] Scanner locked');
 
+      // Set auto-unlock timer in case something goes wrong
+      if (scanUnlockTimeoutRef.current) clearTimeout(scanUnlockTimeoutRef.current);
+      scanUnlockTimeoutRef.current = setTimeout(() => {
+         console.warn('[MaintenanceScanner] Auto-unlocking scanner (timeout)');
+         manualUnlockScanner();
+      }, SCAN_UNLOCK_TIMEOUT_MS);
+
       scanQueueRef.current.push({ code, source });
       console.log(`[MaintenanceScanner] Added to queue, queue length: ${scanQueueRef.current.length}`);
 
@@ -274,7 +292,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
-   }, [scanStep, processQueue]);
+   }, [scanStep, processQueue, manualUnlockScanner]);
 
    // --- HID SCANNER SETUP (Always listening, stabilized with useCallback) ---
    useEffect(() => {
@@ -287,7 +305,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             return;
          }
 
-         // 🔐 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
+         // 🔒 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
          if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
             console.log(`[MaintenanceScanner] Blocking modifier key: ctrl=${event.ctrlKey}, alt=${event.altKey}, meta=${event.metaKey}, shift=${event.shiftKey}`);
             event.preventDefault();
@@ -314,18 +332,19 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
          // Build up the barcode buffer
          hidBufferRef.current += event.key;
-         console.log(`[MaintenanceScanner] HID buffer: "${hidBufferRef.current}"`);
+         console.log(`[MaintenanceScanner] HID buffer: "${hidBufferRef.current}" (length: ${hidBufferRef.current.length})`);
 
          // Clear timeout and restart it
          if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          hidTimeoutRef.current = setTimeout(() => {
-            console.log(`[MaintenanceScanner] HID timeout fired, buffer: "${hidBufferRef.current}"`);
+            console.log(`[MaintenanceScanner] HID timeout fired, buffer: "${hidBufferRef.current}" (length: ${hidBufferRef.current.length})`);
             // If we have accumulated text without Enter, still process it
             if (hidBufferRef.current.length > 2) {
                console.log(`[MaintenanceScanner] Calling handleScan from timeout with: ${hidBufferRef.current}`);
                handleScan(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
-            } else {
+            } else if (hidBufferRef.current.length > 0) {
+               console.log(`[MaintenanceScanner] Buffer too short (${hidBufferRef.current.length}), ignoring`);
                hidBufferRef.current = '';
             }
          }, HID_SCAN_TIMEOUT_MS);
@@ -433,6 +452,12 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
    const resetScanner = () => {
       console.log('[MaintenanceScanner] Resetting scanner');
+      
+      // Clear all timers
+      if (scanUnlockTimeoutRef.current) clearTimeout(scanUnlockTimeoutRef.current);
+      if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      
       scanActiveRef.current = false;
       
       if (zxingReaderRef.current) {
@@ -450,6 +475,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       setDetailsModalOpen(false);
       setLoading(false);
       setScanStep('scan');
+      hidBufferRef.current = '';
       scanActiveRef.current = true; // Unlock for next scan
       console.log('[MaintenanceScanner] Scanner reset complete, ready for next scan');
    };
@@ -487,7 +513,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             
             setCameraError(null);
          } catch (err) {
-            console.error("[@Camera] Init Error:", err);
+            console.error("[Camera] Init Error:", err);
             if (mounted) {
                setCameraError("Could not access camera. Please check permissions.");
             }
@@ -578,7 +604,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                
                {/* DEBUG: Show current state */}
                <div className="text-xs text-slate-500 mb-4 p-2 bg-slate-50 rounded border border-dashed">
-                  <p>scanStep: {scanStep} | mode: {mode} | activePart: {activePart?.part?.name || 'none'} | scanActive: {scanActiveRef.current ? 'true' : 'false'}</p>
+                  <p>scanStep: {scanStep} | mode: {mode} | scanActive: {scanActiveRef.current ? '✅' : '🔒'}</p>
+                  <p className="mt-1">buffer: "{hidBufferRef.current}" | activePart: {activePart?.part?.name || 'none'}</p>
                </div>
                
                {/* STEP 1: SCANNING */}
@@ -596,10 +623,20 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                            <div className="text-center space-y-2">
                               <p className="text-sm text-slate-600 font-medium">External Barcode Scanner Ready</p>
                               <p className="text-xs text-slate-500">Point your handheld scanner at the barcode</p>
+                              <p className="text-xs text-slate-400 mt-2">Zebra LS2208 or similar USB scanner</p>
                            </div>
                            <div className="bg-white p-4 rounded border-2 border-dashed border-teal-300 text-center">
                               <p className="text-xs text-slate-500 font-mono">Waiting for scan...</p>
                            </div>
+                           {/* Manual unlock button for debugging */}
+                           <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="w-full text-xs"
+                              onClick={manualUnlockScanner}
+                           >
+                              🔓 Unlock Scanner (if stuck)
+                           </Button>
                            {/* Hidden input to capture HID events */}
                            <Input 
                               type="text"
