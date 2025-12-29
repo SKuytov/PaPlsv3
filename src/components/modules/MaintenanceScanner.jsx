@@ -63,6 +63,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
    const handleScanRef = useRef(null); // Store handleScan in ref to avoid circular dependency
+   const hidActiveFlagRef = useRef(false); // Track if HID is actively listening
 
    // Transaction Form State - TECHNICIAN: ONLY USAGE
    const [txQty, setTxQty] = useState(1);
@@ -247,14 +248,22 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    useEffect(() => {
       const handleKeyDown = (event) => {
          // Only capture HID input when in scan mode and HID mode is active
-         if (scanStep !== 'scan' || mode !== 'hid') return;
-         
-         // Ignore modifier keys and special keys
-         if (event.ctrlKey || event.altKey || event.metaKey) return;
-         if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-         
+         if (scanStep !== 'scan' || mode !== 'hid' || !hidActiveFlagRef.current) return;
+
+         // 🔒 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
+         // This prevents Ctrl+J (Downloads), Ctrl+K (Search), Ctrl+Shift+J (DevTools), etc.
+         if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+            event.preventDefault();
+            return;
+         }
+
+         // Ignore special keys that shouldn't be in barcode
+         if (['Escape', 'Tab', 'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
+            return;
+         }
+
          event.preventDefault();
-         
+
          // Enter key triggers the scan
          if (event.key === 'Enter') {
             if (hidBufferRef.current.length > 0) {
@@ -263,10 +272,10 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             }
             return;
          }
-         
+
          // Build up the barcode buffer
          hidBufferRef.current += event.key;
-         
+
          // Clear timeout and restart it
          if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          hidTimeoutRef.current = setTimeout(() => {
@@ -280,12 +289,17 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          }, HID_SCAN_TIMEOUT_MS);
       };
 
+      // Set flag when entering HID mode
       if (scanStep === 'scan' && mode === 'hid') {
-         window.addEventListener('keydown', handleKeyDown);
+         hidActiveFlagRef.current = true;
+         window.addEventListener('keydown', handleKeyDown, true); // Use capture phase for priority
          return () => {
-            window.removeEventListener('keydown', handleKeyDown);
+            hidActiveFlagRef.current = false;
+            window.removeEventListener('keydown', handleKeyDown, true);
             if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          };
+      } else {
+         hidActiveFlagRef.current = false;
       }
    }, [scanStep, mode]); // Removed handleScan from dependency - using ref instead
 
