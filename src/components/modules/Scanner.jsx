@@ -22,9 +22,10 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // OPTIMIZATION: Cache configuration
 const CACHE_DURATION_MS = 30000; // 30 seconds
-const DEBOUNCE_DELAY_MS = 500; // 0.5 seconds batch window (changed from 2000ms)
+const DEBOUNCE_DELAY_MS = 500; // 0.5 seconds batch window
 const MAX_BATCH_SIZE = 5; // Query after 5 accumulated scans
 const MAX_RETRIES = 3;
+const HID_SCAN_TIMEOUT_MS = 300; // 300ms timeout for complete HID scan
 
 const Scanner = ({
    onScanComplete,
@@ -37,18 +38,19 @@ const Scanner = ({
    const { user } = useAuth();
    
    // --- State Management ---
-   const [mode, setMode] = useState('camera'); // 'camera' | 'manual'
+   const [mode, setMode] = useState('camera'); // 'camera' | 'hid' | 'manual'
    const [scanStep, setScanStep] = useState('scan'); // 'scan' | 'menu' | 'transaction'
    const [loading, setLoading] = useState(false);
    const [cameraError, setCameraError] = useState(null);
    const [recentScans, setRecentScans] = useState([]);
-   const [activePart, setActivePart] = useState(null); // FIXED: Correctly initialized with useState(null)
+   const [activePart, setActivePart] = useState(null);
    const [showHistory, setShowHistory] = useState(false);
    
    // --- Refs for Logic Control ---
    const scanActiveRef = useRef(true); 
    const zxingReaderRef = useRef(null);
    const videoRef = useRef(null);
+   const manualInputRef = useRef(null);
    
    // OPTIMIZATION: Queue and Cache Refs
    const scanQueueRef = useRef([]);
@@ -56,6 +58,10 @@ const Scanner = ({
    const scanCacheRef = useRef(new Map()); // Map<barcode, { data, timestamp }>
    const debounceTimerRef = useRef(null);
    const queryCounterRef = useRef(0);
+   
+   // HID Scanner Refs
+   const hidBufferRef = useRef('');
+   const hidTimeoutRef = useRef(null);
 
    // Transaction Form State
    const [txType, setTxType] = useState('usage');
@@ -81,6 +87,52 @@ const Scanner = ({
    useEffect(() => {
       if (selectedMachineId) setTxMachineId(selectedMachineId);
    }, [selectedMachineId]);
+
+   // --- HID SCANNER SETUP (Always listening) ---
+   useEffect(() => {
+      const handleKeyDown = (event) => {
+         // Only capture HID input when in scan mode and HID mode is active
+         if (scanStep !== 'scan' || mode !== 'hid') return;
+         
+         // Ignore modifier keys and special keys
+         if (event.ctrlKey || event.altKey || event.metaKey) return;
+         if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+         
+         event.preventDefault();
+         
+         // Enter key triggers the scan
+         if (event.key === 'Enter') {
+            if (hidBufferRef.current.length > 0) {
+               handleScan(hidBufferRef.current, 'hid');
+               hidBufferRef.current = '';
+            }
+            return;
+         }
+         
+         // Build up the barcode buffer
+         hidBufferRef.current += event.key;
+         
+         // Clear timeout and restart it
+         if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+         hidTimeoutRef.current = setTimeout(() => {
+            // If we have accumulated text without Enter, still process it
+            if (hidBufferRef.current.length > 2) {
+               handleScan(hidBufferRef.current, 'hid');
+               hidBufferRef.current = '';
+            } else {
+               hidBufferRef.current = '';
+            }
+         }, HID_SCAN_TIMEOUT_MS);
+      };
+
+      if (scanStep === 'scan' && mode === 'hid') {
+         window.addEventListener('keydown', handleKeyDown);
+         return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
+         };
+      }
+   }, [scanStep, mode, handleScan]);
 
    // --- OPTIMIZED SCAN LOGIC ---
 
@@ -224,21 +276,10 @@ const Scanner = ({
        queryInProgressRef.current = true;
        setLoading(true);
 
-       // Process one by one to ensure order, or could parallelize if needed
-       // For the scanner UI which usually shows one result at a time, FIFO is best.
-       // If multiple scans accumulated, we take the LAST one for single mode, or ALL for batch mode?
-       // Assuming Single Mode primarily shows the result: we process the latest one.
-       // If Batch Mode, we should process all.
-       
-       // Let's iterate through the queue
        const currentBatch = [...scanQueueRef.current];
        scanQueueRef.current = []; // Clear queue
 
        for (const item of currentBatch) {
-           // If user is already in 'menu' or 'transaction' state (and not batch mode), 
-           // we should probably ignore subsequent scans until they finish?
-           // But scanActiveRef usually handles that gatekeeping at the entry level.
-           
            // Double check gatekeeper for single mode inside the loop just in case
            if (!batchMode && scanStep !== 'scan') {
                console.log("Skipping queued scan because user is busy in menu.");
@@ -270,7 +311,7 @@ const Scanner = ({
           return;
       }
       
-      console.log(`[Scanner] Received: ${code}`);
+      console.log(`[Scanner] Received: ${code} from ${source}`);
       playBeep('success');
       
       // If not batch mode, we lock immediately to prevent UI jitter
@@ -364,7 +405,7 @@ const Scanner = ({
       }
    };
 
-   // Helper function to safely stop camera tracks - The Key Fix
+   // Helper function to safely stop camera tracks
    const safeStopVideoTracks = () => {
       if (videoRef.current && videoRef.current.srcObject) {
          try {
@@ -380,11 +421,10 @@ const Scanner = ({
    };
 
    const resetScanner = () => {
-      scanActiveRef.current = false; // Will be set to true by startCamera effect if in scan mode
+      scanActiveRef.current = false;
       
       if (zxingReaderRef.current) {
          try {
-            // Only call reset if it actually exists
             if (typeof zxingReaderRef.current.reset === 'function') {
                zxingReaderRef.current.reset();
             }
@@ -422,18 +462,17 @@ useEffect(() => {
          reader = new BrowserMultiFormatReader();
          zxingReaderRef.current = reader;
 
-         // ✅ FIXED: decoder is INSIDE startCamera, properly scoped
          await reader.decodeFromConstraints(
             { video: { facingMode: { ideal: "environment" } } },
             videoRef.current,
             (result, error) => {
-               // ✅ FIXED: Check mounted state AND scanStep
-               if (!mounted || scanStep !== 'scan') return;
+               // Check mounted state AND scanStep
+               if (!mounted || scanStep !== 'scan' || mode !== 'camera') return;
                
                if (result) {
                   const text = result.getText();
                   console.log('[ZXing] Detected barcode:', text);
-                  handleScan(text, 'zxing');
+                  handleScan(text, 'camera');
                }
             }
          );
@@ -466,7 +505,7 @@ useEffect(() => {
       safeStopVideoTracks();
    };
 
-   // ✅ FIXED: Proper lifecycle management
+   // Proper lifecycle management
    if (scanStep === 'scan' && mode === 'camera') {
       console.log('[Camera] Starting camera for scan...');
       startCamera();
@@ -475,21 +514,26 @@ useEffect(() => {
       stopCamera();
    }
 
-   // ✅ Cleanup on unmount or when dependencies change
+   // Cleanup on unmount or when dependencies change
    return () => {
       console.log('[Camera] useEffect cleanup');
       mounted = false;
       stopCamera();
    };
-}, [scanStep, mode, batchMode, handleScan]); // ✅ Correct dependencies
-
+}, [scanStep, mode, batchMode, handleScan]); // Correct dependencies
 
    const handleManualSubmit = (e) => {
       e.preventDefault();
-      const val = e.target.manualBarcode?.value || "";
+      const formData = new FormData(e.currentTarget);
+      const val = formData.get('manualBarcode') || '';
+      
       if (val.trim()) {
          handleScan(val.trim(), 'manual');
-         e.target.manualBarcode.value = "";
+         e.currentTarget.reset();
+         // Re-focus for continuous scanning
+         if (manualInputRef.current) {
+            manualInputRef.current.focus();
+         }
       }
    };
 
@@ -522,14 +566,16 @@ useEffect(() => {
 
             <CardContent className="p-4">
                
-               {/* STEP 1: SCANNING (Camera or Manual) */}
+               {/* STEP 1: SCANNING (Camera, HID, or Manual) */}
                {scanStep === 'scan' && (
                   <Tabs value={mode} onValueChange={setMode} className="w-full">
-                     <TabsList className="grid w-full grid-cols-2 mb-4">
-                        <TabsTrigger value="camera" className="flex items-center gap-2"><Camera className="w-4 h-4" /> Camera</TabsTrigger>
-                        <TabsTrigger value="manual" className="flex items-center gap-2"><Keyboard className="w-4 h-4" /> Manual</TabsTrigger>
+                     <TabsList className="grid w-full grid-cols-3 mb-4">
+                        <TabsTrigger value="camera" className="flex items-center gap-1 text-xs md:text-sm"><Camera className="w-4 h-4" /> <span className="hidden sm:inline">Camera</span></TabsTrigger>
+                        <TabsTrigger value="hid" className="flex items-center gap-1 text-xs md:text-sm"><QrCode className="w-4 h-4" /> <span className="hidden sm:inline">Scanner</span></TabsTrigger>
+                        <TabsTrigger value="manual" className="flex items-center gap-1 text-xs md:text-sm"><Keyboard className="w-4 h-4" /> <span className="hidden sm:inline">Manual</span></TabsTrigger>
                      </TabsList>
 
+                     {/* Camera Tab */}
                      <TabsContent value="camera" className="space-y-4 mt-0">
                         <div className="relative aspect-video bg-black rounded-lg overflow-hidden shadow-inner ring-1 ring-black/10">
                            {cameraError ? (
@@ -562,21 +608,46 @@ useEffect(() => {
                         </div>
                      </TabsContent>
 
+                     {/* HID Scanner Tab */}
+                     <TabsContent value="hid" className="mt-0">
+                        <div className="space-y-4 p-8 bg-slate-50 rounded-lg border border-slate-200">
+                           <div className="text-center space-y-2">
+                              <p className="text-sm text-slate-600 font-medium">External Barcode Scanner Ready</p>
+                              <p className="text-xs text-slate-500">Point your handheld scanner at the barcode</p>
+                           </div>
+                           <div className="bg-white p-4 rounded border-2 border-dashed border-teal-300 text-center">
+                              <p className="text-xs text-slate-500 font-mono">Waiting for scan...</p>
+                           </div>
+                           {/* Hidden input to capture HID events but keep focus clear */}
+                           <Input 
+                              type="text"
+                              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                              tabIndex="-1"
+                           />
+                        </div>
+                     </TabsContent>
+
+                     {/* Manual Entry Tab */}
                      <TabsContent value="manual" className="mt-0">
-                        <form onSubmit={handleManualSubmit} className="space-y-4 p-8 bg-slate-50 rounded-lg border border-slate-200 flex flex-col items-center">
-                           <div className="w-full max-w-xs space-y-4">
-                              <Label htmlFor="manual-barcode" className="text-center block text-lg">Enter Barcode</Label>
-                              <Input
-                                 name="manualBarcode"
-                                 id="manual-barcode"
-                                 type="text"
-                                 placeholder="Type code & press enter..."
-                                 className="text-center text-lg h-12"
-                                 autoFocus
-                              />
-                              <Button type="submit" disabled={loading} className="w-full h-12 text-lg">
-                                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Look Up"}
-                              </Button>
+                        <form onSubmit={handleManualSubmit} className="space-y-4 p-8 bg-slate-50 rounded-lg border border-slate-200">
+                           <div className="flex flex-col items-center">
+                              <Label htmlFor="manual-barcode" className="text-center block text-lg mb-4">Enter Barcode</Label>
+                              <div className="w-full max-w-xs space-y-3">
+                                 <Input
+                                    ref={manualInputRef}
+                                    name="manualBarcode"
+                                    id="manual-barcode"
+                                    type="text"
+                                    placeholder="Type code & press enter..."
+                                    className="text-center text-lg h-12 font-mono"
+                                    autoFocus
+                                    autoComplete="off"
+                                 />
+                                 <Button type="submit" disabled={loading} className="w-full h-12 text-lg">
+                                    {loading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+                                    {loading ? "Looking up..." : "Look Up"}
+                                 </Button>
+                              </div>
                            </div>
                         </form>
                      </TabsContent>
