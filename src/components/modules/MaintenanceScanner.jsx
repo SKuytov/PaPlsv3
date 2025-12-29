@@ -32,10 +32,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const { user } = useAuth();
    
    // DEBUG LOGGING
-   console.log('[MaintenanceScanner] Props received:');
-   console.log('  - technicianName:', technicianName);
-   console.log('  - technicianId:', technicianId);
-   console.log('  - user?.id:', user?.id);
+   console.log('[MaintenanceScanner] Component mounted');
    
    // --- State Management ---
    const [mode, setMode] = useState('hid'); // 'hid' | 'camera' | 'manual' (default: hid)
@@ -74,8 +71,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
    // Determine which user ID to use for performed_by
    const performedByUserId = technicianId || user?.id;
-   
-   console.log('[MaintenanceScanner] performedByUserId:', performedByUserId);
 
    // Fetch Machines for dropdown
    useEffect(() => {
@@ -98,6 +93,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          return null;
       }
       
+      console.log(`[MaintenanceScanner] Cache HIT for ${barcode}`);
       return cached.data;
    };
 
@@ -111,6 +107,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const fetchWithRetry = async (barcode, attempt = 1) => {
        try {
            queryCounterRef.current += 1;
+           console.log(`[MaintenanceScanner] Executing Query #${queryCounterRef.current} for: ${barcode} (Attempt ${attempt})`);
+           
            const { data: parts, error } = await supabase
             .from('spare_parts')
             .select(`
@@ -123,10 +121,13 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             .eq('barcode', barcode);
 
            if (error) throw error;
+           console.log(`[MaintenanceScanner] Query returned ${parts?.length || 0} parts`);
            return parts;
        } catch (error) {
+           console.error(`[MaintenanceScanner] Query error: ${error.message}`);
            if (attempt < MAX_RETRIES) {
                const delay = 2000 * Math.pow(2, attempt - 1);
+               console.log(`[MaintenanceScanner] Retrying in ${delay}ms...`);
                await new Promise(resolve => setTimeout(resolve, delay));
                return fetchWithRetry(barcode, attempt + 1);
            }
@@ -135,33 +136,41 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    };
 
    const processBarcode = async (code, source) => {
+      console.log(`[MaintenanceScanner] Processing barcode: ${code} from ${source}`);
       let part = getCachedPart(code);
 
       try {
           if (!part) {
+              console.log(`[MaintenanceScanner] Fetching from database...`);
               const parts = await fetchWithRetry(code);
               
               if (parts && parts.length > 0) {
                   parts.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
                   part = parts[0];
+                  console.log(`[MaintenanceScanner] Found part: ${part.name}`);
                   cachePart(code, part);
               }
           }
 
           if (!part) {
+              console.warn(`[MaintenanceScanner] Part not found for barcode: ${code}`);
               playBeep('error');
               toast({
                   title: "Part Not Found",
                   description: `No part found with barcode: ${code}`,
                   variant: "destructive",
               });
-               setTimeout(() => {
+              // Unlock for next scan
+              setTimeout(() => {
+                  console.log('[MaintenanceScanner] Unlocking scanner after error');
                   scanActiveRef.current = true;
                   setLoading(false);
                }, 2000);
                return;
           }
 
+          // SUCCESS: Part found
+          console.log(`[MaintenanceScanner] Part found successfully: ${part.name} (ID: ${part.id})`);
           const scanData = {
               barcode: code,
               part,
@@ -169,20 +178,23 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               source
           };
 
+          console.log(`[MaintenanceScanner] Setting activePart and moving to menu step`);
           setRecentScans(prev => [scanData, ...prev].slice(0, 10));
           setActivePart(scanData);
-          setScanStep('menu'); 
+          setScanStep('menu'); // This should trigger the menu UI
           
           setTxQty(1);
           setTxNotes('');
           setTxMachineId('none');
           setLoading(false);
+          console.log('[MaintenanceScanner] Menu step activated, waiting for user action');
 
       } catch (error) {
           console.error('[MaintenanceScanner] Processing Error:', error);
           playBeep('error');
           toast({ title: "Error", description: "Failed to process scan", variant: "destructive" });
           setTimeout(() => {
+              console.log('[MaintenanceScanner] Unlocking scanner after exception');
               scanActiveRef.current = true;
               setLoading(false);
           }, 2000);
@@ -190,50 +202,75 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    };
 
    const processQueue = async () => {
-       if (queryInProgressRef.current || scanQueueRef.current.length === 0) return;
+       console.log(`[MaintenanceScanner] processQueue called, queue length: ${scanQueueRef.current.length}, in progress: ${queryInProgressRef.current}`);
+       if (queryInProgressRef.current || scanQueueRef.current.length === 0) {
+           console.log('[MaintenanceScanner] processQueue skipped (already in progress or empty queue)');
+           return;
+       }
+       
        queryInProgressRef.current = true;
        setLoading(true);
 
        const currentBatch = [...scanQueueRef.current];
        scanQueueRef.current = [];
+       console.log(`[MaintenanceScanner] Processing batch of ${currentBatch.length} items`);
 
        for (const item of currentBatch) {
+           console.log(`[MaintenanceScanner] Processing item: ${item.code}`);
            if (scanStep !== 'scan') {
+               console.log('[MaintenanceScanner] Not in scan mode, skipping batch item');
                continue; 
            }
            await processBarcode(item.code, item.source);
-           if (scanStep === 'menu') break;
+           if (scanStep === 'menu') {
+               console.log('[MaintenanceScanner] Menu activated, stopping batch processing');
+               break;
+           }
        }
 
        queryInProgressRef.current = false;
+       console.log(`[MaintenanceScanner] Batch processing complete, remaining queue: ${scanQueueRef.current.length}`);
+       
        if (scanQueueRef.current.length > 0) {
+           console.log('[MaintenanceScanner] Queue has more items, reprocessing');
            processQueue();
        } else {
             if (scanStep === 'scan') {
+                console.log('[MaintenanceScanner] All done, disabling loading');
                 setLoading(false);
+            } else {
+                console.log('[MaintenanceScanner] Still in menu/transaction, keeping loading state');
             }
        }
    };
 
    const handleScan = (code, source = 'hid') => {
+      console.log(`[MaintenanceScanner] handleScan called: ${code} from ${source}, scanActive: ${scanActiveRef.current}`);
+      
       if (!scanActiveRef.current) {
+          console.warn(`[MaintenanceScanner] Scan blocked - scanner not active`);
           return;
       }
       
       console.log(`[MaintenanceScanner] Received: ${code} from ${source}`);
       playBeep('success');
-      scanActiveRef.current = false;
+      scanActiveRef.current = false; // Lock immediately
+      console.log('[MaintenanceScanner] Scanner locked');
 
       scanQueueRef.current.push({ code, source });
+      console.log(`[MaintenanceScanner] Added to queue, queue length: ${scanQueueRef.current.length}`);
 
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
       const shouldFlushImmediately = scanQueueRef.current.length >= MAX_BATCH_SIZE;
 
       if (shouldFlushImmediately) {
+          console.log('[MaintenanceScanner] Max batch size reached, processing immediately');
           processQueue();
       } else {
+          console.log('[MaintenanceScanner] Setting debounce timer for 500ms');
           debounceTimerRef.current = setTimeout(() => {
+              console.log('[MaintenanceScanner] Debounce timer fired, processing queue');
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
@@ -246,19 +283,25 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
    // --- HID SCANNER SETUP (Always listening) ---
    useEffect(() => {
+      console.log(`[MaintenanceScanner] HID useEffect setup: scanStep=${scanStep}, mode=${mode}`);
+      
       const handleKeyDown = (event) => {
          // Only capture HID input when in scan mode and HID mode is active
-         if (scanStep !== 'scan' || mode !== 'hid' || !hidActiveFlagRef.current) return;
+         if (scanStep !== 'scan' || mode !== 'hid' || !hidActiveFlagRef.current) {
+            console.log(`[MaintenanceScanner] HID event ignored: scanStep=${scanStep}, mode=${mode}, hidActive=${hidActiveFlagRef.current}`);
+            return;
+         }
 
          // 🔒 CRITICAL: Block ALL modifier key combinations to prevent browser shortcuts
-         // This prevents Ctrl+J (Downloads), Ctrl+K (Search), Ctrl+Shift+J (DevTools), etc.
          if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+            console.log(`[MaintenanceScanner] Blocking modifier key: ctrl=${event.ctrlKey}, alt=${event.altKey}, meta=${event.metaKey}, shift=${event.shiftKey}`);
             event.preventDefault();
             return;
          }
 
          // Ignore special keys that shouldn't be in barcode
          if (['Escape', 'Tab', 'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
+            console.log(`[MaintenanceScanner] Ignoring special key: ${event.key}`);
             return;
          }
 
@@ -266,7 +309,9 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
          // Enter key triggers the scan
          if (event.key === 'Enter') {
+            console.log(`[MaintenanceScanner] Enter key pressed, buffer: "${hidBufferRef.current}"`);
             if (hidBufferRef.current.length > 0) {
+               console.log(`[MaintenanceScanner] Calling handleScan with: ${hidBufferRef.current}`);
                handleScanRef.current(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
             }
@@ -275,12 +320,15 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
          // Build up the barcode buffer
          hidBufferRef.current += event.key;
+         console.log(`[MaintenanceScanner] HID buffer: "${hidBufferRef.current}"`);
 
          // Clear timeout and restart it
          if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          hidTimeoutRef.current = setTimeout(() => {
+            console.log(`[MaintenanceScanner] HID timeout fired, buffer: "${hidBufferRef.current}"`);
             // If we have accumulated text without Enter, still process it
             if (hidBufferRef.current.length > 2) {
+               console.log(`[MaintenanceScanner] Calling handleScan from timeout with: ${hidBufferRef.current}`);
                handleScanRef.current(hidBufferRef.current, 'hid');
                hidBufferRef.current = '';
             } else {
@@ -291,17 +339,20 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
       // Set flag when entering HID mode
       if (scanStep === 'scan' && mode === 'hid') {
+         console.log('[MaintenanceScanner] Activating HID listener');
          hidActiveFlagRef.current = true;
          window.addEventListener('keydown', handleKeyDown, true); // Use capture phase for priority
          return () => {
+            console.log('[MaintenanceScanner] Deactivating HID listener');
             hidActiveFlagRef.current = false;
             window.removeEventListener('keydown', handleKeyDown, true);
             if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
          };
       } else {
+         console.log('[MaintenanceScanner] Not setting up HID listener');
          hidActiveFlagRef.current = false;
       }
-   }, [scanStep, mode]); // Removed handleScan from dependency - using ref instead
+   }, [scanStep, mode]);
 
    const handleTransaction = async () => {
       if (!activePart) return;
@@ -341,7 +392,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             quantity: quantityChange,
             unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
-            performed_by: performedByUserId,  // ✅ NOW USING TECHNICIAN ID FROM RFID LOGIN
+            performed_by: performedByUserId,
             performed_by_role: 'technician' // Track that this was a technician
          };
          
@@ -387,6 +438,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    };
 
    const resetScanner = () => {
+      console.log('[MaintenanceScanner] Resetting scanner');
       scanActiveRef.current = false;
       
       if (zxingReaderRef.current) {
@@ -404,6 +456,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       setDetailsModalOpen(false);
       setLoading(false);
       setScanStep('scan');
+      scanActiveRef.current = true; // Unlock for next scan
+      console.log('[MaintenanceScanner] Scanner reset complete, ready for next scan');
    };
 
    // --- CAMERA LIFECYCLE ---
@@ -469,7 +523,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
          mounted = false;
          stopCamera();
       };
-   }, [scanStep, mode, handleScan]); // handleScan is safe here - it's in camera effect
+   }, [scanStep, mode, handleScan]);
 
    const handleManualSubmit = (e) => {
       e.preventDefault();
@@ -527,6 +581,11 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             </CardHeader>
 
             <CardContent className="p-4">
+               
+               {/* DEBUG: Show current state */}
+               <div className="text-xs text-slate-500 mb-4 p-2 bg-slate-50 rounded border border-dashed">
+                  <p>scanStep: {scanStep} | mode: {mode} | activePart: {activePart?.part?.name || 'none'} | scanActive: {scanActiveRef.current ? 'true' : 'false'}</p>
+               </div>
                
                {/* STEP 1: SCANNING */}
                {scanStep === 'scan' && (
