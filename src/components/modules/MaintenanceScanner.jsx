@@ -26,7 +26,6 @@ const DEBOUNCE_DELAY_MS = 500;
 const MAX_BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
 const HID_SCAN_TIMEOUT_MS = 300; // 300ms timeout for complete HID scan
-const SCAN_UNLOCK_TIMEOUT_MS = 3000; // Auto-unlock after 3 seconds if something goes wrong
 
 const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const { toast } = useToast();
@@ -60,7 +59,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    // HID Scanner Refs
    const hidBufferRef = useRef('');
    const hidTimeoutRef = useRef(null);
-   const scanUnlockTimeoutRef = useRef(null); // Auto-unlock timer
    const hidActiveFlagRef = useRef(false); // Track if HID is actively listening
 
    // Transaction Form State - TECHNICIAN: ONLY USAGE
@@ -105,15 +103,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       });
    };
 
-   // Manual unlock function - call this if scanner gets stuck
-   const manualUnlockScanner = useCallback(() => {
-      console.log('[MaintenanceScanner] MANUAL UNLOCK called');
-      scanActiveRef.current = true;
-      if (scanUnlockTimeoutRef.current) {
-         clearTimeout(scanUnlockTimeoutRef.current);
-      }
-   }, []);
-
    const fetchWithRetry = async (barcode, attempt = 1) => {
        try {
            queryCounterRef.current += 1;
@@ -145,6 +134,11 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
        }
    };
 
+   const unlockScanner = useCallback(() => {
+      console.log('[MaintenanceScanner] ✅ Unlocking scanner for next scan');
+      scanActiveRef.current = true;
+   }, []);
+
    const processBarcode = async (code, source) => {
       console.log(`[MaintenanceScanner] Processing barcode: ${code} from ${source}`);
       let part = getCachedPart(code);
@@ -170,12 +164,9 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                   description: `No part found with barcode: ${code}`,
                   variant: "destructive",
               });
-              // Unlock for next scan
-              setTimeout(() => {
-                  console.log('[MaintenanceScanner] Unlocking scanner after error');
-                  manualUnlockScanner();
-                  setLoading(false);
-               }, 2000);
+              // Unlock for next scan immediately
+              unlockScanner();
+              setLoading(false);
                return;
           }
 
@@ -197,17 +188,15 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
           setTxNotes('');
           setTxMachineId('none');
           setLoading(false);
-          console.log('[MaintenanceScanner] Menu step activated, waiting for user action');
+          console.log('[MaintenanceScanner] Menu step activated, scanner will unlock when returning to scan mode');
 
       } catch (error) {
           console.error('[MaintenanceScanner] Processing Error:', error);
           playBeep('error');
           toast({ title: "Error", description: "Failed to process scan", variant: "destructive" });
-          setTimeout(() => {
-              console.log('[MaintenanceScanner] Unlocking scanner after exception');
-              manualUnlockScanner();
-              setLoading(false);
-          }, 2000);
+          // Unlock for next scan immediately
+          unlockScanner();
+          setLoading(false);
       }
    };
 
@@ -268,13 +257,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       scanActiveRef.current = false; // Lock immediately
       console.log('[MaintenanceScanner] Scanner locked');
 
-      // Set auto-unlock timer in case something goes wrong
-      if (scanUnlockTimeoutRef.current) clearTimeout(scanUnlockTimeoutRef.current);
-      scanUnlockTimeoutRef.current = setTimeout(() => {
-         console.warn('[MaintenanceScanner] Auto-unlocking scanner (timeout)');
-         manualUnlockScanner();
-      }, SCAN_UNLOCK_TIMEOUT_MS);
-
       scanQueueRef.current.push({ code, source });
       console.log(`[MaintenanceScanner] Added to queue, queue length: ${scanQueueRef.current.length}`);
 
@@ -292,7 +274,15 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
               processQueue();
           }, DEBOUNCE_DELAY_MS);
       }
-   }, [scanStep, processQueue, manualUnlockScanner]);
+   }, [scanStep, processQueue]);
+
+   // ⭐ CRITICAL: Auto-unlock scanner when returning to scan mode from menu/transaction
+   useEffect(() => {
+      if (scanStep === 'scan') {
+         console.log('[MaintenanceScanner] Returned to scan mode, auto-unlocking scanner');
+         unlockScanner();
+      }
+   }, [scanStep, unlockScanner]);
 
    // --- HID SCANNER SETUP (Always listening, stabilized with useCallback) ---
    useEffect(() => {
@@ -454,7 +444,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       console.log('[MaintenanceScanner] Resetting scanner');
       
       // Clear all timers
-      if (scanUnlockTimeoutRef.current) clearTimeout(scanUnlockTimeoutRef.current);
       if (hidTimeoutRef.current) clearTimeout(hidTimeoutRef.current);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       
@@ -474,10 +463,9 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       setActivePart(null);
       setDetailsModalOpen(false);
       setLoading(false);
-      setScanStep('scan');
+      setScanStep('scan'); // This will trigger the useEffect to auto-unlock
       hidBufferRef.current = '';
-      scanActiveRef.current = true; // Unlock for next scan
-      console.log('[MaintenanceScanner] Scanner reset complete, ready for next scan');
+      console.log('[MaintenanceScanner] Scanner reset complete, returning to scan mode (will auto-unlock)');
    };
 
    // --- CAMERA LIFECYCLE ---
@@ -628,15 +616,6 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                            <div className="bg-white p-4 rounded border-2 border-dashed border-teal-300 text-center">
                               <p className="text-xs text-slate-500 font-mono">Waiting for scan...</p>
                            </div>
-                           {/* Manual unlock button for debugging */}
-                           <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="w-full text-xs"
-                              onClick={manualUnlockScanner}
-                           >
-                              🔓 Unlock Scanner (if stuck)
-                           </Button>
                            {/* Hidden input to capture HID events */}
                            <Input 
                               type="text"
