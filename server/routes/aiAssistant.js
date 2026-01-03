@@ -7,22 +7,60 @@ dotenv.config();
 
 const router = express.Router();
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || ''
-});
+// Determine which AI provider to use
+const AI_PROVIDER = process.env.AI_PROVIDER || 'openai'; // 'openai', 'perplexity', or 'ollama'
 
-// System prompt for maintenance diagnosis
-const SYSTEM_PROMPT = `You are an expert industrial machinery maintenance technician AI assistant.
+// Initialize AI client based on provider
+let aiClient;
+
+if (AI_PROVIDER === 'perplexity') {
+  // Perplexity uses OpenAI-compatible API
+  aiClient = new OpenAI({
+    apiKey: process.env.PERPLEXITY_API_KEY,
+    baseURL: 'https://api.perplexity.ai'
+  });
+} else if (AI_PROVIDER === 'ollama') {
+  aiClient = new OpenAI({
+    apiKey: 'ollama', // Ollama doesn't need real API key
+    baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1'
+  });
+} else {
+  // Default: OpenAI
+  aiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || ''
+  });
+}
+
+// System prompt for maintenance diagnosis (MULTI-LANGUAGE SUPPORT)
+const SYSTEM_PROMPT = `You are an expert industrial machinery maintenance technician AI assistant with multi-language capabilities.
 
 Your primary responsibilities:
-1. Diagnose machine problems from detailed symptom descriptions
+1. Diagnose machine problems from detailed symptom descriptions in ANY language
 2. Provide step-by-step troubleshooting procedures
 3. Recommend specific spare parts with part numbers when available
 4. Estimate repair difficulty (easy/moderate/complex) and time in hours
 5. Reference relevant manual sections and technical documentation
 6. Always prioritize safety and operational continuity
 7. Escalate complex issues to human experts when necessary
+8. Search online resources for manufacturer-specific solutions
+
+MULTI-LANGUAGE INSTRUCTIONS:
+- If the user writes in Bulgarian, respond in Bulgarian
+- If the user writes in English, respond in English
+- If the user writes in Italian, respond in Italian
+- If the user writes in German, respond in German
+- Always match the user's language for the response
+- When referencing manuals in other languages, provide translations of key sections
+- Technical terms can remain in English if needed, but provide Bulgarian/Italian/German explanations
+
+For Perplexity AI:
+- Use your web search capability to find:
+  * Official manufacturer documentation and manuals
+  * Technical forums discussing similar issues
+  * Parts catalogs and availability
+  * Recent recalls or known issues
+  * Video tutorials and repair guides
+- Cite sources when available
 
 Response Format Requirements:
 - **Root Cause**: Start with most likely root cause
@@ -32,6 +70,7 @@ Response Format Requirements:
 - **Difficulty Level**: Mark as Easy/Moderate/Complex
 - **Safety Notes**: Any warnings or precautions
 - **Next Steps**: What to do if issue persists
+- **Sources**: If using Perplexity, cite online sources found
 
 Always be:
 - Precise and technical in language
@@ -40,17 +79,31 @@ Always be:
 - Practical and action-oriented
 - Reference historical solutions when relevant`;
 
+// Get appropriate model based on provider
+const getModelName = () => {
+  if (AI_PROVIDER === 'perplexity') {
+    // Perplexity models with web search
+    return process.env.PERPLEXITY_MODEL || 'llama-3.1-sonar-large-128k-online';
+  } else if (AI_PROVIDER === 'ollama') {
+    return process.env.OLLAMA_MODEL || 'mistral';
+  } else {
+    return process.env.OPENAI_MODEL || 'gpt-4';
+  }
+};
+
 /**
  * POST /api/ai/diagnose
- * Main diagnosis endpoint
- * Body: { machineId, symptoms, errorCodes?, context? }
+ * Main diagnosis endpoint with multi-language and multi-provider support
+ * Body: { machineId, symptoms, errorCodes?, context?, language? }
  */
 router.post('/diagnose', async (req, res) => {
-  const { machineId, symptoms, errorCodes = [], context = '' } = req.body;
+  const { machineId, symptoms, errorCodes = [], context = '', language = 'auto' } = req.body;
 
   try {
     console.log('[AI] Diagnosis request for machine:', machineId);
+    console.log('[AI] Provider:', AI_PROVIDER);
     console.log('[AI] Symptoms:', symptoms);
+    console.log('[AI] Language:', language);
 
     if (!machineId || !symptoms) {
       return res.status(400).json({
@@ -94,7 +147,11 @@ router.post('/diagnose', async (req, res) => {
       console.warn('[AI] Could not fetch past diagnoses');
     }
 
-    // Build context for AI
+    // Build context for AI (with language instruction)
+    const languageInstruction = language !== 'auto' 
+      ? `\n\nIMPORTANT: Respond in ${language} language.`
+      : '';
+
     const aiContext = `
 MACHINE INFORMATION:
 Name: ${machine?.name || 'Unknown'}
@@ -117,23 +174,34 @@ PAST SIMILAR DIAGNOSES:
 ${similarDiagnoses && similarDiagnoses.length > 0
   ? similarDiagnoses.map((d, i) => `${i + 1}. Symptoms: ${d.symptoms || 'N/A'} - Diagnosis Status: ${d.status || 'pending'}`).join('\n')
   : 'No past diagnoses'}
+${languageInstruction}
     `.trim();
 
-    console.log('[AI] Sending to GPT-4 with context...');
+    console.log('[AI] Sending to AI provider:', AI_PROVIDER);
+    console.log('[AI] Model:', getModelName());
 
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4',
+    // Call AI API (works for OpenAI, Perplexity, and Ollama)
+    const response = await aiClient.chat.completions.create({
+      model: getModelName(),
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: aiContext }
       ],
       temperature: 0.3, // Lower temperature for consistency
       max_tokens: 2500,
-      top_p: 0.9
+      top_p: 0.9,
+      // Perplexity-specific: enable web search
+      ...(AI_PROVIDER === 'perplexity' && {
+        return_citations: true,
+        search_domain_filter: ['youtube.com', 'reddit.com'], // Optional: focus on helpful domains
+        search_recency_filter: 'month' // Optional: prefer recent content
+      })
     });
 
     const diagnosis = response.choices[0].message.content;
+
+    // Extract citations if using Perplexity
+    const citations = response.citations || [];
 
     console.log('[AI] Diagnosis complete. Saving to database...');
 
@@ -148,8 +216,9 @@ ${similarDiagnoses && similarDiagnoses.length > 0
         user_context: context,
         created_at: new Date(),
         status: 'pending_verification',
-        model_used: process.env.OPENAI_MODEL || 'gpt-4',
-        tokens_used: response.usage.total_tokens
+        model_used: `${AI_PROVIDER}:${getModelName()}`,
+        tokens_used: response.usage?.total_tokens || 0,
+        language_detected: language
       })
       .select()
       .single();
@@ -163,6 +232,7 @@ ${similarDiagnoses && similarDiagnoses.length > 0
     res.json({
       success: true,
       diagnosis,
+      citations, // Include web sources if using Perplexity
       machineInfo: {
         id: machine?.id,
         name: machine?.name,
@@ -171,7 +241,9 @@ ${similarDiagnoses && similarDiagnoses.length > 0
         operatingHours: machine?.operating_hours
       },
       diagnosisId: savedDiagnosis?.id,
-      tokensUsed: response.usage.total_tokens,
+      tokensUsed: response.usage?.total_tokens || 0,
+      provider: AI_PROVIDER,
+      model: getModelName(),
       timestamp: new Date()
     });
 
@@ -180,7 +252,8 @@ ${similarDiagnoses && similarDiagnoses.length > 0
     res.status(500).json({
       success: false,
       error: error.message || 'Diagnosis failed. Please try again.',
-      errorType: error.constructor.name
+      errorType: error.constructor.name,
+      provider: AI_PROVIDER
     });
   }
 });
@@ -188,10 +261,10 @@ ${similarDiagnoses && similarDiagnoses.length > 0
 /**
  * POST /api/ai/chat
  * Follow-up conversation endpoint
- * Body: { machineId, message, conversationHistory? }
+ * Body: { machineId, message, conversationHistory?, language? }
  */
 router.post('/chat', async (req, res) => {
-  const { machineId, message, conversationHistory = [] } = req.body;
+  const { machineId, message, conversationHistory = [], language = 'auto' } = req.body;
 
   try {
     console.log('[AI] Chat request for machine:', machineId);
@@ -203,30 +276,41 @@ router.post('/chat', async (req, res) => {
       });
     }
 
-    // Build messages array
+    // Build messages array with language instruction
+    const languageInstruction = language !== 'auto'
+      ? `\n\nIMPORTANT: Respond in ${language} language.`
+      : '';
+
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + languageInstruction },
       ...conversationHistory,
       { role: 'user', content: message }
     ];
 
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4',
+    // Call AI API
+    const response = await aiClient.chat.completions.create({
+      model: getModelName(),
       messages,
       temperature: 0.3,
       max_tokens: 2000,
-      top_p: 0.9
+      top_p: 0.9,
+      // Perplexity-specific
+      ...(AI_PROVIDER === 'perplexity' && {
+        return_citations: true
+      })
     });
 
     const aiMessage = response.choices[0].message.content;
+    const citations = response.citations || [];
 
     console.log('[AI] Chat response generated.');
 
     res.json({
       success: true,
       response: aiMessage,
-      tokensUsed: response.usage.total_tokens,
+      citations,
+      tokensUsed: response.usage?.total_tokens || 0,
+      provider: AI_PROVIDER,
       timestamp: new Date()
     });
 
@@ -349,7 +433,8 @@ router.get('/stats', async (req, res) => {
         accurateDiagnoses,
         accuracyRate: `${accuracy}%`,
         todayDiagnoses,
-        model: process.env.OPENAI_MODEL || 'gpt-4'
+        provider: AI_PROVIDER,
+        model: getModelName()
       }
     });
 
@@ -367,13 +452,23 @@ router.get('/stats', async (req, res) => {
  * Health check for AI service
  */
 router.get('/health', (req, res) => {
-  const hasApiKey = !!process.env.OPENAI_API_KEY;
+  const hasApiKey = AI_PROVIDER === 'perplexity' 
+    ? !!process.env.PERPLEXITY_API_KEY
+    : AI_PROVIDER === 'ollama'
+    ? true // Ollama doesn't need API key
+    : !!process.env.OPENAI_API_KEY;
   
   res.json({
     success: true,
     status: 'operational',
+    provider: AI_PROVIDER,
     apiKeyConfigured: hasApiKey,
-    model: process.env.OPENAI_MODEL || 'gpt-4',
+    model: getModelName(),
+    capabilities: {
+      webSearch: AI_PROVIDER === 'perplexity',
+      multiLanguage: true,
+      citations: AI_PROVIDER === 'perplexity'
+    },
     timestamp: new Date()
   });
 });
