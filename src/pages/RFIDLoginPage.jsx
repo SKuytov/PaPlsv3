@@ -1,44 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RFIDLogin from '@/components/auth/RFIDLogin';
 import MaintenanceScanner from '@/components/modules/MaintenanceScanner';
 import MaintenanceSpareParts from '@/components/modules/MaintenanceSpareParts';
+import { RolePermissionsContext } from '@/contexts/RolePermissionsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, Globe } from 'lucide-react';
+import { AlertCircle, Globe, LogOut, Shield } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getRoleDisplayInfo } from '@/utils/rolePermissions';
 
 const RFIDLoginPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t, language, setLanguage } = useTranslation();
+  const roleContext = useContext(RolePermissionsContext);
+  
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [technicianInfo, setTechnicianInfo] = useState(null);
   const [activeTab, setActiveTab] = useState('scanner');
 
   const translations = {
     en: {
-      sessionActive: 'Technician Session Active',
+      sessionActive: 'Session Active',
       name: 'Name',
       id: 'ID',
-      card: 'Card',
+      email: 'Email',
+      role: 'Role',
+      buildings: 'Buildings',
       scanner: '📋 Scanner',
       spareParts: '📦 Spare Parts',
       logout: 'Logout',
-      errorNoTechnicianId: 'Error: No technician ID found'
+      errorNoTechnicianId: 'Error: No technician ID found',
+      permissions: 'Permissions',
+      canRestock: 'Can Restock',
+      canEdit: 'Can Edit Inventory',
+      canApprove: 'Can Approve'
     },
     bg: {
-      sessionActive: 'Активна сесия на техник',
+      sessionActive: 'Активна сесия',
       name: 'Име',
       id: 'Код',
-      card: 'Карта',
+      email: 'Имейл',
+      role: 'Роля',
+      buildings: 'Сгради',
       scanner: '📋 Сканер',
       spareParts: '📦 Резервни части',
       logout: 'Излез',
-      errorNoTechnicianId: 'Грешка: Няма намерен код на техник'
+      errorNoTechnicianId: 'Грешка: Няма намерен код',
+      permissions: 'Разрешения',
+      canRestock: 'Може да пополнява',
+      canEdit: 'Може да редактира',
+      canApprove: 'Може да одобрява'
     }
   };
 
@@ -47,8 +63,21 @@ const RFIDLoginPage = () => {
 
   const handleLoginSuccess = async (technician) => {
     console.log('[RFIDLoginPage] Login successful:', technician);
-    console.log('[RFIDLoginPage] Technician ID:', technician?.id);
-    console.log('[RFIDLoginPage] Technician Name:', technician?.name);
+    
+    // Update role context
+    if (roleContext) {
+      roleContext.setRole(technician.role);
+      roleContext.setPermissions(technician.permissions || []);
+      if (technician.assigned_buildings) {
+        roleContext.setAssignedBuildings(
+          Array.isArray(technician.assigned_buildings) 
+            ? technician.assigned_buildings 
+            : [technician.assigned_buildings]
+        );
+      }
+      roleContext.setUserProfile(technician);
+    }
+    
     setTechnicianInfo(technician);
     setIsLoggedIn(true);
   };
@@ -67,8 +96,13 @@ const RFIDLoginPage = () => {
       setTechnicianInfo(null);
       setActiveTab('scanner');
       
-      // Optionally redirect to home
-      // navigate('/');
+      // Reset role context
+      if (roleContext) {
+        roleContext.setRole(null);
+        roleContext.setPermissions([]);
+        roleContext.setAssignedBuildings([]);
+        roleContext.setUserProfile(null);
+      }
     } catch (error) {
       console.error('[RFIDLoginPage] Logout error:', error);
     }
@@ -84,7 +118,12 @@ const RFIDLoginPage = () => {
     );
   }
 
-  // After login: Show Scanner and SpareParts tabs
+  const roleInfo = technicianInfo?.role ? getRoleDisplayInfo(technicianInfo.role.name) : null;
+  const buildings = Array.isArray(technicianInfo?.assigned_buildings) 
+    ? technicianInfo.assigned_buildings.join(', ') 
+    : (technicianInfo?.assigned_buildings || 'N/A');
+
+  // After login: Show Scanner and SpareParts tabs with role-based features
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8 px-4">
       {/* Language Switcher - Top Right */}
@@ -115,33 +154,90 @@ const RFIDLoginPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto">
-        {/* Session Info */}
-        <Card className="mb-6 border-blue-200 bg-blue-50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-blue-900 font-medium">
-                  {txt.sessionActive}
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  {txt.name}: {technicianInfo?.name} | {txt.id}: {technicianInfo?.id} | {txt.card}: {technicianInfo?.rfid_card_id}
-                </p>
+        {/* Session Info Card */}
+        <Card className={`mb-6 border-l-4 ${
+          roleInfo?.bg.includes('blue') ? 'border-blue-600 bg-blue-50' :
+          roleInfo?.bg.includes('purple') ? 'border-purple-600 bg-purple-50' :
+          roleInfo?.bg.includes('orange') ? 'border-orange-600 bg-orange-50' :
+          roleInfo?.bg.includes('red') ? 'border-red-600 bg-red-50' :
+          roleInfo?.bg.includes('green') ? 'border-green-600 bg-green-50' :
+          'border-slate-600 bg-slate-50'
+        }`}>
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {/* Main Info Row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {roleInfo && (
+                    <div className="text-2xl">{roleInfo.icon}</div>
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {txt.sessionActive} • {technicianInfo?.name}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      {txt.role}: <span className="font-medium">{technicianInfo?.role?.name}</span>
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {txt.logout}
+                </Button>
               </div>
+
+              {/* Details Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <p className="text-slate-600 font-medium">{txt.email}</p>
+                  <p className="text-slate-900 font-mono">{technicianInfo?.email}</p>
+                </div>
+                <div>
+                  <p className="text-slate-600 font-medium">{txt.buildings}</p>
+                  <p className="text-slate-900">{buildings}</p>
+                </div>
+                <div>
+                  <p className="text-slate-600 font-medium">{txt.canRestock}</p>
+                  <p className="text-slate-900">
+                    {technicianInfo?.role?.can_restock ? '✅ Yes' : '❌ No'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-600 font-medium">{txt.canEdit}</p>
+                  <p className="text-slate-900">
+                    {technicianInfo?.role?.can_edit_inventory ? '✅ Yes' : '❌ No'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Permissions Display */}
+              {technicianInfo?.permissions && technicianInfo.permissions.length > 0 && (
+                <div className="pt-2 border-t border-slate-300/50">
+                  <p className="text-xs font-semibold text-slate-700 mb-1.5">{txt.permissions}:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {technicianInfo.permissions.map((perm) => (
+                      <span
+                        key={perm}
+                        className="inline-block px-2 py-1 bg-white/60 border border-slate-300 rounded text-xs font-mono text-slate-700"
+                      >
+                        {perm}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="border-blue-300 text-blue-700 hover:bg-blue-100"
-            >
-              {txt.logout}
-            </Button>
           </CardContent>
         </Card>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-200">
             <TabsTrigger value="scanner" className="text-base font-semibold">
               {txt.scanner}
             </TabsTrigger>
@@ -157,10 +253,14 @@ const RFIDLoginPage = () => {
                 onLogout={handleLogout}
                 technicianName={technicianInfo?.name}
                 technicianId={technicianInfo?.id}
+                userId={technicianInfo?.id}
+                userRole={technicianInfo?.role}
+                userPermissions={technicianInfo?.permissions || []}
+                building={buildings}
               />
             )}
             {!technicianInfo?.id && (
-              <div className="text-center text-red-600 font-bold">{txt.errorNoTechnicianId}</div>
+              <div className="text-center text-red-600 font-bold py-8">{txt.errorNoTechnicianId}</div>
             )}
           </TabsContent>
 
@@ -171,10 +271,13 @@ const RFIDLoginPage = () => {
                 onLogout={handleLogout}
                 technicianName={technicianInfo?.name}
                 technicianId={technicianInfo?.id}
+                userId={technicianInfo?.id}
+                userRole={technicianInfo?.role}
+                userPermissions={technicianInfo?.permissions || []}
               />
             )}
             {!technicianInfo?.id && (
-              <div className="text-center text-red-600 font-bold">{txt.errorNoTechnicianId}</div>
+              <div className="text-center text-red-600 font-bold py-8">{txt.errorNoTechnicianId}</div>
             )}
           </TabsContent>
         </Tabs>
