@@ -77,9 +77,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
 
    // Restock Form State - ADMIN: ADD QUANTITY
    const [restockQty, setRestockQty] = useState(1);
-   const [restockCost, setRestockCost] = useState('');
    const [restockNotes, setRestockNotes] = useState('');
-   const [restockSupplier, setRestockSupplier] = useState('');
 
    // Determine which user ID to use for performed_by
    const performedByUserId = technicianId || user?.id;
@@ -194,9 +192,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
           setTxNotes('');
           setTxMachineId('none');
           setRestockQty(1);
-          setRestockCost('');
           setRestockNotes('');
-          setRestockSupplier('');
           setLoading(false);
           setIsProcessing(false);
           console.log('[MaintenanceScanner] Menu activated');
@@ -355,8 +351,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
             quantity: quantityChange,
             unit_cost: activePart.part.average_cost || 0,
             notes: txNotes,
-            performed_by: performedByUserId,
-            performed_by_role: 'technician'
+            performed_by: performedByUserId
          };
          
          const { error: txError } = await supabase.from('inventory_transactions').insert(txData);
@@ -391,33 +386,29 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
       setLoading(true);
       try {
          const quantityChange = Math.abs(restockQty);
-         const unitCost = parseFloat(restockCost) || activePart.part.average_cost || 0;
 
+         // ✅ FIXED: Only use columns that exist in inventory_transactions table
          const txData = {
             part_id: activePart.part.id,
             transaction_type: 'restock',
             quantity: quantityChange,
-            unit_cost: unitCost,
+            unit_cost: activePart.part.average_cost || 0,
             notes: restockNotes || `Restocked by ${technicianName}`,
-            performed_by: performedByUserId,
-            performed_by_role: 'admin',
-            supplier: restockSupplier || null
+            performed_by: performedByUserId
+            // ❌ REMOVED: supplier, performed_by_role (columns don't exist)
          };
          
+         console.log('[MaintenanceScanner] Restock transaction data:', txData);
+         
          const { error: txError } = await supabase.from('inventory_transactions').insert(txData);
-         if (txError) throw txError;
-
-         // Update average cost if new cost provided
-         let updateData = { current_quantity: activePart.part.current_quantity + quantityChange };
-         if (restockCost) {
-            const oldValue = activePart.part.current_quantity * (activePart.part.average_cost || 0);
-            const newValue = quantityChange * unitCost;
-            const totalQty = activePart.part.current_quantity + quantityChange;
-            updateData.average_cost = (oldValue + newValue) / totalQty;
+         if (txError) {
+            console.error('[MaintenanceScanner] Restock insert error:', txError);
+            throw txError;
          }
 
+         // Update part quantity
          const { error: updateError } = await supabase.from('spare_parts')
-            .update(updateData)
+            .update({ current_quantity: activePart.part.current_quantity + quantityChange })
             .eq('id', activePart.part.id);
          if (updateError) throw updateError;
 
@@ -699,23 +690,13 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
                      </div>
                      <PartSummary part={activePart.part} />
                      <div className="space-y-5 bg-white p-1">
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <Label>Quantity to Add</Label>
-                              <Input type="number" min="1" value={restockQty} onChange={(e) => setRestockQty(parseInt(e.target.value) || 0)} className="font-bold text-xl h-12 text-center" />
-                           </div>
-                           <div className="space-y-2">
-                              <Label>Unit Cost ($)</Label>
-                              <Input type="number" min="0" step="0.01" value={restockCost} onChange={(e) => setRestockCost(e.target.value)} className="font-bold text-lg h-12 text-center" placeholder="Optional" />
-                           </div>
+                        <div className="space-y-2">
+                           <Label>Quantity to Add</Label>
+                           <Input type="number" min="1" value={restockQty} onChange={(e) => setRestockQty(parseInt(e.target.value) || 0)} className="font-bold text-xl h-12 text-center" />
                         </div>
                         <div className="space-y-2">
-                           <Label>Supplier (Optional)</Label>
-                           <Input type="text" value={restockSupplier} onChange={(e) => setRestockSupplier(e.target.value)} className="h-10" placeholder="e.g., Amazon, Local Supplier" />
-                        </div>
-                        <div className="space-y-2">
-                           <Label>Notes</Label>
-                           <Textarea placeholder="Order details, invoice #, etc." value={restockNotes} onChange={(e) => setRestockNotes(e.target.value)} className="resize-none h-24" />
+                           <Label>Notes / Source</Label>
+                           <Textarea placeholder="Where restocked from? Additional details..." value={restockNotes} onChange={(e) => setRestockNotes(e.target.value)} className="resize-none h-24" />
                         </div>
                         <Button className="w-full h-14 text-lg font-bold bg-green-600 hover:bg-green-700" onClick={handleRestock} disabled={loading}>
                            {loading ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
