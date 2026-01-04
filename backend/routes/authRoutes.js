@@ -13,6 +13,19 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// List of valid technician roles (includes all technician-related roles)
+const TECHNICIAN_ROLES = [
+  'technician',
+  'Building 1 Technician',
+  'Building 2 Technician',
+  'Building 3/5 Technician',
+  'Building 4 Technician',
+  'Maintenance Organizer',
+  'Head Technician',
+  'Technical Director',
+  'God Admin' // Admin can also access technician interface
+];
+
 /**
  * POST /api/auth/rfid-login
  * 
@@ -29,7 +42,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  *     "id": "uuid",
  *     "name": "John Doe",
  *     "email": "john@example.com",
- *     "rfid_card_id": "00001234567890"
+ *     "rfid_card_id": "00001234567890",
+ *     "role": "Building 1 Technician",
+ *     "permissions": ["view_inventory", "restock_inventory"]
  *   }
  * }
  */
@@ -62,7 +77,7 @@ router.post('/auth/rfid-login', async (req, res) => {
       });
     }
 
-    // Step 2: Look up technician and join with roles
+    // Step 2: Look up technician and join with roles + permissions
     const { data: technician, error: techError } = await supabase
       .from('users')
       .select(`
@@ -70,7 +85,15 @@ router.post('/auth/rfid-login', async (req, res) => {
         email,
         full_name,
         role_id,
-        role:roles(id, name)
+        role:roles(
+          id,
+          name,
+          permissions,
+          can_restock,
+          can_edit_inventory,
+          can_view_reports,
+          can_approve_inventory
+        )
       `)
       .eq('id', cardRecord.user_id)
       .single();
@@ -83,16 +106,27 @@ router.post('/auth/rfid-login', async (req, res) => {
       });
     }
 
-    // Step 3: Verify user has technician role
-    if (!technician.role || technician.role.name !== 'technician') {
-      console.warn(`[RFID Auth] User does not have technician role: ${cardRecord.user_id}`);
+    // Step 3: Verify user has valid technician role
+    if (!technician.role || !TECHNICIAN_ROLES.includes(technician.role.name)) {
+      console.warn(`[RFID Auth] User does not have valid technician role: ${cardRecord.user_id}, Role: ${technician.role?.name}`);
       return res.status(401).json({
         error: 'User does not have technician role',
         code: 'INVALID_ROLE'
       });
     }
 
-    // Step 4: Log successful RFID login attempt
+    // Step 4: Extract permissions from role
+    let permissions = [];
+    if (technician.role.permissions && typeof technician.role.permissions === 'object') {
+      // Extract permissions from JSONB object
+      permissions = Object.keys(technician.role.permissions).filter(
+        key => technician.role.permissions[key] === true
+      );
+    }
+
+    console.log(`[RFID Auth] User authenticated: ${technician.id}, Role: ${technician.role.name}, Permissions: ${permissions.join(', ')}`);
+
+    // Step 5: Log successful RFID login attempt
     const { error: auditError } = await supabase
       .from('rfid_login_audit')
       .insert({
@@ -108,8 +142,7 @@ router.post('/auth/rfid-login', async (req, res) => {
       // Don't fail the request, just warn
     }
 
-    // Step 5: Return success response with technician info
-    // Frontend will handle setting up the Supabase session
+    // Step 6: Return success response with complete technician info
     res.status(200).json({
       success: true,
       technician: {
@@ -117,7 +150,16 @@ router.post('/auth/rfid-login', async (req, res) => {
         name: technician.full_name,
         email: technician.email,
         rfid_card_id: trimmedCardId,
-        role: technician.role?.name || 'technician'
+        role: {
+          id: technician.role.id,
+          name: technician.role.name,
+          can_restock: technician.role.can_restock || false,
+          can_edit_inventory: technician.role.can_edit_inventory || false,
+          can_view_reports: technician.role.can_view_reports || false,
+          can_approve_inventory: technician.role.can_approve_inventory || false
+        },
+        permissions: permissions,
+        assigned_buildings: [] // Will be populated from technician_profiles if available
       },
       message: `Welcome ${technician.full_name}`
     });
