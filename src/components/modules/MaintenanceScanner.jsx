@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import {
    Camera, Keyboard, QrCode, History, AlertTriangle,
    CheckCircle, X, RefreshCw,
-   MinusCircle, ArrowLeft, Info, LogOut
+   MinusCircle, ArrowLeft, Info, LogOut, Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,13 +27,16 @@ const MAX_BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
 const HID_SCAN_TIMEOUT_MS = 300; // 300ms timeout for complete HID scan
 
-const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
+const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, userPermissions = [] }) => {
    const { toast } = useToast();
    const { user } = useAuth();
    
+   // Check if user can restock
+   const canRestock = userRole?.includes('Admin') || userRole === 'God Admin' || userPermissions?.includes('restock_inventory') || false;
+   
    // --- State Management ---
    const [mode, setMode] = useState('hid'); // 'hid' | 'camera' | 'manual' (default: hid)
-   const [scanStep, setScanStep] = useState('scan'); // 'scan' | 'menu' | 'transaction'
+   const [scanStep, setScanStep] = useState('scan'); // 'scan' | 'menu' | 'transaction' | 'restock'
    const [loading, setLoading] = useState(false);
    const [cameraError, setCameraError] = useState(null);
    const [recentScans, setRecentScans] = useState([]);
@@ -65,6 +68,12 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
    const [txNotes, setTxNotes] = useState('');
    const [machines, setMachines] = useState([]);
    const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+
+   // Restock Form State - ADMIN: ADD QUANTITY
+   const [restockQty, setRestockQty] = useState(1);
+   const [restockCost, setRestockCost] = useState('');
+   const [restockNotes, setRestockNotes] = useState('');
+   const [restockSupplier, setRestockSupplier] = useState('');
 
    // Determine which user ID to use for performed_by
    const performedByUserId = technicianId || user?.id;
@@ -178,6 +187,10 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
           setTxQty(1);
           setTxNotes('');
           setTxMachineId('none');
+          setRestockQty(1);
+          setRestockCost('');
+          setRestockNotes('');
+          setRestockSupplier('');
           setLoading(false);
           setIsProcessing(false);
           console.log('[MaintenanceScanner] Menu activated');
@@ -361,6 +374,60 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
       }
    };
 
+   const handleRestock = async () => {
+      if (!activePart || restockQty <= 0) return;
+      
+      if (!performedByUserId) {
+         toast({ variant: "destructive", title: "Error", description: "No user logged in" });
+         return;
+      }
+      
+      setLoading(true);
+      try {
+         const quantityChange = Math.abs(restockQty);
+         const unitCost = parseFloat(restockCost) || activePart.part.average_cost || 0;
+
+         const txData = {
+            part_id: activePart.part.id,
+            transaction_type: 'restock',
+            quantity: quantityChange,
+            unit_cost: unitCost,
+            notes: restockNotes || `Restocked by ${technicianName}`,
+            performed_by: performedByUserId,
+            performed_by_role: 'admin',
+            supplier: restockSupplier || null
+         };
+         
+         const { error: txError } = await supabase.from('inventory_transactions').insert(txData);
+         if (txError) throw txError;
+
+         // Update average cost if new cost provided
+         let updateData = { current_quantity: activePart.part.current_quantity + quantityChange };
+         if (restockCost) {
+            const oldValue = activePart.part.current_quantity * (activePart.part.average_cost || 0);
+            const newValue = quantityChange * unitCost;
+            const totalQty = activePart.part.current_quantity + quantityChange;
+            updateData.average_cost = (oldValue + newValue) / totalQty;
+         }
+
+         const { error: updateError } = await supabase.from('spare_parts')
+            .update(updateData)
+            .eq('id', activePart.part.id);
+         if (updateError) throw updateError;
+
+         playBeep('success');
+         toast({ title: "Success", description: `Restocked ${quantityChange} x ${activePart.part.name}` });
+         scanCacheRef.current.delete(activePart.barcode);
+         resetScanner();
+
+      } catch (error) {
+         console.error('Restock error:', error);
+         toast({ variant: "destructive", title: "Restock Failed", description: error.message });
+      } finally {
+         setLoading(false);
+      }
+   };
+
    const safeStopVideoTracks = () => {
       if (videoRef.current?.srcObject) {
          try {
@@ -481,9 +548,9 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                   <QrCode className="w-5 h-5 text-teal-600" />
                   <div>
                      <CardTitle className="text-slate-800 text-lg">
-                        {scanStep === 'scan' ? 'Technician Scanner' : scanStep === 'menu' ? 'Item Menu' : 'Register Usage'}
+                        {scanStep === 'scan' ? 'Technician Scanner' : scanStep === 'menu' ? 'Item Menu' : scanStep === 'transaction' ? 'Register Usage' : 'Restock Item'}
                      </CardTitle>
-                     <p className="text-xs text-slate-500 mt-0.5">Logged in as: <span className="font-semibold">{technicianName}</span></p>
+                     <p className="text-xs text-slate-500 mt-0.5">Logged in as: <span className="font-semibold">{technicianName}</span> {canRestock && <span className="text-teal-600">👑 Admin</span>}</p>
                   </div>
                </div>
                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={onLogout}>
@@ -494,7 +561,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
 
             <CardContent className="p-4">
                <div className="text-xs text-slate-500 mb-4 p-2 bg-slate-50 rounded border border-dashed">
-                  <p>scanStep: {scanStep} | mode: {mode} | isProcessing: {isProcessing ? '🔒' : '✅'}</p>
+                  <p>scanStep: {scanStep} | mode: {mode} | isProcessing: {isProcessing ? '🔒' : '✅'} | canRestock: {canRestock ? '✅' : '❌'}</p>
                </div>
                
                {scanStep === 'scan' && (
@@ -561,6 +628,12 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                            <MinusCircle className="w-6 h-6 mr-3" />
                            Use Item
                         </Button>
+                        {canRestock && (
+                           <Button size="lg" className="h-16 text-lg font-semibold bg-green-600 hover:bg-green-700" onClick={() => setScanStep('restock')}>
+                              <Plus className="w-6 h-6 mr-3" />
+                              Restock Item
+                           </Button>
+                        )}
                         <Button size="lg" variant="outline" className="h-16 text-lg font-semibold border-2" onClick={() => setDetailsModalOpen(true)}>
                            <Info className="w-6 h-6 mr-3 text-blue-600" />
                            View Details
@@ -605,6 +678,42 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
                         <Button className="w-full h-14 text-lg font-bold bg-red-600 hover:bg-red-700" onClick={handleTransaction} disabled={loading}>
                            {loading ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <CheckCircle className="w-5 h-5 mr-2" />}
                            Confirm Usage
+                        </Button>
+                     </div>
+                  </div>
+               )}
+
+               {scanStep === 'restock' && activePart && (
+                  <div className="animate-in slide-in-from-right-4 duration-200">
+                     <div className="flex items-center mb-4">
+                        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setScanStep('menu')}>
+                           <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                        </Button>
+                        <h3 className="ml-auto font-semibold text-lg">Restock Item</h3>
+                     </div>
+                     <PartSummary part={activePart.part} />
+                     <div className="space-y-5 bg-white p-1">
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-2">
+                              <Label>Quantity to Add</Label>
+                              <Input type="number" min="1" value={restockQty} onChange={(e) => setRestockQty(parseInt(e.target.value) || 0)} className="font-bold text-xl h-12 text-center" />
+                           </div>
+                           <div className="space-y-2">
+                              <Label>Unit Cost ($)</Label>
+                              <Input type="number" min="0" step="0.01" value={restockCost} onChange={(e) => setRestockCost(e.target.value)} className="font-bold text-lg h-12 text-center" placeholder="Optional" />
+                           </div>
+                        </div>
+                        <div className="space-y-2">
+                           <Label>Supplier (Optional)</Label>
+                           <Input type="text" value={restockSupplier} onChange={(e) => setRestockSupplier(e.target.value)} className="h-10" placeholder="e.g., Amazon, Local Supplier" />
+                        </div>
+                        <div className="space-y-2">
+                           <Label>Notes</Label>
+                           <Textarea placeholder="Order details, invoice #, etc." value={restockNotes} onChange={(e) => setRestockNotes(e.target.value)} className="resize-none h-24" />
+                        </div>
+                        <Button className="w-full h-14 text-lg font-bold bg-green-600 hover:bg-green-700" onClick={handleRestock} disabled={loading}>
+                           {loading ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+                           Confirm Restock
                         </Button>
                      </div>
                   </div>
