@@ -298,106 +298,108 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-  <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
-    <DialogTitle className="sr-only">{part?.name || 'Part Details'}</DialogTitle>
-      <DialogDescription className="sr-only">Part details and information</DialogDescription>    
+        <DialogContent className="w-[95vw] h-[95vh] md:w-full md:h-auto md:max-w-4xl md:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white rounded-lg md:rounded-xl border shadow-lg md:shadow-2xl">
+          <DialogTitle className="sr-only">{part?.name || 'Part Details'}</DialogTitle>
+          <DialogDescription className="sr-only">Part details and information</DialogDescription>    
+          
           {/* --- HEADER SECTION --- */}
-          <div className="relative bg-slate-900 overflow-hidden shrink-0 min-h-[200px] sm:min-h-[192px] flex flex-col justify-end">
+          <div className="relative bg-slate-900 overflow-hidden shrink-0 min-h-[160px] md:min-h-[192px] flex flex-col justify-end">
             <div className="absolute inset-0 opacity-40">
               <ImageWithFallback src={part.photo_url} alt={part.name} className="w-full h-full object-cover blur-sm scale-105" />
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-slate-900/20" />
             
-            <div className="absolute top-4 right-4 z-20 flex gap-2">
+            {/* Header Actions */}
+            <div className="absolute top-2 right-2 md:top-4 md:right-4 z-20 flex flex-col md:flex-row gap-1 md:gap-2">
                {part.photo_url && (
-                  <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-8 text-xs px-3" onClick={() => setImageViewerOpen(true)}>
-                    <ZoomIn className="w-3 h-3 mr-2" /> <span className="hidden sm:inline">View Image</span>
+                  <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-7 md:h-8 text-xs px-2 md:px-3" onClick={() => setImageViewerOpen(true)}>
+                    <ZoomIn className="w-3 h-3" /> <span className="hidden sm:inline ml-1">View</span>
                   </Button>
                )}
-               <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-8 text-xs px-3" onClick={() => window.open(part.specifications?.datasheet_url || '#', '_blank')}>
-                 <FileText className="w-3 h-3 mr-2" /> <span className="hidden sm:inline">Datasheet</span>
+               <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-7 md:h-8 text-xs px-2 md:px-3" onClick={() => window.open(part.specifications?.datasheet_url || '#', '_blank')}>
+                 <FileText className="w-3 h-3" /> <span className="hidden sm:inline ml-1">Sheet</span>
                </Button>
                {isGodAdmin && (
-                  <Button size="sm" variant="secondary" className="bg-white/90 text-slate-900 hover:bg-white h-8 text-xs px-3" onClick={() => onEdit?.(part)}>
-                    <Pencil className="w-3 h-3 mr-2" /> Edit
+                  <Button size="sm" variant="secondary" className="bg-white/90 text-slate-900 hover:bg-white h-7 md:h-8 text-xs px-2 md:px-3" onClick={() => onEdit?.(part)}>
+                    <Pencil className="w-3 h-3" /> <span className="hidden sm:inline ml-1">Edit</span>
                   </Button>
                )}
             </div>
 
-
-            <div className="relative z-10 p-4 sm:p-6 w-full flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-              <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 sm:border-4 border-white shrink-0 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setImageViewerOpen(true)}>
+            {/* Header Content */}
+            <div className="relative z-10 p-3 md:p-6 w-full flex flex-col gap-3 items-start">
+              <div className="w-16 h-16 md:w-32 md:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 md:border-4 border-white shrink-0 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setImageViewerOpen(true)}>
                  <ImageWithFallback src={part.photo_url} alt={part.name} className="w-full h-full object-cover" />
               </div>
               
               <div className="flex-1 min-w-0 w-full">
-                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <Badge variant="secondary" className="bg-slate-700 text-slate-100 hover:bg-slate-600 border-0 text-[10px] sm:text-xs px-2 py-0.5">
+                 <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                    <Badge variant="secondary" className="bg-slate-700 text-slate-100 hover:bg-slate-600 border-0 text-[8px] md:text-xs px-1.5 md:px-2 py-0.5">
                       {part.category || "Uncategorized"}
                     </Badge>
                     <StatusBadge status={status} />
                  </div>
                  
-                 <h2 className="text-xl sm:text-3xl font-bold text-white leading-tight shadow-black drop-shadow-md break-words mb-2">
+                 <h2 className="text-base md:text-2xl lg:text-3xl font-bold text-white leading-tight shadow-black drop-shadow-md break-words mb-1.5">
                    {part.name}
                  </h2>
                  
-                 <div className="text-slate-300 font-mono text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 opacity-90">
-                    <div className="flex items-center gap-2"><span className="opacity-70">PN:</span> {part.part_number}</div>
-                    <span className="hidden sm:block w-1 h-1 bg-slate-500 rounded-full" />
-                    <div className="flex items-center gap-2"><span className="opacity-70">BC:</span> {part.barcode}</div>
+                 <div className="text-slate-300 font-mono text-[10px] md:text-xs lg:text-sm flex flex-col gap-1 opacity-90">
+                    <div className="flex items-center gap-1.5 flex-wrap"><span className="opacity-70">PN:</span> <span className="break-all">{part.part_number}</span></div>
+                    <div className="flex items-center gap-1.5 flex-wrap"><span className="opacity-70">BC:</span> <span className="break-all">{part.barcode}</span></div>
                  </div>
               </div>
             </div>
           </div>
 
-
           {/* --- TABS & CONTENT --- */}
           <div className="flex-1 overflow-hidden flex flex-col bg-white">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
-              <div className="bg-white border-b">
-                 <div className="px-4 sm:px-6 pt-2 sm:pt-4 overflow-x-auto no-scrollbar">
-                    <TabsList className="flex w-full justify-start bg-transparent p-0 h-auto gap-2 sm:gap-0 mb-0">
-                      <TabsTrigger value="info" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Info</TabsTrigger>
-                      <TabsTrigger value="mappings" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Supplier IDs</TabsTrigger>
-                      <TabsTrigger value="suppliers" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Suppliers</TabsTrigger>
-                      <TabsTrigger value="machines" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Machines</TabsTrigger>
-                      <TabsTrigger value="specs" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">Specs</TabsTrigger>
-                      <TabsTrigger value="history" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none">History</TabsTrigger>
+              {/* Tab List */}
+              <div className="bg-white border-b overflow-x-auto no-scrollbar">
+                 <div className="px-2 md:px-6 pt-1 md:pt-4">
+                    <TabsList className="flex w-full justify-start bg-transparent p-0 h-auto gap-0.5 md:gap-0 mb-0">
+                      <TabsTrigger value="info" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">Info</TabsTrigger>
+                      <TabsTrigger value="mappings" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">IDs</TabsTrigger>
+                      <TabsTrigger value="suppliers" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">Suppliers</TabsTrigger>
+                      <TabsTrigger value="machines" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">Machines</TabsTrigger>
+                      <TabsTrigger value="specs" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">Specs</TabsTrigger>
+                      <TabsTrigger value="history" className="flex-shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-2.5 md:px-4 py-2 md:py-3 text-xs md:text-sm data-[state=active]:bg-transparent data-[state=active]:shadow-none">History</TabsTrigger>
                     </TabsList>
                  </div>
               </div>
 
-
+              {/* Scrollable Content */}
               <ScrollArea className="flex-1 bg-slate-50/50">
-                <div className="p-4 sm:p-6">
+                <div className="p-3 md:p-6 space-y-4 md:space-y-6">
                   
                   {/* INFO TAB */}
-                  <TabsContent value="info" className="mt-0 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <Card className="md:col-span-2 bg-white shadow-sm">
-                        <CardHeader className="pb-3">
-                          <h3 className="text-lg font-semibold flex items-center gap-2">
-                            <Box className="w-5 h-5 text-teal-600" /> Inventory Status
+                  <TabsContent value="info" className="mt-0 space-y-4 md:space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
+                      {/* Main Card */}
+                      <Card className="lg:col-span-2 bg-white shadow-sm">
+                        <CardHeader className="pb-2 md:pb-3">
+                          <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                            <Box className="w-4 md:w-5 h-4 md:h-5 text-teal-600" /> Inventory Status
                           </h3>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                            <div className="p-4 bg-slate-50 rounded-lg border flex sm:block justify-between items-center sm:justify-center">
-                               <div className="text-xs uppercase font-bold text-slate-400 mb-0 sm:mb-1">On Hand</div>
-                               <div className="text-2xl font-bold text-slate-900">{part.current_quantity}</div>
+                        <CardContent className="space-y-4 md:space-y-6">
+                          <div className="grid grid-cols-3 gap-2 md:gap-4">
+                            <div className="p-2 md:p-4 bg-slate-50 rounded-lg border text-center">
+                               <div className="text-[8px] md:text-xs uppercase font-bold text-slate-400 mb-1">On Hand</div>
+                               <div className="text-lg md:text-2xl font-bold text-slate-900">{part.current_quantity}</div>
                             </div>
-                            <div className="p-4 bg-slate-50 rounded-lg border flex sm:block justify-between items-center sm:justify-center">
-                               <div className="text-xs uppercase font-bold text-slate-400 mb-0 sm:mb-1">Min Stock</div>
-                               <div className="text-2xl font-bold text-slate-700">{part.min_stock_level}</div>
+                            <div className="p-2 md:p-4 bg-slate-50 rounded-lg border text-center">
+                               <div className="text-[8px] md:text-xs uppercase font-bold text-slate-400 mb-1">Min Stock</div>
+                               <div className="text-lg md:text-2xl font-bold text-slate-700">{part.min_stock_level}</div>
                             </div>
-                            <div className="p-4 bg-slate-50 rounded-lg border flex sm:block justify-between items-center sm:justify-center">
-                               <div className="text-xs uppercase font-bold text-slate-400 mb-0 sm:mb-1">Reorder</div>
-                               <div className="text-2xl font-bold text-blue-600">{part.reorder_point}</div>
+                            <div className="p-2 md:p-4 bg-slate-50 rounded-lg border text-center">
+                               <div className="text-[8px] md:text-xs uppercase font-bold text-slate-400 mb-1">Reorder</div>
+                               <div className="text-lg md:text-2xl font-bold text-blue-600">{part.reorder_point}</div>
                             </div>
                           </div>
                           <div className="space-y-2">
-                             <div className="flex justify-between text-sm">
+                             <div className="flex justify-between text-xs md:text-sm">
                                 <span className="text-slate-500">Stock Health</span>
                                 <span className="font-medium text-slate-700">{stockPercentage}%</span>
                              </div>
@@ -415,40 +417,41 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                         </CardContent>
                       </Card>
 
-
-                      <div className="space-y-6">
+                      {/* Side Cards */}
+                      <div className="space-y-3 md:space-y-6">
+                        {/* Location Card */}
                         <Card className="bg-white shadow-sm">
-                          <CardHeader className="pb-3"><h3 className="font-semibold text-sm uppercase text-slate-500 tracking-wide">Location</h3></CardHeader>
-                          <CardContent className="space-y-4">
-                             <div className="flex items-start gap-3">
-                                <MapPin className="w-5 h-5 text-slate-400 mt-0.5 flex-shrink-0" />
+                          <CardHeader className="pb-2 md:pb-3"><h3 className="font-semibold text-xs md:text-sm uppercase text-slate-500 tracking-wide">Location</h3></CardHeader>
+                          <CardContent className="space-y-2 md:space-y-4 text-xs md:text-sm">
+                             <div className="flex items-start gap-2">
+                                <MapPin className="w-4 h-4 md:w-5 md:h-5 text-slate-400 mt-0.5 flex-shrink-0" />
                                 <div className="min-w-0">
                                    <div className="font-medium text-slate-900 break-words">{part.warehouse?.name || "Main Warehouse"}</div>
-                                   <div className="text-sm text-slate-500 break-words">{part.warehouse?.building?.name || "General Storage"}</div>
+                                   <div className="text-xs text-slate-500 break-words">{part.warehouse?.building?.name || "General Storage"}</div>
                                 </div>
                              </div>
-                             <div className="p-3 bg-slate-100 rounded-md text-center border border-dashed border-slate-300">
-                                <div className="text-xs text-slate-500 uppercase mb-1">Bin Location</div>
-                                <div className="text-xl font-mono font-bold text-slate-800">{part.bin_location || "N/A"}</div>
+                             <div className="p-2 md:p-3 bg-slate-100 rounded-md text-center border border-dashed border-slate-300">
+                                <div className="text-[10px] md:text-xs text-slate-500 uppercase mb-1">Bin</div>
+                                <div className="text-base md:text-xl font-mono font-bold text-slate-800">{part.bin_location || "N/A"}</div>
                              </div>
                           </CardContent>
                         </Card>
 
-
+                        {/* Valuation Card */}
                         <Card className="bg-slate-900 text-white shadow-sm border-slate-800">
-                          <CardHeader className="pb-3">
-                             <h3 className="font-semibold text-sm uppercase text-emerald-400 tracking-wide flex items-center gap-2">
-                                <DollarSign className="w-4 h-4" /> Valuation
+                          <CardHeader className="pb-2 md:pb-3">
+                             <h3 className="font-semibold text-xs md:text-sm uppercase text-emerald-400 tracking-wide flex items-center gap-2">
+                                <DollarSign className="w-3 md:w-4 h-3 md:h-4" /> Value
                              </h3>
                           </CardHeader>
-                          <CardContent className="space-y-3">
+                          <CardContent className="space-y-2 md:space-y-3 text-xs md:text-sm">
                              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                                <span className="text-slate-400 text-sm">Unit Price</span>
+                                <span className="text-slate-400">Unit Price</span>
                                 <span className="font-mono font-bold">{formatPrice(unitPrice)}</span>
                              </div>
                              <div className="flex justify-between items-center pt-1">
-                                <span className="text-emerald-400 font-bold text-sm">Total Inventory</span>
-                                <span className="font-mono font-bold text-lg">{formatPrice(totalValue)}</span>
+                                <span className="text-emerald-400 font-bold">Total</span>
+                                <span className="font-mono font-bold text-base md:text-lg">{formatPrice(totalValue)}</span>
                              </div>
                           </CardContent>
                         </Card>
@@ -459,74 +462,61 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                   {/* SUPPLIER MAPPINGS TAB */}
                   <TabsContent value="mappings" className="mt-0">
                     <Card className="bg-white shadow-sm">
-                      <CardHeader>
-                        <h3 className="text-lg font-semibold flex items-center gap-2">
-                          <Tag className="w-5 h-5 text-purple-600" /> Supplier Part IDs / SKUs
+                      <CardHeader className="pb-2 md:pb-3">
+                        <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                          <Tag className="w-4 md:w-5 h-4 md:h-5 text-purple-600" /> Supplier IDs
                         </h3>
-                        <p className="text-sm text-slate-600 mt-2">Unique identifiers used by each supplier for this part</p>
+                        <p className="text-xs md:text-sm text-slate-600 mt-2">Unique identifiers for each supplier</p>
                       </CardHeader>
                       <CardContent>
                         {loadingMappings ? (
-                          <div className="flex justify-center py-8">
-                            <LoadingSpinner />
-                          </div>
+                          <div className="flex justify-center py-8"><LoadingSpinner /></div>
                         ) : supplierMappings.length === 0 ? (
                           <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded-xl">
                             <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                            <p>No supplier mappings yet.</p>
-                            <p className="text-xs mt-1">Add supplier part IDs when creating or editing the part.</p>
+                            <p className="text-xs md:text-sm">No supplier mappings yet.</p>
                           </div>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-2 md:space-y-3">
                             {supplierMappings.map((mapping) => (
-                              <div key={mapping.id} className="border border-slate-200 rounded-lg p-4 bg-gradient-to-br from-slate-50 to-white hover:shadow-md transition-shadow">
-                                <div className="flex items-start justify-between gap-4 mb-3">
-                                  <div className="flex-1">
-                                    <h4 className="font-bold text-slate-900 text-lg">{mapping.supplier?.name || 'Unknown Supplier'}</h4>
-                                    <p className="text-xs text-slate-500">{mapping.supplier?.email || ''}</p>
+                              <div key={mapping.id} className="border border-slate-200 rounded-lg p-3 md:p-4 bg-gradient-to-br from-slate-50 to-white hover:shadow-md transition-shadow">
+                                <div className="flex items-start justify-between gap-2 md:gap-4 mb-2 md:mb-3">
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-sm md:text-lg text-slate-900 break-words">{mapping.supplier?.name || 'Unknown'}</h4>
+                                    <p className="text-[10px] md:text-xs text-slate-500 break-all">{mapping.supplier?.email || ''}</p>
                                   </div>
                                   {isGodAdmin && (
                                     <button
                                       onClick={() => handleRemoveSupplierMapping(mapping.id)}
-                                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
-                                      title="Remove mapping"
+                                      className="p-1 md:p-2 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                                      title="Remove"
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Trash2 className="h-3 md:h-4 w-3 md:w-4" />
                                     </button>
                                   )}
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white rounded-lg p-3 border border-slate-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 bg-white rounded-lg p-2 md:p-3 border border-slate-100 text-xs md:text-sm">
                                   <div>
-                                    <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Their SKU/ID</p>
-                                    <p className="font-mono font-bold text-teal-700 text-sm break-all">{mapping.supplier_sku}</p>
+                                    <p className="text-[9px] md:text-xs font-semibold text-slate-600 uppercase mb-0.5">SKU</p>
+                                    <p className="font-mono font-bold text-teal-700 break-all text-xs">{mapping.supplier_sku}</p>
                                   </div>
-
                                   {mapping.supplier_part_number && (
                                     <div>
-                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Their Part #</p>
-                                      <p className="font-mono font-bold text-slate-800 text-sm break-all">{mapping.supplier_part_number}</p>
+                                      <p className="text-[9px] md:text-xs font-semibold text-slate-600 uppercase mb-0.5">Part #</p>
+                                      <p className="font-mono font-bold text-slate-800 break-all text-xs">{mapping.supplier_part_number}</p>
                                     </div>
                                   )}
-
                                   {mapping.lead_time_days && (
                                     <div>
-                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Lead Time</p>
-                                      <p className="font-mono text-slate-800 text-sm">{mapping.lead_time_days} days</p>
+                                      <p className="text-[9px] md:text-xs font-semibold text-slate-600 uppercase mb-0.5">Lead</p>
+                                      <p className="font-mono text-slate-800">{mapping.lead_time_days}d</p>
                                     </div>
                                   )}
-
                                   {mapping.price_per_unit && (
                                     <div>
-                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Unit Price</p>
-                                      <p className="font-mono font-bold text-emerald-700 text-sm">€{mapping.price_per_unit.toFixed(2)}</p>
-                                    </div>
-                                  )}
-
-                                  {mapping.min_order_qty && mapping.min_order_qty > 1 && (
-                                    <div>
-                                      <p className="text-xs font-semibold text-slate-600 uppercase mb-1">Min Order</p>
-                                      <p className="font-mono text-slate-800 text-sm">{mapping.min_order_qty} units</p>
+                                      <p className="text-[9px] md:text-xs font-semibold text-slate-600 uppercase mb-0.5">Price</p>
+                                      <p className="font-mono font-bold text-emerald-700">€{mapping.price_per_unit.toFixed(2)}</p>
                                     </div>
                                   )}
                                 </div>
@@ -541,33 +531,32 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                   {/* SUPPLIERS TAB */}
                   <TabsContent value="suppliers" className="mt-0">
                      <Card className="bg-white shadow-sm">
-                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 gap-2">
-                           <h3 className="text-lg font-semibold flex items-center gap-2">
-                              <Users className="w-5 h-5 text-teal-600" /> Supplier Options
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 md:pb-3 gap-2">
+                           <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                              <Users className="w-4 md:w-5 h-4 md:h-5 text-teal-600" /> Suppliers
                            </h3>
                            {!isAddingSupplier && isGodAdmin && (
-                               <Button size="sm" onClick={() => { setIsAddingSupplier(true); fetchSuppliers(); }} className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto">
-                                   <LinkIcon className="w-4 h-4 mr-2" /> Link Supplier
+                               <Button size="sm" onClick={() => { setIsAddingSupplier(true); fetchSuppliers(); }} className="bg-teal-600 hover:bg-teal-700 w-full sm:w-auto text-xs md:text-sm h-8 md:h-9 px-2 md:px-4">
+                                   <LinkIcon className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" /> Link
                                </Button>
                            )}
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="space-y-3 md:space-y-4 text-xs md:text-sm">
                            {isAddingSupplier && (
-                              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-teal-100 animate-in slide-in-from-top-2">
-                                 <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-teal-800 text-sm">Link New Supplier</h4>
-                                    <Button variant="ghost" size="sm" onClick={() => setIsAddingSupplier(false)}><X className="w-4 h-4" /></Button>
+                              <div className="mb-4 md:mb-6 p-3 md:p-4 bg-slate-50 rounded-lg border border-teal-100 animate-in slide-in-from-top-2">
+                                 <div className="flex justify-between items-center mb-3 md:mb-4">
+                                    <h4 className="font-bold text-teal-800 text-xs md:text-sm">Link Supplier</h4>
+                                    <Button variant="ghost" size="sm" onClick={() => setIsAddingSupplier(false)} className="h-6 w-6 p-0"><X className="w-3 h-3 md:w-4 md:h-4" /></Button>
                                  </div>
                                  
-                                 {/* Searchable Supplier List */}
-                                 <div className="space-y-4">
-                                    <div className="space-y-2">
-                                      <Label>Find Supplier</Label>
+                                 <div className="space-y-3 md:space-y-4">
+                                    <div className="space-y-1.5 md:space-y-2">
+                                      <Label className="text-xs md:text-sm">Find Supplier</Label>
                                       <div className="relative">
-                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                                         <Search className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400"/>
                                          <Input 
-                                            placeholder="Search by name..." 
-                                            className="pl-9 bg-white"
+                                            placeholder="Search..." 
+                                            className="pl-8 md:pl-9 bg-white h-8 md:h-9 text-xs"
                                             value={supplierSearchTerm}
                                             onChange={e => setSupplierSearchTerm(e.target.value)}
                                          />
@@ -576,16 +565,16 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                                       {supplierSearchTerm && (
                                          <div className="max-h-40 overflow-y-auto border rounded-md bg-white shadow-sm">
                                             {filteredSuppliers.length === 0 ? (
-                                               <div className="p-3 text-sm text-slate-500 text-center">No suppliers found</div>
+                                               <div className="p-2 md:p-3 text-xs text-slate-500 text-center">No suppliers</div>
                                             ) : (
                                                filteredSuppliers.map(s => (
                                                   <div 
                                                      key={s.id} 
                                                      onClick={() => { setNewSupplier({...newSupplier, supplier_id: s.id}); setSupplierSearchTerm(''); }}
-                                                     className="p-2 hover:bg-teal-50 cursor-pointer text-sm flex justify-between items-center"
+                                                     className="p-2 hover:bg-teal-50 cursor-pointer text-xs flex justify-between items-center"
                                                   >
-                                                     <span>{s.name}</span>
-                                                     {s.is_oem && <Badge variant="secondary" className="text-[10px]">OEM</Badge>}
+                                                     <span className="break-words">{s.name}</span>
+                                                     {s.is_oem && <Badge variant="secondary" className="text-[8px] ml-1 flex-shrink-0">OEM</Badge>}
                                                   </div>
                                                ))
                                             )}
@@ -593,51 +582,49 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                                       )}
                                       
                                       {newSupplier.supplier_id && (
-                                         <div className="text-sm font-medium text-teal-700 bg-teal-50 p-2 rounded flex items-center gap-2">
-                                            <Check className="w-4 h-4" />
-                                            Selected: {availableSuppliers.find(s => s.id === newSupplier.supplier_id)?.name}
+                                         <div className="text-xs font-medium text-teal-700 bg-teal-50 p-1.5 md:p-2 rounded flex items-center gap-1 md:gap-2">
+                                            <Check className="w-3 h-3" />
+                                            <span className="truncate">{availableSuppliers.find(s => s.id === newSupplier.supplier_id)?.name}</span>
                                          </div>
                                       )}
                                     </div>
 
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                       <div className="space-y-2">
-                                          <Label>Unit Price (€)</Label>
-                                          <Input type="number" step="0.01" className="bg-white" value={newSupplier.unit_price} onChange={e => setNewSupplier({...newSupplier, unit_price: e.target.value})} />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
+                                       <div className="space-y-1 md:space-y-2">
+                                          <Label className="text-xs">Unit Price (€)</Label>
+                                          <Input type="number" step="0.01" className="bg-white h-8 md:h-9 text-xs" value={newSupplier.unit_price} onChange={e => setNewSupplier({...newSupplier, unit_price: e.target.value})} />
                                        </div>
-                                       <div className="space-y-2">
-                                          <Label>Lead Time (Days)</Label>
-                                          <Input type="number" className="bg-white" value={newSupplier.lead_time_days} onChange={e => setNewSupplier({...newSupplier, lead_time_days: e.target.value})} />
+                                       <div className="space-y-1 md:space-y-2">
+                                          <Label className="text-xs">Lead Time (Days)</Label>
+                                          <Input type="number" className="bg-white h-8 md:h-9 text-xs" value={newSupplier.lead_time_days} onChange={e => setNewSupplier({...newSupplier, lead_time_days: e.target.value})} />
                                        </div>
                                     </div>
                                     
-                                    <Button className="w-full bg-teal-600 hover:bg-teal-700" onClick={handleAddSupplier} disabled={!newSupplier.supplier_id}>Save Link</Button>
+                                    <Button className="w-full bg-teal-600 hover:bg-teal-700 h-8 md:h-9 text-xs" onClick={handleAddSupplier} disabled={!newSupplier.supplier_id}>Save</Button>
                                  </div>
                               </div>
                            )}
 
-
-                           {/* Linked Suppliers List */}
-                           <div className="space-y-3">
+                           {/* Linked Suppliers */}
+                           <div className="space-y-2 md:space-y-3">
                              {!part.supplier_options?.length ? (
-                               !isAddingSupplier && <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded-xl">No suppliers linked.</div>
+                               !isAddingSupplier && <div className="text-center py-6 md:py-8 text-slate-400 border-2 border-dashed rounded-xl text-xs md:text-sm">No suppliers</div>
                              ) : (
                                part.supplier_options.map(opt => (
-                                  <div key={opt.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-lg bg-white gap-2 hover:shadow-sm transition-shadow">
-                                     <div className="flex-1">
-                                        <div className="font-bold text-slate-800 flex items-center gap-2">
-                                           {opt.supplier?.name}
-                                           {opt.supplier?.is_oem && <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-0 text-[10px]">OEM</Badge>}
-                                           {opt.is_preferred && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[10px]">Preferred</Badge>}
+                                  <div key={opt.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-2 md:p-4 border rounded-lg bg-white gap-2 hover:shadow-sm transition-shadow">
+                                     <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-slate-800 flex items-center gap-1 md:gap-2 flex-wrap">
+                                           <span className="break-words text-sm md:text-base">{opt.supplier?.name}</span>
+                                           {opt.supplier?.is_oem && <Badge className="bg-purple-100 text-purple-700 border-0 text-[8px] md:text-[10px] flex-shrink-0">OEM</Badge>}
+                                           {opt.is_preferred && <Badge className="bg-green-100 text-green-700 border-0 text-[8px] md:text-[10px] flex-shrink-0">Pref</Badge>}
                                         </div>
-                                        <div className="text-sm text-slate-500 mt-1">Lead Time: {opt.lead_time_days || 0} days</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">Lead: {opt.lead_time_days || 0}d</div>
                                      </div>
-                                     <div className="flex items-center gap-4">
-                                        <div className="font-bold text-lg text-slate-700">€{Number(opt.unit_price).toFixed(2)}</div>
+                                     <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                                        <div className="font-bold text-slate-700 text-sm md:text-lg">€{Number(opt.unit_price).toFixed(2)}</div>
                                         {isGodAdmin && (
-                                           <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-600" onClick={() => handleRemoveSupplier(opt.id)}>
-                                              <Trash2 className="w-4 h-4" />
+                                           <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-600 h-7 w-7 md:h-8 md:w-8" onClick={() => handleRemoveSupplier(opt.id)}>
+                                              <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                                            </Button>
                                         )}
                                      </div>
@@ -652,34 +639,32 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                   {/* MACHINES TAB */}
                   <TabsContent value="machines" className="mt-0">
                       <Card className="bg-white shadow-sm">
-                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 gap-2">
-                           <h3 className="text-lg font-semibold flex items-center gap-2">
-                              <Monitor className="w-5 h-5 text-blue-600" /> Linked Machines
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 md:pb-3 gap-2">
+                           <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                              <Monitor className="w-4 md:w-5 h-4 md:h-5 text-blue-600" /> Machines
                            </h3>
                            {!isAddingMachine && isGodAdmin && (
-                               <Button size="sm" onClick={() => { setIsAddingMachine(true); fetchMachines(); }} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
-                                   <LinkIcon className="w-4 h-4 mr-2" /> Link Machine
+                               <Button size="sm" onClick={() => { setIsAddingMachine(true); fetchMachines(); }} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto text-xs md:text-sm h-8 md:h-9 px-2 md:px-4">
+                                   <LinkIcon className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" /> Link
                                </Button>
                            )}
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="space-y-3 md:space-y-4 text-xs md:text-sm">
                            {isAddingMachine && (
-                              <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-blue-100 animate-in slide-in-from-top-2">
-                                 <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-blue-800 text-sm">Link New Machine</h4>
-                                    <Button variant="ghost" size="sm" onClick={() => setIsAddingMachine(false)}><X className="w-4 h-4" /></Button>
+                              <div className="mb-4 md:mb-6 p-3 md:p-4 bg-slate-50 rounded-lg border border-blue-100 animate-in slide-in-from-top-2">
+                                 <div className="flex justify-between items-center mb-3 md:mb-4">
+                                    <h4 className="font-bold text-blue-800 text-xs md:text-sm">Link Machine</h4>
+                                    <Button variant="ghost" size="sm" onClick={() => setIsAddingMachine(false)} className="h-6 w-6 p-0"><X className="w-3 h-3 md:w-4 md:h-4" /></Button>
                                  </div>
 
-
-                                 {/* Searchable Machine List */}
-                                 <div className="space-y-4">
-                                    <div className="space-y-2">
-                                      <Label>Find Machine</Label>
+                                 <div className="space-y-3 md:space-y-4">
+                                    <div className="space-y-1.5 md:space-y-2">
+                                      <Label className="text-xs md:text-sm">Find Machine</Label>
                                       <div className="relative">
-                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
+                                         <Search className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-slate-400"/>
                                          <Input 
-                                            placeholder="Search by code or name..." 
-                                            className="pl-9 bg-white"
+                                            placeholder="Search..." 
+                                            className="pl-8 md:pl-9 bg-white h-8 md:h-9 text-xs"
                                             value={machineSearchTerm}
                                             onChange={e => setMachineSearchTerm(e.target.value)}
                                          />
@@ -688,16 +673,16 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                                       {machineSearchTerm && (
                                          <div className="max-h-40 overflow-y-auto border rounded-md bg-white shadow-sm">
                                             {filteredMachines.length === 0 ? (
-                                               <div className="p-3 text-sm text-slate-500 text-center">No machines found</div>
+                                               <div className="p-2 md:p-3 text-xs text-slate-500 text-center">No machines</div>
                                             ) : (
                                                filteredMachines.map(m => (
                                                   <div 
                                                      key={m.id} 
                                                      onClick={() => { setNewMachine({...newMachine, machine_id: m.id}); setMachineSearchTerm(''); }}
-                                                     className="p-2 hover:bg-blue-50 cursor-pointer text-sm flex justify-between items-center"
+                                                     className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between items-center"
                                                   >
-                                                     <span>{m.name}</span>
-                                                     <span className="font-mono text-xs text-slate-400">{m.machine_code}</span>
+                                                     <span className="break-words">{m.name}</span>
+                                                     <span className="font-mono text-[9px] text-slate-400 flex-shrink-0 ml-1">{m.machine_code}</span>
                                                   </div>
                                                ))
                                             )}
@@ -705,50 +690,48 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                                       )}
                                       
                                       {newMachine.machine_id && (
-                                         <div className="text-sm font-medium text-blue-700 bg-blue-50 p-2 rounded flex items-center gap-2">
-                                            <Check className="w-4 h-4" />
-                                            Selected: {availableMachines.find(m => m.id === newMachine.machine_id)?.name}
+                                         <div className="text-xs font-medium text-blue-700 bg-blue-50 p-1.5 md:p-2 rounded flex items-center gap-1 md:gap-2">
+                                            <Check className="w-3 h-3" />
+                                            <span className="truncate">{availableMachines.find(m => m.id === newMachine.machine_id)?.name}</span>
                                          </div>
                                       )}
                                     </div>
 
-
-                                    <div className="space-y-2">
-                                       <Label>Usage Frequency</Label>
+                                    <div className="space-y-1.5 md:space-y-2">
+                                       <Label className="text-xs">Usage Frequency</Label>
                                        <Select value={newMachine.usage_frequency} onValueChange={v => setNewMachine({...newMachine, usage_frequency: v})}>
-                                          <SelectTrigger className="bg-white">
-                                             <SelectValue placeholder="Select..." />
+                                          <SelectTrigger className="bg-white h-8 md:h-9 text-xs">
+                                             <SelectValue />
                                           </SelectTrigger>
                                           <SelectContent className="bg-white">
-                                             <SelectItem value="High">High (Daily)</SelectItem>
-                                             <SelectItem value="Medium">Medium (Weekly)</SelectItem>
-                                             <SelectItem value="Low">Low (Monthly)</SelectItem>
-                                             <SelectItem value="On Demand">On Demand</SelectItem>
+                                             <SelectItem value="High" className="text-xs">High (Daily)</SelectItem>
+                                             <SelectItem value="Medium" className="text-xs">Medium (Weekly)</SelectItem>
+                                             <SelectItem value="Low" className="text-xs">Low (Monthly)</SelectItem>
+                                             <SelectItem value="On Demand" className="text-xs">On Demand</SelectItem>
                                           </SelectContent>
                                        </Select>
                                     </div>
                                     
-                                    <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleAddMachine} disabled={!newMachine.machine_id}>Save Link</Button>
+                                    <Button className="w-full bg-blue-600 hover:bg-blue-700 h-8 md:h-9 text-xs" onClick={handleAddMachine} disabled={!newMachine.machine_id}>Save</Button>
                                  </div>
                               </div>
                            )}
 
-
-                           {/* Linked Machines List */}
-                           <div className="space-y-3">
+                           {/* Linked Machines */}
+                           <div className="space-y-2 md:space-y-3">
                              {!part.machine_associations?.length ? (
-                                !isAddingMachine && <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded-xl">No machines linked.</div>
+                                !isAddingMachine && <div className="text-center py-6 md:py-8 text-slate-400 border-2 border-dashed rounded-xl text-xs md:text-sm">No machines</div>
                              ) : (
                                 part.machine_associations.map(assoc => (
-                                   <div key={assoc.id} className="p-4 border rounded-lg bg-white mb-2 flex justify-between items-center hover:shadow-sm transition-shadow">
-                                      <div>
-                                         <div className="font-bold text-slate-800">{assoc.machine?.name}</div>
+                                   <div key={assoc.id} className="p-2 md:p-4 border rounded-lg bg-white flex justify-between items-start md:items-center hover:shadow-sm transition-shadow gap-2">
+                                      <div className="min-w-0">
+                                         <div className="font-bold text-slate-800 text-sm md:text-base break-words">{assoc.machine?.name}</div>
                                          <div className="text-xs text-slate-500 font-mono">{assoc.machine?.machine_code}</div>
-                                         <Badge variant="outline" className="mt-1 text-[10px]">{assoc.usage_frequency || "Standard"}</Badge>
+                                         <Badge variant="outline" className="mt-1 text-[8px] md:text-[10px]">{assoc.usage_frequency || "Std"}</Badge>
                                       </div>
                                       {isGodAdmin && (
-                                         <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-600" onClick={() => handleRemoveMachine(assoc.id)}>
-                                            <Trash2 className="w-4 h-4" />
+                                         <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-600 h-7 w-7 md:h-8 md:w-8 flex-shrink-0" onClick={() => handleRemoveMachine(assoc.id)}>
+                                            <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                                          </Button>
                                       )}
                                    </div>
@@ -762,19 +745,19 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                   {/* SPECS TAB */}
                   <TabsContent value="specs" className="mt-0">
                      <Card className="bg-white shadow-sm">
-                        <CardHeader>
-                           <h3 className="text-lg font-semibold flex items-center gap-2">
-                              <Ruler className="w-5 h-5 text-blue-600" /> Technical Specifications
+                        <CardHeader className="pb-2 md:pb-3">
+                           <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                              <Ruler className="w-4 md:w-5 h-4 md:h-5 text-blue-600" /> Specs
                            </h3>
                         </CardHeader>
                         <CardContent>
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 text-xs md:text-sm">
                               <div className="border-b pb-2">
-                                 <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">Manufacturer</span>
+                                 <span className="block text-[9px] md:text-xs font-semibold text-slate-500 uppercase mb-1">Manufacturer</span>
                                  <span className="text-slate-800 font-medium">{part.manufacturer || "Unknown"}</span>
                               </div>
                               <div className="border-b pb-2">
-                                 <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">Unit</span>
+                                 <span className="block text-[9px] md:text-xs font-semibold text-slate-500 uppercase mb-1">Unit</span>
                                  <span className="text-slate-800 font-medium capitalize">{part.unit_of_measure || "Each"}</span>
                               </div>
                            </div>
@@ -782,34 +765,33 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                      </Card>
                   </TabsContent>
 
-
                   {/* HISTORY TAB */}
                   <TabsContent value="history" className="mt-0">
                      <Card className="bg-white shadow-sm">
-                        <CardHeader>
-                           <h3 className="text-lg font-semibold flex items-center gap-2">
-                              <History className="w-5 h-5 text-purple-600" /> Transaction History
+                        <CardHeader className="pb-2 md:pb-3">
+                           <h3 className="text-base md:text-lg font-semibold flex items-center gap-2">
+                              <History className="w-4 md:w-5 h-4 md:h-5 text-purple-600" /> History
                            </h3>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="text-xs md:text-sm">
                            {loadingHistory ? <LoadingSpinner /> : (
-                              <div className="space-y-4">
-                                 {history.length === 0 ? <div className="text-slate-500 text-center py-4">No history available.</div> :
+                              <div className="space-y-2 md:space-y-4">
+                                 {history.length === 0 ? <div className="text-slate-500 text-center py-6 md:py-8">No history</div> :
                                  history.map((tx) => (
                                     <div 
                                       key={tx.id} 
                                       onClick={() => handleTransactionClick(tx)}
-                                      className="flex gap-4 pb-4 border-b last:border-0 hover:bg-slate-50 p-2 rounded cursor-pointer transition-colors"
+                                      className="flex gap-2 md:gap-4 pb-2 md:pb-4 border-b last:border-0 hover:bg-slate-50 p-1.5 md:p-2 rounded cursor-pointer transition-colors"
                                     >
-                                       <div className="flex-1">
-                                          <div className="font-semibold capitalize flex items-center gap-2">
+                                       <div className="flex-1 min-w-0">
+                                          <div className="font-semibold capitalize flex items-center gap-1 md:gap-2">
                                             {tx.transaction_type}
-                                            <Eye className="w-4 h-4 text-slate-400" />
+                                            <Eye className="w-3 h-3 md:w-4 md:h-4 text-slate-400 flex-shrink-0" />
                                           </div>
-                                          <div className="text-sm text-slate-500">{new Date(tx.created_at).toLocaleDateString()}</div>
-                                          <div className="text-sm text-slate-600">{tx.notes}</div>
+                                          <div className="text-[10px] md:text-xs text-slate-500">{new Date(tx.created_at).toLocaleDateString()}</div>
+                                          <div className="text-xs text-slate-600 break-words">{tx.notes}</div>
                                        </div>
-                                       <div className={`font-bold ${tx.transaction_type === 'usage' ? 'text-red-600' : 'text-green-600'}`}>
+                                       <div className={`font-bold flex-shrink-0 ${tx.transaction_type === 'usage' ? 'text-red-600' : 'text-green-600'}`}>
                                           {tx.transaction_type === 'usage' ? '-' : '+'}{Math.abs(tx.quantity)}
                                        </div>
                                     </div>
@@ -822,10 +804,10 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
                 </div>
               </ScrollArea>
 
-
-              <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
-                 <Button variant="outline" size="lg" onClick={handleCloseClick} className="w-full sm:w-auto bg-white">
-                    <X className="w-4 h-4 mr-2" /> Close Details
+              {/* Footer */}
+              <div className="p-2 md:p-4 bg-slate-50 border-t flex justify-end gap-1 md:gap-2 flex-shrink-0">
+                 <Button variant="outline" size="sm" onClick={handleCloseClick} className="w-full md:w-auto bg-white h-8 md:h-9 text-xs md:text-sm">
+                    <X className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" /> Close
                  </Button>
               </div>
             </Tabs>
@@ -854,6 +836,5 @@ const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onE
     </>
   );
 };
-
 
 export default PartDetailsModal;
