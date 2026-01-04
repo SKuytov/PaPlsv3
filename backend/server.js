@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import quoteRoutes from './routes/quoteRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import inventoryRoutes from './routes/inventory.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -96,7 +97,8 @@ app.get('/api/health', (req, res) => {
       multer: 'configured',
       quote_api: 'active',
       auth_api: 'active',
-      rfid_auth: 'enabled'
+      rfid_auth: 'enabled',
+      inventory_api: 'active'
     }
   });
 });
@@ -107,6 +109,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api', quoteRoutes);
 app.use('/api', authRoutes);
+app.use('/api', inventoryRoutes);
 
 // ============================================================
 // LEGACY DOCUMENT ENDPOINTS (KEPT FOR COMPATIBILITY)
@@ -277,6 +280,8 @@ if (httpsOptions && protocol === 'https') {
     console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
     console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
     console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
+    console.log(`   POST   /api/inventory/restock               - Restock inventory item`);
+    console.log(`   GET    /api/inventory/restock-history       - Get restock audit log`);
     console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
     console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
     console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
@@ -297,6 +302,8 @@ if (httpsOptions && protocol === 'https') {
     console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
     console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
     console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
+    console.log(`   POST   /api/inventory/restock               - Restock inventory item`);
+    console.log(`   GET    /api/inventory/restock-history       - Get restock audit log`);
     console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
     console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
     console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
