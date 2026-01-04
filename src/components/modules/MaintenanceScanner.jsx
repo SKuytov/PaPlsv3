@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useContext } from 'rea
 import {
    Camera, Keyboard, QrCode, History, AlertTriangle,
    CheckCircle, X, RefreshCw,
-   MinusCircle, ArrowLeft, Info, LogOut, Plus
+   MinusCircle, ArrowLeft, Info, LogOut, Plus, MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,7 +126,8 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
                part_supplier_options (
                   supplier:suppliers (id, name, email, phone)
                ),
-               warehouse:warehouses(name)
+               warehouse:warehouses(name, building:buildings(name)),
+               building:buildings(name)
             `)
             .eq('barcode', barcode);
 
@@ -522,20 +523,34 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
    };
 
    // --- UI COMPONENTS ---
-   const PartSummary = ({ part }) => (
-      <div className="flex gap-4 bg-slate-50 p-4 rounded-lg border mb-4">
-         <div className="w-16 h-16 bg-white rounded-md border overflow-hidden shrink-0">
-            <ImageWithFallback src={part.photo_url} alt={part.name} className="w-full h-full object-cover" />
+   const PartSummary = ({ part }) => {
+      // Extract location information
+      const warehouseName = part.warehouse?.name || 'Unknown';
+      const buildingName = part.warehouse?.building?.name || part.building?.name || 'Unknown';
+      const binLocation = part.bin_location || 'Not assigned';
+      const location = `${buildingName} → ${warehouseName} → ${binLocation}`;
+
+      return (
+         <div className="flex gap-4 bg-slate-50 p-4 rounded-lg border mb-4">
+            <div className="w-16 h-16 bg-white rounded-md border overflow-hidden shrink-0">
+               <ImageWithFallback src={part.photo_url} alt={part.name} className="w-full h-full object-cover" />
+            </div>
+            <div className="min-w-0 flex-1">
+               <h4 className="font-bold text-slate-900 truncate">{part.name}</h4>
+               <p className="text-xs text-slate-500 font-mono mb-1">{part.part_number}</p>
+               <div className="flex flex-col gap-1.5">
+                  <Badge variant={part.current_quantity <= part.min_stock_level ? "destructive" : "outline"} className="text-[10px] h-5 w-fit">
+                     Stock: {part.current_quantity} {part.unit_of_measure}
+                  </Badge>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                     <MapPin className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                     <span className="text-[11px] leading-tight">{location}</span>
+                  </div>
+               </div>
+            </div>
          </div>
-         <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-slate-900 truncate">{part.name}</h4>
-            <p className="text-xs text-slate-500 font-mono mb-1">{part.part_number}</p>
-            <Badge variant={part.current_quantity <= part.min_stock_level ? "destructive" : "outline"} className="text-[10px] h-5">
-               Stock: {part.current_quantity} {part.unit_of_measure}
-            </Badge>
-         </div>
-      </div>
-   );
+      );
+   };
 
    return (
       <ErrorBoundary>
@@ -727,7 +742,17 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
             </CardContent>
          </Card>
 
-         {activePart && <PartDetailsModal open={detailsModalOpen} part={activePart.part} onClose={() => setDetailsModalOpen(false)} onDeleteRequest={() => {}} onEditRequest={() => {}} />}
+         {/* ✅ FIXED: Added onOpenChange prop to properly close the modal */}
+         {activePart && (
+            <PartDetailsModal 
+               open={detailsModalOpen} 
+               part={activePart.part} 
+               onOpenChange={setDetailsModalOpen}
+               isEditable={false}
+               onEdit={null}
+               onDelete={null}
+            />
+         )}
       </ErrorBoundary>
    );
 };
