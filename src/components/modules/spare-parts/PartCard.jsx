@@ -9,10 +9,16 @@ import ImageWithFallback from '@/components/common/ImageWithFallback';
 /**
  * Displays a single spare part in a grid layout.
  * Memoized to prevent unnecessary re-renders during parent state updates.
- * Updated: Image display enhanced for larger size and removal of placeholder effects and reduced padding.
+ * Updated: Added map-style location breadcrumb showing Building → Warehouse → Bin Location
  */
 const PartCard = memo(({ part, onClick }) => {
   const status = getStockStatus(part.current_quantity, part.min_stock_level, part.reorder_point);
+
+  // Extract location information with fallbacks
+  const warehouseName = part.warehouse?.name || 'Unknown';
+  const buildingName = part.warehouse?.building?.name || part.building?.name || 'Unknown';
+  const binLocation = part.bin_location || 'Not assigned';
+  const locationBreadcrumb = `${buildingName} → ${warehouseName} → ${binLocation}`;
 
   return (
     <motion.div
@@ -26,7 +32,7 @@ const PartCard = memo(({ part, onClick }) => {
         className="group h-full flex flex-col overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer border-slate-200 hover:border-teal-500/50" 
         onClick={() => onClick(part)}
       >
-        {/* Image Section - Removed bluish background and reduced padding */}
+        {/* Image Section */}
         <div className="relative aspect-video flex items-center justify-center overflow-hidden border-b p-0">
           <ImageWithFallback 
             src={part.photo_url} 
@@ -62,11 +68,13 @@ const PartCard = memo(({ part, onClick }) => {
               </div>
            </div>
 
-           {/* Footer Info: Location Only */}
-           <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
-              <div className="flex items-center gap-1">
-                 <MapPin className="w-3 h-3" />
-                 <span>{part.bin_location || "N/A"}</span>
+           {/* Location Breadcrumb - Map Style */}
+           <div className="mt-3 pt-3 border-t border-slate-200">
+              <div className="flex items-start gap-2 text-xs text-slate-600">
+                 <MapPin className="w-3.5 h-3.5 text-teal-600 flex-shrink-0 mt-0.5" />
+                 <span className="text-[11px] leading-snug break-words" title={locationBreadcrumb}>
+                    {locationBreadcrumb}
+                 </span>
               </div>
            </div>
         </CardContent>
