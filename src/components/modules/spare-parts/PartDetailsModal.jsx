@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Wrench, History, AlertTriangle, 
   Trash2, Ruler, MapPin, FileText, Pencil, Users, Monitor,
-  Plus, Save, DollarSign, X, Search, Check, Link as LinkIcon, Eye, Tag
+  Plus, Save, DollarSign, X, Search, Check, Link as LinkIcon, Eye, Tag, ZoomIn
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import TransactionDetailsModal from '@/components/modules/machines/TransactionDetailsModal';
+import ImageViewer from '@/components/modules/spare-parts/ImageViewer';
 
 
 const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, onEditRequest }) => {
@@ -36,6 +37,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
   const [transactionDetailsOpen, setTransactionDetailsOpen] = useState(false);
   const [supplierMappings, setSupplierMappings] = useState([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -316,6 +318,11 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-slate-900/20" />
             
             <div className="absolute top-4 right-4 z-20 flex gap-2">
+               {part.photo_url && (
+                  <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-8 text-xs px-3" onClick={() => setImageViewerOpen(true)}>
+                    <ZoomIn className="w-3 h-3 mr-2" /> <span className="hidden sm:inline">View Image</span>
+                  </Button>
+               )}
                <Button size="sm" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm border-white/20 h-8 text-xs px-3" onClick={() => window.open(part.specifications?.datasheet_url || '#', '_blank')}>
                  <FileText className="w-3 h-3 mr-2" /> <span className="hidden sm:inline">Datasheet</span>
                </Button>
@@ -328,7 +335,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
 
             <div className="relative z-10 p-4 sm:p-6 w-full flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-              <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 sm:border-4 border-white shrink-0">
+              <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg bg-white shadow-xl overflow-hidden border-2 sm:border-4 border-white shrink-0 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setImageViewerOpen(true)}>
                  <ImageWithFallback src={part.photo_url} alt={part.name} className="w-full h-full object-cover" />
               </div>
               
@@ -834,6 +841,16 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Image Viewer Modal */}
+      {part.photo_url && (
+        <ImageViewer
+          open={imageViewerOpen}
+          imageUrl={part.photo_url}
+          imageName={part.name}
+          onClose={() => setImageViewerOpen(false)}
+        />
+      )}
 
       {/* Transaction Details Modal */}
       {selectedTransaction && (
