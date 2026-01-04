@@ -24,9 +24,7 @@ const RFIDLoginPage = () => {
   const translations = {
     en: {
       sessionActive: 'Technician Session Active',
-      name: 'Name',
-      id: 'ID',
-      card: 'Card',
+      name: 'Technician',
       scanner: '📋 Scanner',
       spareParts: '📦 Spare Parts',
       logout: 'Logout',
@@ -34,9 +32,7 @@ const RFIDLoginPage = () => {
     },
     bg: {
       sessionActive: 'Активна сесия на техник',
-      name: 'Име',
-      id: 'Код',
-      card: 'Карта',
+      name: 'Техник',
       scanner: '📋 Сканер',
       spareParts: '📦 Резервни части',
       logout: 'Излез',
@@ -134,7 +130,7 @@ const RFIDLoginPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto">
-        {/* Session Info - ORIGINAL DESIGN */}
+        {/* Session Info - SENSITIVE DATA HIDDEN */}
         <Card className="mb-6 border-blue-200 bg-blue-50">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3 flex-1">
@@ -144,7 +140,7 @@ const RFIDLoginPage = () => {
                   {txt.sessionActive}
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  {txt.name}: {technicianInfo?.name} | {txt.id}: {technicianInfo?.id} | {txt.card}: {technicianInfo?.rfid_card_id}
+                  {txt.name}: {technicianInfo?.name}
                 </p>
               </div>
             </div>
