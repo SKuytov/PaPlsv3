@@ -31,11 +31,14 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
    const { toast } = useToast();
    const { user } = useAuth();
    
-   // Check if user can restock - userRole is an OBJECT with {id, name}
+   // Check if user can restock
+   // Allow: Everyone EXCEPT pure "technician" role
+   // Deny: Only "technician" role cannot restock
    const roleName = typeof userRole === 'object' ? userRole?.name : userRole;
-   const canRestock = roleName === 'God Admin' || roleName?.includes('Admin') || userPermissions?.includes('restock_inventory') || false;
+   const isPureTechnician = roleName === 'technician' || (Array.isArray(roleName) && roleName.includes('technician') && roleName.length === 1);
+   const canRestock = !isPureTechnician && (roleName !== 'technician');
    
-   console.log('[MaintenanceScanner] Role check:', { roleName, canRestock, userRole, userPermissions });
+   console.log('[MaintenanceScanner] Role check:', { roleName, isPureTechnician, canRestock, userRole, userPermissions });
    
    // --- State Management ---
    const [mode, setMode] = useState('hid'); // 'hid' | 'camera' | 'manual' (default: hid)
@@ -553,7 +556,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
                      <CardTitle className="text-slate-800 text-lg">
                         {scanStep === 'scan' ? 'Technician Scanner' : scanStep === 'menu' ? 'Item Menu' : scanStep === 'transaction' ? 'Register Usage' : 'Restock Item'}
                      </CardTitle>
-                     <p className="text-xs text-slate-500 mt-0.5">Logged in as: <span className="font-semibold">{technicianName}</span> {canRestock && <span className="text-teal-600">👑 Admin</span>}</p>
+                     <p className="text-xs text-slate-500 mt-0.5">Logged in as: <span className="font-semibold">{technicianName}</span> {canRestock && <span className="text-teal-600"> | Restock Access ✅</span>}</p>
                   </div>
                </div>
                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={onLogout}>
@@ -564,7 +567,7 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
 
             <CardContent className="p-4">
                <div className="text-xs text-slate-500 mb-4 p-2 bg-slate-50 rounded border border-dashed">
-                  <p>scanStep: {scanStep} | mode: {mode} | isProcessing: {isProcessing ? '🔒' : '✅'} | canRestock: {canRestock ? '✅' : '❌'}</p>
+                  <p>scanStep: {scanStep} | mode: {mode} | isProcessing: {isProcessing ? '🔒' : '✅'} | canRestock: {canRestock ? '✅' : '❌'} | Role: {roleName}</p>
                </div>
                
                {scanStep === 'scan' && (
