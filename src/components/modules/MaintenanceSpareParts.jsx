@@ -1,399 +1,895 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
-import { useTranslation } from '@/hooks/useTranslation';
-import { 
-  Search, 
-  AlertCircle, 
-  Eye, 
-  ChevronRight, 
-  RefreshCw, 
-  Loader2,
-  LogOut,
-  Globe
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import {
+  Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
+  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { dbService } from '@/lib/supabase';
 import { supabase } from '@/lib/customSupabaseClient';
-import ImageWithFallback from '@/components/common/ImageWithFallback';
-import ErrorBoundary from '@/components/ErrorBoundary';
-import PartDetailsModal from '@/components/modules/spare-parts/PartDetailsModal';
+import { useToast } from '@/components/ui/use-toast';
+import { getStockStatus } from '@/utils/calculations';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import * as Dialog from '@radix-ui/react-dialog';
+import { useAuth } from '@/contexts/AuthContext';
 
-const MaintenanceSpareParts = ({ onLogout, technicianName, userRole, userPermissions }) => {
+// Imported Components
+import PartCard from './spare-parts/PartCard';
+import PartDetailsModal from './spare-parts/PartDetailsModal';
+import PartForm from './spare-parts/PartForm';
+import CategoryManager from './spare-parts/CategoryManager';
+
+// --- REORDER MODAL COMPONENT (FOR TECHNICIANS) ---
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
+  const [selectedParts, setSelectedParts] = useState([]);
+  const [copiedPart, setCopiedPart] = useState(null);
+  const [expandedSuppliers, setExpandedSuppliers] = useState({});
+  const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const { toast } = useToast();
-  const { language, setLanguage } = useTranslation();
-  
-  const [parts, setParts] = useState([]);
-  const [filteredParts, setFilteredParts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [selectedPart, setSelectedPart] = useState(null);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [sortBy, setSortBy] = useState('name'); // 'name', 'stock', 'cost'
 
-  // Translation dictionary for technician spare parts
-  const translations = {
-    en: {
-      title: 'Spare Parts Catalog',
-      loggedInAs: 'Logged in as',
-      readOnlyView: 'Read-Only View',
-      logout: 'Logout',
-      searchPlaceholder: 'Search by name, part number, or barcode...',
-      sortBy: 'Sort by',
-      name: 'Name',
-      stock: 'Stock',
-      cost: 'Cost',
-      refresh: 'Refresh',
-      showing: 'Showing',
-      of: 'of',
-      parts: 'parts',
-      loading: 'Loading spare parts...',
-      noPartsFound: 'No parts found',
-      tryDifferentSearch: 'Try a different search',
-      loadingParts: 'Loading parts...',
-      minStock: 'Min Stock',
-      avgCost: 'Avg Cost',
-      outOfStock: 'Out of Stock',
-      lowStock: 'Low Stock',
-      inStock: 'In Stock',
-      viewDetails: 'View Details',
-      errorLoading: 'Error loading spare parts',
-      failedLoadParts: 'Failed to load spare parts'
-    },
-    bg: {
-      title: 'Каталог на резервни части',
-      loggedInAs: 'Вход като',
-      readOnlyView: 'Преглед само за четене',
-      logout: 'Изход',
-      searchPlaceholder: 'Търсене по име, номер на част или баркод...',
-      sortBy: 'Сортирай по',
-      name: 'Име',
-      stock: 'Наличност',
-      cost: 'Цена',
-      refresh: 'Обновяване',
-      showing: 'Показва се',
-      of: 'от',
-      parts: 'части',
-      loading: 'Зареждане на резервни части...',
-      noPartsFound: 'Намерени са 0 части',
-      tryDifferentSearch: 'Опитайте друго търсене',
-      loadingParts: 'Зареждане на части...',
-      minStock: 'Мин. наличност',
-      avgCost: 'Среда. цена',
-      outOfStock: 'Няма наличност',
-      lowStock: 'Ниска наличност',
-      inStock: 'В наличност',
-      viewDetails: 'Преглед детайли',
-      errorLoading: 'Грешка при зареждане',
-      failedLoadParts: 'Неуспешно зареждане на резервни части'
-    }
-  };
-
-  const lang = language === 'bg' ? 'bg' : 'en';
-  const t = translations[lang];
-
-  // Fetch all spare parts (read-only for technician)
+  // Fetch supplier data for all parts
   useEffect(() => {
-    fetchParts();
-  }, []);
+    if (open && parts.length > 0) {
+      loadPartsWithSuppliers();
+    }
+  }, [open, parts]);
 
-  const fetchParts = async () => {
-    setLoading(true);
+  const loadPartsWithSuppliers = async () => {
+    setLoadingSuppliers(true);
     try {
+      const partIds = parts.map(p => p.id);
+      
       const { data, error } = await supabase
-        .from('spare_parts')
+        .from('part_supplier_options')
         .select(`
-          *,
-          part_supplier_options (
-            supplier:suppliers (id, name, email, phone)
-          ),
-          warehouse:warehouses(name)
+          id,
+          part_id,
+          unit_price,
+          lead_time_days,
+          is_preferred,
+          supplier:suppliers(
+            id, 
+            name, 
+            contact_person,
+            email,
+            phone,
+            address,
+            is_oem,
+            quality_score,
+            delivery_score,
+            price_stability_score
+          )
         `)
-        .order('name');
+        .in('part_id', partIds);
 
       if (error) throw error;
 
-      setParts(data || []);
-      setFilteredParts(data || []);
+      const supplierMap = {};
+      if (data) {
+        data.forEach(option => {
+          if (!supplierMap[option.part_id]) {
+            supplierMap[option.part_id] = [];
+          }
+          supplierMap[option.part_id].push({
+            ...option.supplier,
+            unit_price: option.unit_price,
+            is_preferred: option.is_preferred,
+            lead_time_days: option.lead_time_days
+          });
+        });
+      }
+
+      const enrichedParts = parts.map(part => ({
+        ...part,
+        suppliers: supplierMap[part.id] || []
+      }));
+
+      setPartsWithSuppliers(enrichedParts);
+      setSelectedParts(enrichedParts.map(p => p.id));
+
+      const suppliers = {};
+      enrichedParts.forEach(p => {
+        p.suppliers.forEach(s => {
+          suppliers[s.name] = true;
+        });
+      });
+      setExpandedSuppliers(suppliers);
+
     } catch (error) {
-      console.error('[MaintenanceSpareParts] Error fetching parts:', error);
+      console.error('Error loading suppliers:', error);
       toast({
-        variant: 'destructive',
-        title: t.errorLoading,
-        description: t.failedLoadParts
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load supplier information"
       });
     } finally {
-      setLoading(false);
+      setLoadingSuppliers(false);
     }
   };
 
-  // Search and filter parts
-  useEffect(() => {
-    let results = [...parts];
+  const groupedBySupplier = () => {
+    const groups = {};
+    const reorderParts = partsWithSuppliers.filter(p => selectedParts.includes(p.id));
+    
+    reorderParts.forEach(part => {
+      let preferredSupplier = part.suppliers.find(s => s.is_preferred);
+      if (!preferredSupplier && part.suppliers.length > 0) {
+        preferredSupplier = part.suppliers[0];
+      }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      results = results.filter(part => 
-        part.name.toLowerCase().includes(query) ||
-        part.part_number.toLowerCase().includes(query) ||
-        part.barcode.toLowerCase().includes(query) ||
-        part.description?.toLowerCase().includes(query)
-      );
+      const supplierName = preferredSupplier?.name || 'No Supplier';
+      if (!groups[supplierName]) {
+        groups[supplierName] = [];
+      }
+      groups[supplierName].push({
+        ...part,
+        selectedSupplier: preferredSupplier
+      });
+    });
+
+    return groups;
+  };
+
+  const getReorderParts = () => {
+    return partsWithSuppliers.filter(p => selectedParts.includes(p.id));
+  };
+
+  const generateTableFormat = (supplier = null) => {
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
     }
 
-    // Sort results
-    switch (sortBy) {
-      case 'stock':
-        results.sort((a, b) => b.current_quantity - a.current_quantity);
+    const rows = reorderParts.map(p => {
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return [
+        p.part_number || '-',
+        p.name,
+        p.category || '-',
+        p.current_quantity,
+        p.reorder_point,
+        Math.max(0, p.reorder_point - p.current_quantity),
+        preferred?.unit_price || p.unit_cost || '0.00'
+      ];
+    });
+
+    return {
+      header: ['Part Number', 'Name', 'Category', 'Current Qty', 'Reorder Point', 'Qty Needed', 'Unit Cost'],
+      rows
+    };
+  };
+
+  const generateCSV = (supplier = null) => {
+    const { header, rows } = generateTableFormat(supplier);
+    const csvContent = [
+      header.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    return csvContent;
+  };
+
+  const generateList = (supplier = null) => {
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
+    }
+    return reorderParts.map(p => {
+      const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return `${p.part_number || '-'} | ${p.name} | Qty: ${qtyNeeded} | Unit Cost: €${(preferred?.unit_price || p.unit_cost || 0).toFixed(2)}`;
+    }).join('\n');
+  };
+
+  const generateHTML = (supplier = null) => {
+    const { header, rows } = generateTableFormat(supplier);
+    let reorderParts = getReorderParts();
+    if (supplier) {
+      reorderParts = reorderParts.filter(p => {
+        const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+        return (preferred?.name || 'No Supplier') === supplier;
+      });
+    }
+    const total = reorderParts.reduce((sum, p) => {
+      const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+      const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+      return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
+    }, 0);
+
+    let html = `
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial;">
+  <thead>
+    <tr style="background-color: #f0f0f0; font-weight: bold;">
+      ${header.map(h => `<th>${h}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>
+    ${rows.map((row, idx) => `
+      <tr style="background-color: ${idx % 2 ? '#ffffff' : '#f9f9f9'};">
+        ${row.map(cell => `<td>${cell}</td>`).join('')}
+      </tr>
+    `).join('')}
+  </tbody>
+</table>
+<p style="margin-top: 20px; font-weight: bold;">Total Estimated Cost: €${total.toFixed(2)}</p>
+<p>Supplier: ${supplier || 'All Suppliers'}</p>
+<p>Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+    `;
+    return html;
+  };
+
+  const handleCopyToClipboard = (format, supplier = null) => {
+    let content = '';
+    switch (format) {
+      case 'csv':
+        content = generateCSV(supplier);
         break;
-      case 'cost':
-        results.sort((a, b) => (b.average_cost || 0) - (a.average_cost || 0));
+      case 'list':
+        content = generateList(supplier);
         break;
-      case 'name':
+      case 'table':
+        content = generateTableFormat(supplier).rows.map(row => row.join('\t')).join('\n');
+        break;
       default:
-        results.sort((a, b) => a.name.localeCompare(b.name));
-        break;
+        content = '';
     }
 
-    setFilteredParts(results);
-  }, [searchQuery, parts, sortBy]);
-
-  const handleViewDetails = (part) => {
-    setSelectedPart(part);
-    setDetailsModalOpen(true);
+    navigator.clipboard.writeText(content).then(() => {
+      toast({
+        title: "Copied!",
+        description: `${supplier ? `${supplier} - ` : ''}Items copied to clipboard`
+      });
+      setCopiedPart(format);
+      setTimeout(() => setCopiedPart(null), 2000);
+    }).catch(() => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to copy to clipboard"
+      });
+    });
   };
 
-  const getStockStatus = (part) => {
-    if (part.current_quantity === 0) {
-      return { label: t.outOfStock, variant: 'destructive', icon: '🔴' };
-    }
-    if (part.current_quantity <= part.min_stock_level) {
-      return { label: t.lowStock, variant: 'warning', icon: '🟡' };
-    }
-    return { label: t.inStock, variant: 'success', icon: '🟢' };
+  const handleDownloadCSV = (supplier = null) => {
+    const csv = generateCSV(supplier);
+    const element = document.createElement('a');
+    const filename = supplier 
+      ? `reorder-${supplier}-${new Date().toISOString().split('T')[0]}.csv`
+      : `reorder-list-${new Date().toISOString().split('T')[0]}.csv`;
+    element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv));
+    element.setAttribute('download', filename);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    toast({
+      title: "Downloaded!",
+      description: "CSV file downloaded successfully"
+    });
   };
+
+  const handleDownloadHTML = (supplier = null) => {
+    const html = generateHTML(supplier);
+    const element = document.createElement('a');
+    const filename = supplier
+      ? `reorder-${supplier}-${new Date().toISOString().split('T')[0]}.html`
+      : `reorder-list-${new Date().toISOString().split('T')[0]}.html`;
+    const blob = new Blob([html], { type: 'text/html' });
+    element.setAttribute('href', URL.createObjectURL(blob));
+    element.setAttribute('download', filename);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    toast({
+      title: "Downloaded!",
+      description: "HTML file downloaded successfully"
+    });
+  };
+
+  const togglePartSelection = (partId) => {
+    setSelectedParts(prev =>
+      prev.includes(partId)
+        ? prev.filter(id => id !== partId)
+        : [...prev, partId]
+    );
+  };
+
+  const toggleSupplierExpanded = (supplier) => {
+    setExpandedSuppliers(prev => ({
+      ...prev,
+      [supplier]: !prev[supplier]
+    }));
+  };
+
+  const groupedParts = groupedBySupplier();
+  const reorderParts = getReorderParts();
+  const totalEstimatedCost = reorderParts.reduce((sum, p) => {
+    const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+    const preferred = p.suppliers.find(s => s.is_preferred) || p.suppliers[0];
+    return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
+  }, 0);
 
   return (
-    <ErrorBoundary>
-      <div className="w-full max-w-5xl mx-auto">
-        {/* Header Card */}
-        <Card className="mb-6 border-slate-200 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-slate-50 to-blue-50 border-b">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl text-slate-800 flex items-center gap-2">
-                  📦 {t.title}
-                </CardTitle>
-                <p className="text-sm text-slate-500 mt-2">
-                  {t.loggedInAs}: <span className="font-semibold text-slate-700">{technicianName}</span> ({t.readOnlyView})
-                </p>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-40" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <Dialog.Content className="w-full h-screen sm:h-auto sm:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 shadow-lg overflow-y-auto sm:max-h-[90vh]">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b">
+              <Dialog.Title className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3">
+                <ShoppingCart className="h-6 w-6 text-teal-600" />
+                🔎 View Reorder Items
+              </Dialog.Title>
+              <Dialog.Close asChild>
+                <button className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            {loadingSuppliers ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner />
               </div>
-              <div className="flex gap-2">
-                {/* Language Switcher */}
-                <div className="flex gap-1 bg-white rounded-lg p-1 border border-slate-200">
-                  <button
-                    onClick={() => setLanguage('en')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                      language === 'en'
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-600 hover:text-slate-800'
-                    }`}
-                  >
-                    EN
-                  </button>
-                  <button
-                    onClick={() => setLanguage('bg')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                      language === 'bg'
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-600 hover:text-slate-800'
-                    }`}
-                  >
-                    БГ
-                  </button>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-teal-600">{reorderParts.length}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Total Quantity</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-slate-900">
+                        {reorderParts.reduce((sum, p) => sum + Math.max(0, p.reorder_point - p.current_quantity), 0)}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Suppliers</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-slate-900">
+                        {Object.keys(groupedParts).length}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-2 border-teal-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Est. Cost</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-teal-600">€{totalEstimatedCost.toFixed(2)}</p>
+                    </CardContent>
+                  </Card>
                 </div>
-                {/* Logout Button */}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  onClick={onLogout}
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  {t.logout}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
 
-          <CardContent className="pt-6 space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
-              <Input
-                placeholder={t.searchPlaceholder}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11 bg-slate-50 border-slate-200"
-              />
-            </div>
-
-            {/* Controls */}
-            <div className="flex gap-2 flex-wrap items-center">
-              <span className="text-sm text-slate-600 font-medium">{t.sortBy}:</span>
-              <div className="flex gap-1">
-                {['name', 'stock', 'cost'].map(option => (
-                  <Button
-                    key={option}
-                    variant={sortBy === option ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSortBy(option)}
-                    className="capitalize"
-                  >
-                    {option === 'name' && t.name}
-                    {option === 'stock' && t.stock}
-                    {option === 'cost' && t.cost}
-                  </Button>
-                ))}
-              </div>
-              <div className="ml-auto">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchParts}
-                  disabled={loading}
-                  title={t.refresh}
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                {/* Suppliers Grouped Items */}
+                <div className="space-y-4 mb-6">
+                  {Object.entries(groupedParts).length === 0 ? (
+                    <div className="text-center p-8 bg-slate-50 rounded-lg">
+                      <p className="text-slate-600">No items to reorder</p>
+                    </div>
                   ) : (
-                    <RefreshCw className="w-4 h-4" />
+                    Object.entries(groupedParts).map(([supplier, supplierParts]) => {
+                      const supplierTotal = supplierParts.reduce((sum, p) => {
+                        const qtyNeeded = Math.max(0, p.reorder_point - p.current_quantity);
+                        const preferred = p.selectedSupplier;
+                        return sum + (qtyNeeded * (preferred?.unit_price || p.unit_cost || 0));
+                      }, 0);
+
+                      return (
+                        <div key={supplier} className="border border-slate-200 rounded-lg overflow-hidden">
+                          {/* Supplier Header */}
+                          <button
+                            onClick={() => toggleSupplierExpanded(supplier)}
+                            className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-teal-50 to-teal-50 hover:from-teal-100 hover:to-teal-100 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 text-left">
+                              {expandedSuppliers[supplier] ? (
+                                <ChevronUp className="h-5 w-5 text-teal-600" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5 text-teal-600" />
+                              )}
+                              <div className="flex-1">
+                                <h3 className="font-bold text-slate-900 text-lg">{supplier}</h3>
+                                <p className="text-xs text-slate-600">
+                                  {supplierParts.length} items • €{supplierTotal.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Quick Export Buttons */}
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyToClipboard('list', supplier);
+                                }}
+                                className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                                title="Copy list"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadCSV(supplier);
+                                }}
+                                className="p-2 text-slate-600 hover:bg-white rounded transition-colors"
+                                title="Download CSV"
+                              >
+                                <Download className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </button>
+
+                          {/* Supplier Items */}
+                          {expandedSuppliers[supplier] && (
+                            <div className="max-h-96 overflow-y-auto border-t">
+                              <table className="w-full text-xs sm:text-sm">
+                                <thead className="bg-slate-50 sticky top-0">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left">
+                                      <input
+                                        type="checkbox"
+                                        checked={supplierParts.every(p => selectedParts.includes(p.id))}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedParts(prev => [...new Set([...prev, ...supplierParts.map(p => p.id)])]);
+                                          } else {
+                                            setSelectedParts(prev => prev.filter(id => !supplierParts.find(p => p.id === id)));
+                                          }
+                                        }}
+                                        className="rounded"
+                                      />
+                                    </th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Part #</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Name</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Current</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Needed</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Cost</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-slate-900">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {supplierParts.map((part, idx) => {
+                                    const qtyNeeded = Math.max(0, part.reorder_point - part.current_quantity);
+                                    const totalCost = qtyNeeded * (part.selectedSupplier?.unit_price || part.unit_cost || 0);
+                                    return (
+                                      <tr key={part.id} className={`border-b ${idx % 2 ? 'bg-slate-50' : 'bg-white'}`}>
+                                        <td className="px-4 py-3">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedParts.includes(part.id)}
+                                            onChange={() => togglePartSelection(part.id)}
+                                            className="rounded"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-slate-900">{part.part_number || '-'}</td>
+                                        <td className="px-4 py-3 font-semibold text-slate-900">{part.name}</td>
+                                        <td className="px-4 py-3">
+                                          <Badge variant={part.current_quantity <= 0 ? 'destructive' : 'secondary'}>
+                                            {part.current_quantity}
+                                          </Badge>
+                                        </td>
+                                        <td className="px-4 py-3 font-bold text-teal-600">{qtyNeeded}</td>
+                                        <td className="px-4 py-3 font-semibold text-slate-900">€{totalCost.toFixed(2)}</td>
+                                        <td className="px-4 py-3 text-center">
+                                          <button
+                                            onClick={() => onPartClick(part)}
+                                            className="p-2 text-teal-600 hover:bg-teal-50 rounded transition-colors inline-flex items-center gap-1"
+                                            title="View part details"
+                                          >
+                                            <Eye className="h-4 w-4" />
+                                            <span className="hidden sm:inline text-xs">View</span>
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
-                </Button>
+                </div>
+
+                {/* Global Export Options */}
+                {Object.keys(groupedParts).length > 0 && (
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h3 className="text-sm font-semibold text-slate-900 mb-3">📥 Export All Items</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleCopyToClipboard('list')}
+                        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy List
+                        {copiedPart === 'list' && <span className="text-green-600">✓</span>}
+                      </button>
+                      <button
+                        onClick={() => handleCopyToClipboard('table')}
+                        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-xs"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Table
+                        {copiedPart === 'table' && <span className="text-green-600">✓</span>}
+                      </button>
+                      <button
+                        onClick={() => handleDownloadCSV()}
+                        className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        CSV
+                      </button>
+                      <button
+                        onClick={() => handleDownloadHTML()}
+                        className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-xs font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        HTML
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="flex gap-2 border-t pt-4">
+                  <Dialog.Close asChild>
+                    <Button variant="outline" className="flex-1">
+                      Close
+                    </Button>
+                  </Dialog.Close>
+                </div>
+              </>
+            )}
+          </Dialog.Content>
+        </div>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+};
+
+// --- MAIN MAINTENANCE SPARE PARTS COMPONENT (TECHNICIAN VERSION) ---
+const MaintenanceSpareParts = () => {
+  const [parts, setParts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewDetails, setViewDetails] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const { toast } = useToast();
+  const { userRole } = useAuth();
+
+  const pageSize = 12;
+  const [editingPart, setEditingPart] = useState(null);
+
+  const [filters, setFilters] = useState({
+    search: '',
+    category: 'all',
+    status: 'all',
+    building_id: 'all'
+  });
+
+  const lastRequestId = useRef(0);
+
+  useEffect(() => {
+    loadParts();
+  }, [filters, page]);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    const { data } = await dbService.getCategories();
+    if (data) setCategories(data);
+  };
+
+  const loadParts = async () => {
+    const requestId = ++lastRequestId.current;
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('spare_parts')
+        .select('*, warehouse:warehouses(name, building:buildings(name))', { count: 'exact' });
+
+      if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,part_number.ilike.%${filters.search}%,barcode.eq.${filters.search}`);
+      }
+
+      if (filters.category !== 'all') {
+        query = query.eq('category', filters.category);
+      }
+
+      if (filters.building_id !== 'all') {
+        query = query.eq('building_id', filters.building_id);
+      }
+
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      query = query.order('created_at', { ascending: false }).range(from, to);
+
+      const { data, count, error } = await query;
+
+      if (requestId !== lastRequestId.current) return;
+      if (error) throw error;
+
+      let filteredData = data || [];
+
+      if (filters.status !== 'all') {
+        filteredData = filteredData.filter(p => {
+          const status = getStockStatus(p.current_quantity, p.min_stock_level, p.reorder_point);
+          return status === filters.status || (filters.status === 'critical' && status === 'out');
+        });
+      }
+
+      setParts(filteredData);
+      setTotalCount(count || 0);
+    } catch (error) {
+      if (requestId === lastRequestId.current) {
+        console.error(error);
+        const message = error.message || "Failed to load inventory. Please try again.";
+        toast({
+          variant: "destructive",
+          title: "Connection Error",
+          description: message
+        });
+      }
+    } finally {
+      if (requestId === lastRequestId.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const resetFilters = () => {
+    setFilters({ search: '', category: 'all', status: 'all', building_id: 'all' });
+    setPage(0);
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPage(0);
+  };
+
+  const handleCardClick = useCallback((part) => {
+    setViewDetails(part);
+  }, []);
+
+  const handleReorderPartClick = (part) => {
+    setViewDetails(part);
+  };
+
+  // Count items needing reorder
+  const needsReorderCount = parts.filter(p =>
+    p.current_quantity <= p.reorder_point
+  ).length;
+
+  return (
+    <>
+      <div className="min-h-screen bg-slate-50 p-2 sm:p-4 lg:p-6">
+        {/* Header */}
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">🔧 Spare Parts Catalog</h1>
+          <p className="text-xs sm:text-sm text-slate-600">Browse spare parts and track stock levels (Read-Only View).</p>
+        </div>
+
+        {/* Action Bar */}
+        <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
+          <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">🔍 Search & Filter</h2>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            {/* Search */}
+            <div className="flex-1 min-w-full sm:min-w-[250px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search parts..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-9 w-full text-xs sm:text-sm"
+                />
               </div>
             </div>
 
-            {/* Results Summary */}
-            <div className="text-sm text-slate-600">
-              {t.showing} <span className="font-semibold text-slate-800">{filteredParts.length}</span> {t.of} <span className="font-semibold text-slate-800">{parts.length}</span> {t.parts}
+            {/* Category Filter */}
+            <select
+              value={filters.category}
+              onChange={(e) => handleFilterChange('category', e.target.value)}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+            >
+              <option value="all">All Categories</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="in-stock">In Stock</option>
+              <option value="low">Low Stock</option>
+              <option value="critical">Critical</option>
+            </select>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {/* Reorder Button with Badge */}
+              <button
+                onClick={() => setShowReorderModal(true)}
+                className="relative px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-xs sm:text-sm font-medium flex items-center gap-2"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                <span className="hidden sm:inline">Reorder</span>
+                {needsReorderCount > 0 && (
+                  <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
+                )}
+              </button>
+
+              <Button
+                onClick={resetFilters}
+                variant="outline"
+                size="sm"
+                className="text-xs sm:text-sm"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Inventory Actions Section (Technician-Only) */}
+        <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2">
+            📦 Inventory Actions
+          </h2>
+          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+            {/* Reorder Items Button */}
+            <button
+              onClick={() => setShowReorderModal(true)}
+              className="px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              View Reorder Items
+              {needsReorderCount > 0 && (
+                <Badge className="bg-red-500">{needsReorderCount}</Badge>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Reorder Alert */}
+        {needsReorderCount > 0 && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                {needsReorderCount} item{needsReorderCount !== 1 ? 's' : ''} need{needsReorderCount !== 1 ? '' : 's'} reordering
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Use the "View Reorder Items" button to review parts that need to be reordered
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Parts Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-teal-600 mx-auto mb-3" />
-              <p className="text-slate-600">{t.loading}</p>
-            </div>
+          <div className="flex justify-center py-12">
+            <LoadingSpinner />
           </div>
-        ) : filteredParts.length === 0 ? (
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="py-12 text-center">
-              <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-600 font-medium">{t.noPartsFound}</p>
-              <p className="text-sm text-slate-500 mt-1">
-                {searchQuery ? t.tryDifferentSearch : t.loadingParts}
-              </p>
-            </CardContent>
-          </Card>
+        ) : parts.length === 0 ? (
+          <div className="bg-white rounded-lg p-8 text-center border border-slate-200">
+            <Box className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <p className="text-slate-600 font-medium">No parts found matching your filters.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredParts.map(part => {
-              const stockStatus = getStockStatus(part);
-              return (
-                <Card key={part.id} className="hover:shadow-lg transition-shadow border-slate-200">
-                  <CardContent className="p-4 space-y-3">
-                    {/* Part Image */}
-                    <div className="relative bg-slate-100 rounded-lg overflow-hidden h-32 flex items-center justify-center">
-                      <ImageWithFallback
-                        src={part.photo_url}
-                        alt={part.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <AnimatePresence>
+                {parts.map(part => (
+                  <PartCard
+                    key={part.id}
+                    part={part}
+                    onClick={() => handleCardClick(part)}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
 
-                    {/* Part Name and Number */}
-                    <div>
-                      <h3 className="font-semibold text-slate-900 truncate text-sm">
-                        {part.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5">
-                        {part.part_number}
-                      </p>
-                    </div>
-
-                    {/* Stock Status */}
-                    <div className="flex items-center gap-2">
-                      <Badge variant={stockStatus.variant === 'destructive' ? 'destructive' : 'default'} className="text-xs">
-                        {stockStatus.icon} {stockStatus.label}
-                      </Badge>
-                      <span className="text-xs font-semibold text-slate-700">
-                        {part.current_quantity} {part.unit_of_measure}
-                      </span>
-                    </div>
-
-                    {/* Info Grid */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-50 p-2 rounded">
-                        <p className="text-slate-500 font-medium mb-0.5">{t.minStock}</p>
-                        <p className="font-semibold text-slate-800">{part.min_stock_level}</p>
-                      </div>
-                      <div className="bg-slate-50 p-2 rounded">
-                        <p className="text-slate-500 font-medium mb-0.5">{t.avgCost}</p>
-                        <p className="font-semibold text-slate-800">
-                          {part.average_cost ? `$${part.average_cost.toFixed(2)}` : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Warehouse Info */}
-                    {part.warehouse && (
-                      <div className="bg-blue-50 p-2 rounded text-xs">
-                        <p className="text-blue-600 font-medium">
-                          📍 {part.warehouse.name}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Barcode */}
-                    <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded font-mono break-words">
-                      {part.barcode}
-                    </div>
-
-                    {/* View Details Button */}
-                    <Button
-                      onClick={() => handleViewDetails(part)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm h-9"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      {t.viewDetails}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+            {/* Pagination */}
+            <div className="flex justify-between items-center pt-4 border-t bg-white rounded-lg p-4">
+              <p className="text-xs sm:text-sm text-slate-600">
+                Showing {totalCount === 0 ? 0 : (page * pageSize + 1)} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} results
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page === 0}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page * pageSize + parts.length >= totalCount}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Details Modal */}
-      {selectedPart && (
-        <PartDetailsModal
-          open={detailsModalOpen}
-          part={selectedPart}
-          onClose={() => {
-            setDetailsModalOpen(false);
-            setSelectedPart(null);
-          }}
-          onDeleteRequest={() => {}}
-          onEditRequest={() => {}}
-        />
-      )}
-    </ErrorBoundary>
+      {/* Dialogs */}
+      <PartDetailsModal
+        part={viewDetails}
+        open={!!viewDetails}
+        onOpenChange={(open) => !open && setViewDetails(null)}
+        isEditable={false}
+      />
+
+      {/* Reorder Modal - FOR TECHNICIANS */}
+      <ReorderModal
+        open={showReorderModal}
+        onOpenChange={setShowReorderModal}
+        parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
+        onPartClick={handleReorderPartClick}
+      />
+    </>
   );
 };
 
