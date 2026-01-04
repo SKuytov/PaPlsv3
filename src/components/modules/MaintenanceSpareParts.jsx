@@ -142,14 +142,47 @@ const MaintenanceSpareParts = () => {
       <div className="min-h-screen bg-slate-50 p-2 sm:p-4 lg:p-6">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">🔍 Spare Parts Catalog</h1>
-          <p className="text-xs sm:text-sm text-slate-600">Browse spare parts and track stock levels (Read-Only View).</p>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">🔍 Spare Parts Catalog</h1>
+            <Badge className="bg-teal-100 text-teal-800 border-0 text-xs sm:text-sm">Technician Mode</Badge>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600">Browse and search spare parts inventory. Limited to read-only access.</p>
+        </div>
+
+        {/* Restrictions Info Card */}
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs sm:text-sm">
+            <p className="font-semibold text-amber-900 mb-1">
+              ⚠️ Restricted Access - Read-Only Mode
+            </p>
+            <div className="text-amber-800 space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">❌</span>
+                <span>Cannot add or delete parts</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">❌</span>
+                <span>Cannot edit part information</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">❌</span>
+                <span>Cannot view reorder lists or management features</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">❌</span>
+                <span>Cannot create quotes or export data</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6 shadow-sm">
           <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">🔎 Search & Filter</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <Search className="w-4 h-4" /> Search & Filter
+            </h2>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -158,7 +191,7 @@ const MaintenanceSpareParts = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Search parts..."
+                  placeholder="Search parts by name, part number, or barcode..."
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
                   className="pl-9 w-full text-xs sm:text-sm"
@@ -170,7 +203,7 @@ const MaintenanceSpareParts = () => {
             <select
               value={filters.category}
               onChange={(e) => handleFilterChange('category', e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white hover:border-slate-400 transition-colors"
             >
               <option value="all">All Categories</option>
               {categories.map(cat => (
@@ -182,7 +215,7 @@ const MaintenanceSpareParts = () => {
             <select
               value={filters.status}
               onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white hover:border-slate-400 transition-colors"
             >
               <option value="all">All Status</option>
               <option value="in-stock">In Stock</option>
@@ -202,28 +235,16 @@ const MaintenanceSpareParts = () => {
           </div>
         </div>
 
-        {/* Information Card */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 sm:mb-6 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-900">
-              📚 Read-Only Catalog View
-            </p>
-            <p className="text-xs text-blue-700 mt-1">
-              You can browse and search spare parts. For reordering or modifications, contact your administrator.
-            </p>
-          </div>
-        </div>
-
         {/* Parts Grid */}
         {loading ? (
           <div className="flex justify-center py-12">
             <LoadingSpinner />
           </div>
         ) : parts.length === 0 ? (
-          <div className="bg-white rounded-lg p-8 text-center border border-slate-200">
+          <div className="bg-white rounded-lg p-8 text-center border border-slate-200 shadow-sm">
             <Box className="h-12 w-12 text-slate-400 mx-auto mb-4" />
             <p className="text-slate-600 font-medium">No parts found matching your filters.</p>
+            <p className="text-slate-500 text-sm mt-1">Try adjusting your search criteria.</p>
           </div>
         ) : (
           <>
@@ -240,7 +261,7 @@ const MaintenanceSpareParts = () => {
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-between items-center pt-4 border-t bg-white rounded-lg p-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t bg-white rounded-lg p-4 shadow-sm">
               <p className="text-xs sm:text-sm text-slate-600">
                 Showing {totalCount === 0 ? 0 : (page * pageSize + 1)} to {Math.min((page + 1) * pageSize, totalCount)} of {totalCount} results
               </p>
@@ -269,12 +290,22 @@ const MaintenanceSpareParts = () => {
         )}
       </div>
 
-      {/* Part Details Modal - READ ONLY */}
+      {/* Part Details Modal - FULLY READ ONLY FOR TECHNICIANS */}
+      {/* Technicians cannot: */}
+      {/* ❌ Add new parts */}
+      {/* ❌ Edit parts */}
+      {/* ❌ Delete parts */}
+      {/* ❌ View reorder items */}
+      {/* ❌ Export reorder lists */}
+      {/* ❌ Create quote requests */}
+      {/* ❌ Any modification/management features */}
       <PartDetailsModal
         part={viewDetails}
         open={!!viewDetails}
         onOpenChange={(open) => !open && setViewDetails(null)}
         isEditable={false}
+        onEdit={null}
+        onDelete={null}
       />
     </>
   );
