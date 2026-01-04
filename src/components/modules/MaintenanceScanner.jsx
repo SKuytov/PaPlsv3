@@ -479,12 +479,9 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId }) => {
             <CardHeader className="bg-gradient-to-r from-slate-50 to-teal-50 border-b py-4 flex flex-row items-center justify-between">
                <div className="flex items-center gap-2">
                   <QrCode className="w-5 h-5 text-teal-600" />
-                  <div>
-                     <CardTitle className="text-slate-800 text-lg">
-                        {scanStep === 'scan' ? 'Technician Scanner' : scanStep === 'menu' ? 'Item Menu' : 'Register Usage'}
-                     </CardTitle>
-                     <p className="text-xs text-slate-500 mt-0.5">Logged in as: <span className="font-semibold">{technicianName}</span></p>
-                  </div>
+                  <CardTitle className="text-slate-800 text-lg">
+                     {scanStep === 'scan' ? 'Technician Scanner' : scanStep === 'menu' ? 'Item Menu' : 'Register Usage'}
+                  </CardTitle>
                </div>
                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={onLogout}>
                   <LogOut className="w-4 h-4 mr-2" />
