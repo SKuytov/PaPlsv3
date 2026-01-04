@@ -9,6 +9,7 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
   const imageRef = useRef(null);
 
@@ -21,6 +22,7 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
     if (open) {
       setZoom(1);
       setPan({ x: 0, y: 0 });
+      setCurrentPan({ x: 0, y: 0 });
     }
   }, [open]);
 
@@ -35,14 +37,15 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
   const handleReset = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setCurrentPan({ x: 0, y: 0 });
   };
 
   const handleMouseDown = (e) => {
     if (zoom === 1) return; // Only allow panning when zoomed in
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y,
+      x: e.clientX - currentPan.x,
+      y: e.clientY - currentPan.y,
     });
   };
 
@@ -52,17 +55,22 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
     const newX = e.clientX - dragStart.x;
     const newY = e.clientY - dragStart.y;
 
-    // Calculate boundaries based on zoom level
+    // Calculate max pan boundaries based on zoom level and container size
     const container = containerRef.current;
     if (container && imageRef.current) {
       const containerRect = container.getBoundingClientRect();
-      const maxX = (imageRef.current.width * zoom - containerRect.width) / 2;
-      const maxY = (imageRef.current.height * zoom - containerRect.height) / 2;
+      const scaledWidth = imageRef.current.naturalWidth * zoom;
+      const scaledHeight = imageRef.current.naturalHeight * zoom;
 
-      const boundedX = Math.max(-maxX, Math.min(maxX, newX));
-      const boundedY = Math.max(-maxY, Math.min(maxY, newY));
+      // Calculate how much space we have to pan
+      const maxPanX = (scaledWidth - containerRect.width) / 2;
+      const maxPanY = (scaledHeight - containerRect.height) / 2;
 
-      setPan({ x: boundedX, y: boundedY });
+      // Constrain pan within boundaries
+      const boundedX = Math.max(-maxPanX, Math.min(maxPanX, newX));
+      const boundedY = Math.max(-maxPanY, Math.min(maxPanY, newY));
+
+      setCurrentPan({ x: boundedX, y: boundedY });
     }
   };
 
@@ -94,7 +102,7 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
         container.removeEventListener('wheel', handleWheel);
       };
     }
-  }, [isDragging, dragStart, zoom, pan]);
+  }, [isDragging, dragStart, zoom, currentPan]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -102,15 +110,15 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
         <DialogTitle className="sr-only">Image Viewer - {imageName}</DialogTitle>
 
         {/* Header */}
-        <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between shrink-0">
           <div className="flex-1 min-w-0">
             <h2 className="text-white font-semibold truncate">{imageName}</h2>
-            <p className="text-sm text-slate-400 mt-1">Zoom: {Math.round(zoom * 100)}% | Scroll to zoom, drag to pan</p>
+            <p className="text-sm text-slate-400 mt-1">Zoom: {Math.round(zoom * 100)}% | Scroll to zoom{zoom > 1 ? ', drag to pan' : ''}</p>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-300 hover:text-white hover:bg-slate-700"
+            className="text-slate-300 hover:text-white hover:bg-slate-700 flex-shrink-0"
             onClick={() => onClose(false)}
           >
             <X className="w-5 h-5" />
@@ -125,23 +133,27 @@ const ImageViewer = ({ open, imageUrl, imageName, onClose }) => {
         >
           <div
             style={{
-              transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+              transform: `translate(${currentPan.x}px, ${currentPan.y}px) scale(${zoom})`,
               transition: isDragging ? 'none' : 'transform 0.1s ease-out',
               transformOrigin: 'center',
             }}
             className="flex items-center justify-center"
           >
-            <ImageWithFallback
+            <img
               ref={imageRef}
               src={imageUrl}
               alt={imageName}
-              className="max-h-[calc(90vh-140px)] max-w-full object-contain"
+              className="max-h-[calc(90vh-140px)] max-w-full object-contain select-none"
+              onLoad={() => {
+                // Reset pan on image load to ensure proper calculations
+                setCurrentPan({ x: 0, y: 0 });
+              }}
             />
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="bg-slate-800 border-t border-slate-700 px-4 py-3 flex items-center justify-center gap-2">
+        <div className="bg-slate-800 border-t border-slate-700 px-4 py-3 flex items-center justify-center gap-2 shrink-0">
           <Button
             variant="secondary"
             size="sm"
