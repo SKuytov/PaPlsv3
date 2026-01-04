@@ -26,7 +26,7 @@ import TransactionDetailsModal from '@/components/modules/machines/TransactionDe
 import ImageViewer from '@/components/modules/spare-parts/ImageViewer';
 
 
-const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, onEditRequest }) => {
+const PartDetailsModal = ({ open, part: initialPart, onOpenChange, onDelete, onEdit, isEditable }) => {
   const [part, setPart] = useState(initialPart);
   const [activeTab, setActiveTab] = useState('info');
   const [history, setHistory] = useState([]);
@@ -42,7 +42,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
   const { userRole } = useAuth();
 
 
-  const isGodAdmin = userRole?.name === 'God Admin';
+  const isGodAdmin = isEditable || userRole?.name === 'God Admin';
 
 
   // Linking State
@@ -266,18 +266,9 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
     setTransactionDetailsOpen(true);
   };
 
-  // Handle close - properly close the modal
-  const handleClose = () => {
-    if (onClose && typeof onClose === 'function') {
-      onClose();
-    }
-  };
-
-  // Handle open change from Dialog component
-  const handleOpenChange = (isOpen) => {
-    if (!isOpen) {
-      handleClose();
-    }
+  // Handle close button click
+  const handleCloseClick = () => {
+    onOpenChange(false);
   };
 
 
@@ -306,7 +297,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
   return (
     <>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
   <DialogContent className="max-w-4xl h-[90vh] sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-white sm:rounded-xl border shadow-2xl">
     <DialogTitle className="sr-only">{part?.name || 'Part Details'}</DialogTitle>
       <DialogDescription className="sr-only">Part details and information</DialogDescription>    
@@ -327,7 +318,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
                  <FileText className="w-3 h-3 mr-2" /> <span className="hidden sm:inline">Datasheet</span>
                </Button>
                {isGodAdmin && (
-                  <Button size="sm" variant="secondary" className="bg-white/90 text-slate-900 hover:bg-white h-8 text-xs px-3" onClick={() => onEditRequest(part)}>
+                  <Button size="sm" variant="secondary" className="bg-white/90 text-slate-900 hover:bg-white h-8 text-xs px-3" onClick={() => onEdit?.(part)}>
                     <Pencil className="w-3 h-3 mr-2" /> Edit
                   </Button>
                )}
@@ -833,7 +824,7 @@ const PartDetailsModal = ({ open, part: initialPart, onClose, onDeleteRequest, o
 
 
               <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
-                 <Button variant="outline" size="lg" onClick={handleClose} className="w-full sm:w-auto bg-white">
+                 <Button variant="outline" size="lg" onClick={handleCloseClick} className="w-full sm:w-auto bg-white">
                     <X className="w-4 h-4 mr-2" /> Close Details
                  </Button>
               </div>
