@@ -231,7 +231,7 @@ const FilterPanel = ({
 };
 
 // --- REORDER MODAL COMPONENT (WITH CORRECT SUPPLIERS TABLE SCHEMA) ---
-const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuoteRequests }) => {
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuoteRequests, isGodAdmin }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
@@ -776,13 +776,15 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuoteReq
                         <FileText className="h-3.5 w-3.5" />
                         HTML
                       </button>
-                      <button
-                        onClick={() => onCreateQuoteRequests(reorderParts)}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-xs font-medium ml-auto"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Create Quote Requests
-                      </button>
+                      {isGodAdmin && (
+                        <button
+                          onClick={() => onCreateQuoteRequests(reorderParts)}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-xs font-medium ml-auto"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Create Quote Requests
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1074,7 +1076,7 @@ const SpareParts = () => {
         {/* Search Bar */}
         <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Search</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">🔍 Search</h2>
           </div>
           <div className="flex gap-2">
             <div className="flex-1 min-w-full sm:min-w-[250px]">
@@ -1106,38 +1108,46 @@ const SpareParts = () => {
           />
         </div>
 
-        {/* Action Bar */}
+        {/* Action Bar - Only shown for God Admin */}
+        {isGodAdmin && (
+          <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
+            <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-900">⚙️ Admin Actions</h2>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Part
+              </Button>
+              <Button
+                onClick={() => setShowManualQuoteModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">New Quote Request</span>
+                <span className="sm:hidden">Quote Request</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions Bar - Shown for all users */}
         <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Actions</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">{isGodAdmin ? '📋 Quick Actions' : '🛠️ Inventory Actions'}</h2>
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {isGodAdmin && (
-              <>
-                <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Part
-                </Button>
-                <Button
-                  onClick={() => setShowManualQuoteModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm"
-                  size="sm"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">New Quote Request</span>
-                  <span className="sm:hidden">Quote Request</span>
-                </Button>
-              </>
-            )}
-
             {/* Reorder Button with Badge */}
             <button
               onClick={() => setShowReorderModal(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs sm:text-sm"
+              className="flex items-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs sm:text-sm font-medium"
             >
               <RotateCcw className="h-4 w-4" />
-              <span className="hidden sm:inline">Reorder</span>
+              <span className="hidden sm:inline">View Reorder Items</span>
+              <span className="sm:hidden">Reorder</span>
               {needsReorderCount > 0 && (
                 <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
               )}
@@ -1151,10 +1161,11 @@ const SpareParts = () => {
               title="Reset all filters"
             >
               <RotateCcw className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Reset</span>
             </Button>
 
             {activeFilterCount > 0 && (
-              <div className="text-xs text-amber-600 font-medium px-2 py-2">
+              <div className="text-xs text-amber-600 font-medium px-2 py-2 bg-amber-50 rounded-lg border border-amber-200">
                 {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
               </div>
             )}
@@ -1175,7 +1186,7 @@ const SpareParts = () => {
                 {needsReorderCount} item{needsReorderCount !== 1 ? 's' : ''} need{needsReorderCount !== 1 ? '' : 's'} reordering
               </p>
               <p className="text-xs text-amber-700 mt-1">
-                Click the "Reorder" button to manage and export your reorder list by supplier
+                Click "View Reorder Items" to manage and export your reorder list by supplier
               </p>
             </div>
           </div>
@@ -1278,6 +1289,7 @@ const SpareParts = () => {
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
         onPartClick={handlePartClick}
         onCreateQuoteRequests={handleCreateBulkQuoteRequests}
+        isGodAdmin={isGodAdmin}
       />
 
       {/* Manual Quote Request Modal */}
