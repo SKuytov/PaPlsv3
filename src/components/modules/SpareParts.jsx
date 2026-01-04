@@ -603,11 +603,14 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
 const SpareParts = () => {
   const [parts, setParts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [buildings, setBuildings] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewDetails, setViewDetails] = useState(null);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -623,7 +626,10 @@ const SpareParts = () => {
     search: '',
     category: 'all',
     status: 'all',
-    building_id: 'all'
+    building_id: 'all',
+    warehouse_id: 'all',
+    bin_location: 'all',
+    manufacturer: 'all'
   });
 
   const lastRequestId = useRef(0);
@@ -634,11 +640,32 @@ const SpareParts = () => {
 
   useEffect(() => {
     loadCategories();
+    loadBuildingsAndWarehouses();
   }, []);
 
   const loadCategories = async () => {
     const { data } = await dbService.getCategories();
     if (data) setCategories(data);
+  };
+
+  const loadBuildingsAndWarehouses = async () => {
+    try {
+      const { data: buildingsData } = await supabase
+        .from('buildings')
+        .select('id, name')
+        .order('name');
+      
+      if (buildingsData) setBuildings(buildingsData);
+
+      const { data: warehousesData } = await supabase
+        .from('warehouses')
+        .select('id, name')
+        .order('name');
+      
+      if (warehousesData) setWarehouses(warehousesData);
+    } catch (error) {
+      console.error('Error loading buildings/warehouses:', error);
+    }
   };
 
   const loadParts = async () => {
@@ -659,6 +686,10 @@ const SpareParts = () => {
 
       if (filters.building_id !== 'all') {
         query = query.eq('building_id', filters.building_id);
+      }
+
+      if (filters.warehouse_id !== 'all') {
+        query = query.eq('warehouse_id', filters.warehouse_id);
       }
 
       const from = page * pageSize;
@@ -746,7 +777,15 @@ const SpareParts = () => {
   };
 
   const resetFilters = () => {
-    setFilters({ search: '', category: 'all', status: 'all', building_id: 'all' });
+    setFilters({
+      search: '',
+      category: 'all',
+      status: 'all',
+      building_id: 'all',
+      warehouse_id: 'all',
+      bin_location: 'all',
+      manufacturer: 'all'
+    });
     setPage(0);
   };
 
@@ -763,6 +802,11 @@ const SpareParts = () => {
     setViewDetails(part);
   };
 
+  // Count active filters
+  const activeFilterCount = Object.entries(filters).filter(
+    ([key, value]) => key !== 'search' && value !== 'all'
+  ).length;
+
   // Count items needing reorder
   const needsReorderCount = parts.filter(p =>
     p.current_quantity <= p.reorder_point
@@ -777,82 +821,135 @@ const SpareParts = () => {
           <p className="text-xs sm:text-sm text-slate-600">Manage spare parts, track stock levels, and monitor costs.</p>
         </div>
 
-        {/* Action Bar */}
+        {/* Search Bar */}
         <div className="bg-white rounded-lg border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
-          <div className="flex items-center justify-between gap-2 mb-3 sm:mb-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Controls</h2>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            {/* Search */}
-            <div className="flex-1 min-w-full sm:min-w-[250px]">
+          <div className="flex gap-2">
+            <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Search parts..."
+                  placeholder="Search parts by name, number, or barcode..."
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
                   className="pl-9 w-full text-xs sm:text-sm"
                 />
               </div>
             </div>
-
-            {/* Category Filter */}
-            <select
-              value={filters.category}
-              onChange={(e) => handleFilterChange('category', e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+            <Button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
             >
-              <option value="all">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-
-            {/* Status Filter */}
-            <select
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm"
+              <Filter className="h-4 w-4 mr-1" />
+              Filters {activeFilterCount > 0 && <Badge className="ml-2 bg-teal-600">{activeFilterCount}</Badge>}
+            </Button>
+            <Button
+              onClick={resetFilters}
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
             >
-              <option value="all">All Status</option>
-              <option value="in-stock">In Stock</option>
-              <option value="low">Low Stock</option>
-              <option value="critical">Critical</option>
-            </select>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              {isGodAdmin && (
-                <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Part
-                </Button>
-              )}
-
-              {/* Reorder Button with Badge */}
-              <button
-                onClick={() => setShowReorderModal(true)}
-                className="relative px-3 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-xs sm:text-sm font-medium flex items-center gap-2"
-              >
-                <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Reorder</span>
-                {needsReorderCount > 0 && (
-                  <Badge className="ml-1 bg-red-500">{needsReorderCount}</Badge>
-                )}
-              </button>
-
-              <Button
-                onClick={resetFilters}
-                variant="outline"
-                size="sm"
-                className="text-xs sm:text-sm"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            </div>
+              <RotateCcw className="h-4 w-4" />
+            </Button>
           </div>
         </div>
+
+        {/* Advanced Filters Panel */}
+        <AnimatePresence>
+          {showAdvancedFilters && (
+            <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 sm:mb-6">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4">📊 Advanced Filters</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Category Filter */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-2">Category</label>
+                  <select
+                    value={filters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Building Filter */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-2">Building</label>
+                  <select
+                    value={filters.building_id}
+                    onChange={(e) => handleFilterChange('building_id', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  >
+                    <option value="all">All Buildings</option>
+                    {buildings.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Warehouse Filter */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-2">Warehouse</label>
+                  <select
+                    value={filters.warehouse_id}
+                    onChange={(e) => handleFilterChange('warehouse_id', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  >
+                    <option value="all">All Warehouses</option>
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-2">Stock Status</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="in-stock">In Stock</option>
+                    <option value="low">Low Stock</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Admin Actions Section */}
+        {isGodAdmin && (
+          <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4 sm:mb-6">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2">
+              ⚙️ Admin Actions
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+              <Button onClick={handleCreate} size="sm" className="text-xs sm:text-sm">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Part
+              </Button>
+
+              <button
+                onClick={() => setShowReorderModal(true)}
+                className="px-4 py-2 bg-teal-50 border border-teal-300 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Reorder Items
+                {needsReorderCount > 0 && (
+                  <Badge className="bg-red-500">{needsReorderCount}</Badge>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Reorder Alert */}
         {needsReorderCount > 0 && (
@@ -863,7 +960,7 @@ const SpareParts = () => {
                 {needsReorderCount} item{needsReorderCount !== 1 ? 's' : ''} need{needsReorderCount !== 1 ? '' : 's'} reordering
               </p>
               <p className="text-xs text-amber-700 mt-1">
-                Click the "Reorder" button to manage and export your reorder list by supplier
+                Click the "Reorder Items" button to manage and export your reorder list by supplier
               </p>
             </div>
           </div>
@@ -927,7 +1024,9 @@ const SpareParts = () => {
       <PartDetailsModal
         part={viewDetails}
         open={!!viewDetails}
-        onOpenChange={(open) => !open && setViewDetails(null)}
+        onOpenChange={(open) => {
+          if (!open) setViewDetails(null);
+        }}
         onEdit={() => handleEdit(viewDetails)}
         onDelete={() => setDeleteId(viewDetails?.id)}
         isEditable={isGodAdmin}
