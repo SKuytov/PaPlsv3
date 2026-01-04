@@ -31,8 +31,11 @@ const MaintenanceScanner = ({ onLogout, technicianName, technicianId, userRole, 
    const { toast } = useToast();
    const { user } = useAuth();
    
-   // Check if user can restock
-   const canRestock = userRole?.includes('Admin') || userRole === 'God Admin' || userPermissions?.includes('restock_inventory') || false;
+   // Check if user can restock - userRole is an OBJECT with {id, name}
+   const roleName = typeof userRole === 'object' ? userRole?.name : userRole;
+   const canRestock = roleName === 'God Admin' || roleName?.includes('Admin') || userPermissions?.includes('restock_inventory') || false;
+   
+   console.log('[MaintenanceScanner] Role check:', { roleName, canRestock, userRole, userPermissions });
    
    // --- State Management ---
    const [mode, setMode] = useState('hid'); // 'hid' | 'camera' | 'manual' (default: hid)
