@@ -40,13 +40,16 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 transition-transform duration-300 ease-in-out flex flex-col h-screen",
         mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
-        {/* Header */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-900">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-teal-500/20">
-              <Box className="text-white w-5 h-5" />
-            </div>
-            <span className="text-white font-bold text-xl tracking-tight">PartPulse v3</span>
+        {/* Header with Logo */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900">
+          <div className="flex items-center space-x-3 flex-1">
+            {/* PartPulse Logo */}
+            <img 
+              src="https://partpulse.eu/images/PartPulse-logo.png" 
+              alt="PartPulse Logo" 
+              className="w-8 h-8 object-contain drop-shadow-lg"
+            />
+            <span className="text-white font-bold text-lg tracking-tight">PartPulse</span>
           </div>
           {/* Close button for mobile */}
           <button 
