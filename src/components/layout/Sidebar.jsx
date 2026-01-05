@@ -43,48 +43,12 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         {/* Header with Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900">
           <div className="flex items-center space-x-3 flex-1">
-            {/* PartPulse Logo - Simplified and Clean */}
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 100 100"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="flex-shrink-0"
-            >
-              <defs>
-                <linearGradient id="gearGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#1e3a5f" />
-                  <stop offset="50%" stopColor="#313e5a" />
-                  <stop offset="100%" stopColor="#f36b32" />
-                </linearGradient>
-              </defs>
-              
-              {/* Left Gear - Blue */}
-              <circle cx="30" cy="50" r="25" fill="#1e3a5f" />
-              <circle cx="30" cy="50" r="15" fill="#154577" />
-              <circle cx="30" cy="50" r="8" fill="#0d3a52" />
-              
-              {/* Gear teeth - Left */}
-              <rect x="28" y="15" width="4" height="8" fill="#1e3a5f" />
-              <rect x="28" y="77" width="4" height="8" fill="#1e3a5f" />
-              <rect x="-5" y="48" width="8" height="4" fill="#1e3a5f" />
-              
-              {/* Right Gear - Orange */}
-              <circle cx="70" cy="50" r="25" fill="#f36b32" />
-              <circle cx="70" cy="50" r="15" fill="#e85a1f" />
-              <circle cx="70" cy="50" r="8" fill="#d94a10" />
-              
-              {/* Gear teeth - Right */}
-              <rect x="68" y="15" width="4" height="8" fill="#f36b32" />
-              <rect x="68" y="77" width="4" height="8" fill="#f36b32" />
-              <rect x="97" y="48" width="8" height="4" fill="#f36b32" />
-              
-              {/* Center connection pulse */}
-              <circle cx="50" cy="50" r="6" fill="#f36b32" opacity="0.8" />
-              <circle cx="50" cy="50" r="12" fill="none" stroke="#f36b32" strokeWidth="1.5" opacity="0.5" />
-              <circle cx="50" cy="50" r="18" fill="none" stroke="#f36b32" strokeWidth="1" opacity="0.3" />
-            </svg>
+            {/* PartPulse Logo - Image File */}
+            <img 
+              src="/logo.svg" 
+              alt="PartPulse Logo" 
+              className="w-12 h-auto flex-shrink-0"
+            />
             <span className="text-white font-bold text-lg tracking-tight">PartPulse</span>
           </div>
           {/* Close button for mobile */}
