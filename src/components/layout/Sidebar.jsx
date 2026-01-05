@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import PartPulseLogo from '@/components/svg/PartPulseLogo';
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const { signOut } = useAuth();
@@ -44,10 +43,32 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         {/* Header with Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900">
           <div className="flex items-center space-x-3 flex-1">
-            {/* PartPulse Logo SVG */}
-            <div className="w-8 h-8 flex-shrink-0">
-              <PartPulseLogo />
-            </div>
+            {/* PartPulse Logo - Inline SVG */}
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 100 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-8 h-8 flex-shrink-0"
+            >
+              {/* Professional Placeholder Logo */}
+              {/* Replace this SVG with your custom Adobe Illustrator logo */}
+              <circle cx="50" cy="50" r="48" fill="#14b8a6" opacity="0.1" stroke="#14b8a6" strokeWidth="2" />
+              <circle cx="50" cy="50" r="42" fill="#14b8a6" />
+              <circle cx="50" cy="50" r="38" fill="#0d9488" />
+              <circle cx="50" cy="50" r="18" fill="none" stroke="#ffffff" strokeWidth="2.5" opacity="0.8" />
+              <circle cx="50" cy="50" r="26" fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.5" />
+              <circle cx="50" cy="50" r="4" fill="#ffffff" />
+              <path
+                d="M 42 38 L 42 62 M 42 45 L 52 45 Q 56 45 56 49 Q 56 53 52 53 L 42 53"
+                stroke="#ffffff"
+                strokeWidth="2.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             <span className="text-white font-bold text-lg tracking-tight">PartPulse</span>
           </div>
           {/* Close button for mobile */}
