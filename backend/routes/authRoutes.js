@@ -48,7 +48,7 @@ const TECHNICIAN_ROLES = [
  *   }
  * }
  */
-router.post('/api/auth/rfid-login', async (req, res) => {
+router.post('/auth/rfid-login', async (req, res) => {
   try {
     const { rfid_card_id } = req.body;
 
@@ -179,7 +179,7 @@ router.post('/api/auth/rfid-login', async (req, res) => {
  * 
  * Log out technician and record logout attempt
  */
-router.post('/api/auth/rfid-logout', async (req, res) => {
+router.post('/auth/rfid-logout', async (req, res) => {
   try {
     const { user_id, rfid_card_id } = req.body;
 
@@ -221,7 +221,7 @@ router.post('/api/auth/rfid-logout', async (req, res) => {
  * Admin endpoint to list all RFID cards (for management)
  * Requires admin authentication
  */
-router.get('/api/auth/rfid-cards', async (req, res) => {
+router.get('/auth/rfid-cards', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('rfid_cards')
