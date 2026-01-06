@@ -48,7 +48,7 @@ const TECHNICIAN_ROLES = [
  *   }
  * }
  */
-router.post('/auth/rfid-login', async (req, res) => {
+router.post('/api/auth/rfid-login', async (req, res) => {
   try {
     const { rfid_card_id } = req.body;
 
