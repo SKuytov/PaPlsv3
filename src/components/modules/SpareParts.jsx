@@ -645,6 +645,7 @@ const SpareParts = () => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showQuoteCreator, setShowQuoteCreator] = useState(false);
   const [selectedPartsForQuotes, setSelectedPartsForQuotes] = useState([]);
+  const [allReorderParts, setAllReorderParts] = useState([]); // ← NEW: Store all reorder parts globally
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -670,6 +671,7 @@ const SpareParts = () => {
 
   useEffect(() => {
     loadParts();
+    loadAllReorderParts(); // ← Load all reorder parts when component mounts
   }, [filters, page]);
 
   useEffect(() => {
@@ -804,7 +806,6 @@ const SpareParts = () => {
 
   const loadAllReorderParts = async () => {
     try {
-      setLoading(true);
       // Load ALL parts from database that need reordering
       // Scan the entire database without pagination or filters
       const { data, error } = await supabase
@@ -816,11 +817,12 @@ const SpareParts = () => {
       if (error) throw error;
 
       // Filter parts where current_quantity <= reorder_point
-      const allReorderParts = (data || []).filter(p => p.current_quantity <= p.reorder_point);
+      const reorderPartsFiltered = (data || []).filter(p => p.current_quantity <= p.reorder_point);
       
-      console.log(`Found ${allReorderParts.length} parts needing reorder out of ${data?.length || 0} total parts`);
+      console.log(`Found ${reorderPartsFiltered.length} parts needing reorder out of ${data?.length || 0} total parts`);
       
-      return allReorderParts;
+      // Store globally in state
+      setAllReorderParts(reorderPartsFiltered);
     } catch (error) {
       console.error('Error loading all reorder parts:', error);
       toast({
@@ -828,9 +830,6 @@ const SpareParts = () => {
         title: "Error",
         description: "Failed to load all parts needing reorder"
       });
-      return [];
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -879,6 +878,7 @@ const SpareParts = () => {
 
   const handleFormSuccess = () => {
     loadParts();
+    loadAllReorderParts(); // ← Refresh reorder parts list on form success
   };
 
   const resetFilters = () => {
@@ -913,8 +913,7 @@ const SpareParts = () => {
   };
 
   const handleCreateQuotesClick = async (selectedReorderParts) => {
-    // Load all reorder parts globally from entire database
-    const allReorderParts = await loadAllReorderParts();
+    // Use the globally stored reorder parts
     setSelectedPartsForQuotes(allReorderParts);
     setShowQuoteCreator(true);
   };
@@ -1313,11 +1312,11 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal */}
+      {/* Reorder Modal - Now passes all reorder parts from global state */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
-        parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
+        parts={allReorderParts}
         onPartClick={handleReorderPartClick}
         onCreateQuotes={handleCreateQuotesClick}
       />
@@ -1331,6 +1330,7 @@ const SpareParts = () => {
           onSuccess={() => {
             setShowQuoteCreator(false);
             loadParts();
+            loadAllReorderParts();
           }}
         />
       )}
