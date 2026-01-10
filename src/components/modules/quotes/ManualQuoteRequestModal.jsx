@@ -262,7 +262,8 @@ Delivery Date: ${deliveryNeed}
       emailBody += `  Quantity: ${itemQuantity} units
 `;
       emailBody += `  Description: ${itemDescription}
-\n`;
+
+`;
     });
 
     emailBody += `Delivery Location: 155 Blvd. Lipnik, 7005 Ruse, Bulgaria
@@ -271,7 +272,8 @@ Delivery Date: ${deliveryNeed}
 
 ${requesterName}
 ${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}PartPulse Industrial
+${requesterPhone ? `${requesterPhone}
+` : ''}PartPulse Industrial
 www.partpulse.eu
 
 We would appreciate your detailed quotation including:
@@ -290,7 +292,8 @@ Best regards,
 ${requesterName}
 PartPulse Industrial
 ${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}www.partpulse.eu
+${requesterPhone ? `${requesterPhone}
+` : ''}www.partpulse.eu
 
 Quote Generated: ${date}`;
 
@@ -381,7 +384,7 @@ Quote Generated: ${date}`;
         description: `Quote ID: ${quoteId} with ${items.length} item${items.length !== 1 ? 's' : ''}`
       });
 
-      if (onSuccess && (sendMethod === 'system' || sendMethod === 'outlook')) {
+      if (onSuccess and (sendMethod === 'system' || sendMethod === 'outlook')) {
         setTimeout(() => onSuccess(), 2000);
       }
     } catch (error) {
@@ -573,8 +576,8 @@ Quote Generated: ${date}`;
                                   supplierPartNumber: e.target.value 
                                 })}
                                 placeholder="Enter part number..."
-                                className={`${
-                                  supplierMapping?.supplier_part_number && !currentItem.supplierPartNumber
+                                className={`$
+                                  {supplierMapping?.supplier_part_number && !currentItem.supplierPartNumber
                                     ? 'border-green-300 bg-green-50'
                                     : currentItem.supplierPartNumber
                                     ? 'border-slate-300'
@@ -613,8 +616,8 @@ Quote Generated: ${date}`;
                                   supplierSku: e.target.value 
                                 })}
                                 placeholder="Enter SKU..."
-                                className={`${
-                                  supplierMapping?.supplier_sku && !currentItem.supplierSku
+                                className={`$
+                                  {supplierMapping?.supplier_sku && !currentItem.supplierSku
                                     ? 'border-green-300 bg-green-50'
                                     : currentItem.supplierSku
                                     ? 'border-slate-300'
@@ -1166,6 +1169,7 @@ Quote Generated: ${date}`;
                   quoteId={quoteId}
                   showCopyOnly={true}
                   items={items}
+                  languageCode={selectedSupplier?.preferred_language || 'EN'}
                 />
 
                 <div className="flex gap-2 pt-4 border-t">
