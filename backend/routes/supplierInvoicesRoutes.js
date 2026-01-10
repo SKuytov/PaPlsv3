@@ -1,88 +1,71 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// ============================================================
-// SUPPLIER INVOICE TRACKING ENDPOINTS - PRODUCTION READY
-// ============================================================
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * GET /api/supplier-invoices
- * Fetch all supplier invoices with optional filters
- * Query params: status, order_id
+ * GET ALL SUPPLIER INVOICES
+ * Query params: status, order_id, limit, offset
  */
-router.get('/supplier-invoices', async (req, res) => {
+router.get('/supplier-invoices', authenticateToken, async (req, res) => {
   try {
-    const { status, order_id, limit = 50, offset = 0 } = req.query;
-    const userId = req.user?.id || req.query.userId;
+    const userId = req.user?.id;
+    const { status, order_id, limit = 100, offset = 0 } = req.query;
 
     let query = supabase
       .from('supplier_invoices')
-      .select(`
-        *,
-        order:orders(id, title, supplier, amount),
-        created_by_user:profiles(id, full_name, email)
-      `)
-      .order('received_date', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+      .select('*', { count: 'exact' })
+      .eq('created_by', userId);
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+    if (status) query = query.eq('status', status);
+    if (order_id) query = query.eq('order_id', order_id);
 
-    if (order_id) {
-      query = query.eq('order_id', order_id);
-    }
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) throw error;
 
     res.json({
       success: true,
-      count: data?.length || 0,
-      data: data || []
+      data: data || [],
+      total: count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
     });
   } catch (err) {
-    console.error('❌ Error fetching supplier invoices:', err);
+    console.error('Error fetching supplier invoices:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to fetch supplier invoices' 
     });
   }
 });
 
 /**
- * GET /api/supplier-invoices/:id
- * Fetch a single supplier invoice
+ * GET SINGLE SUPPLIER INVOICE
  */
-router.get('/supplier-invoices/:id', async (req, res) => {
+router.get('/supplier-invoices/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const { data, error } = await supabase
       .from('supplier_invoices')
-      .select(`
-        *,
-        order:orders(id, title, supplier, amount),
-        created_by_user:profiles(id, full_name, email),
-        sent_to_accounting_user:profiles!sent_to_accounting_by(id, full_name, email)
-      `)
+      .select('*')
       .eq('id', id)
+      .eq('created_by', userId)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return res.status(404).json({ 
-          success: false,
-          error: 'Supplier invoice not found' 
-        });
+        return res.status(404).json({ error: 'Supplier invoice not found' });
       }
       throw error;
     }
@@ -92,20 +75,17 @@ router.get('/supplier-invoices/:id', async (req, res) => {
       data
     });
   } catch (err) {
-    console.error('❌ Error fetching supplier invoice:', err);
+    console.error('Error fetching supplier invoice:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to fetch supplier invoice' 
     });
   }
 });
 
 /**
- * POST /api/supplier-invoices
- * Create a new supplier invoice record
- * Body: { order_id, supplier_invoice_number, amount, received_date, due_date, notes?, attachment_url? }
+ * CREATE SUPPLIER INVOICE (LOG RECEIVED INVOICE)
  */
-router.post('/supplier-invoices', async (req, res) => {
+router.post('/supplier-invoices', authenticateToken, async (req, res) => {
   try {
     const {
       order_id,
@@ -117,32 +97,31 @@ router.post('/supplier-invoices', async (req, res) => {
       attachment_url
     } = req.body;
 
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?.id;
 
     // Validation
-    if (!order_id || !supplier_invoice_number || !amount || !received_date || !due_date) {
+    if (!order_id || !supplier_invoice_number?.trim() || !amount || !received_date || !due_date) {
       return res.status(400).json({
-        success: false,
         error: 'Missing required fields: order_id, supplier_invoice_number, amount, received_date, due_date'
       });
     }
 
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue < 0) {
+    if (isNaN(amount) || parseFloat(amount) <= 0) {
       return res.status(400).json({
-        success: false,
-        error: 'Amount must be a valid positive number'
+        error: 'Amount must be a positive number'
       });
     }
 
-    // Validate dates
-    const receivedDate = new Date(received_date);
-    const dueDate = new Date(due_date);
+    // Check if invoice number already exists
+    const { data: existingInvoice } = await supabase
+      .from('supplier_invoices')
+      .select('id')
+      .eq('supplier_invoice_number', supplier_invoice_number.trim())
+      .single();
 
-    if (isNaN(receivedDate.getTime()) || isNaN(dueDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid date format. Use YYYY-MM-DD'
+    if (existingInvoice) {
+      return res.status(409).json({
+        error: 'Supplier invoice number already exists'
       });
     }
 
@@ -151,23 +130,17 @@ router.post('/supplier-invoices', async (req, res) => {
       .insert([{
         order_id,
         supplier_invoice_number: supplier_invoice_number.trim(),
-        amount: amountValue,
-        received_date: received_date,
-        due_date: due_date,
+        amount: parseFloat(amount),
+        received_date,
+        due_date,
         status: 'pending',
         notes: notes?.trim() || null,
-        attachment_url: attachment_url || null,
-        created_by: userId,
-        created_at: new Date().toISOString()
+        attachment_url: attachment_url?.trim() || null,
+        created_by: userId
       }])
-      .select(`
-        *,
-        order:orders(id, title, supplier, amount)
-      `);
+      .select();
 
     if (error) throw error;
-
-    console.log(`✅ Supplier invoice created: ${data[0]?.supplier_invoice_number}`);
 
     res.status(201).json({
       success: true,
@@ -175,57 +148,41 @@ router.post('/supplier-invoices', async (req, res) => {
       data: data[0]
     });
   } catch (err) {
-    console.error('❌ Error creating supplier invoice:', err);
+    console.error('Error creating supplier invoice:', err);
     res.status(500).json({ 
-      success: false,
-      error: err.message || 'Failed to create supplier invoice' 
+      error: err.message || 'Failed to log supplier invoice' 
     });
   }
 });
 
 /**
- * PATCH /api/supplier-invoices/:id
- * Update a supplier invoice
- * Body: { status?, notes?, attachment_url? }
+ * UPDATE SUPPLIER INVOICE
  */
-router.patch('/supplier-invoices/:id', async (req, res) => {
+router.patch('/supplier-invoices/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, attachment_url } = req.body;
+    const userId = req.user?.id;
+    const { status, notes, amount, due_date } = req.body;
 
+    // Build update object
     const updateData = {};
     if (status) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
-    if (attachment_url) updateData.attachment_url = attachment_url;
-
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No fields to update'
-      });
-    }
-
-    updateData.updated_at = new Date().toISOString();
+    if (amount) updateData.amount = parseFloat(amount);
+    if (due_date) updateData.due_date = due_date;
 
     const { data, error } = await supabase
       .from('supplier_invoices')
       .update(updateData)
       .eq('id', id)
-      .select(`
-        *,
-        order:orders(id, title, supplier, amount)
-      `);
+      .eq('created_by', userId)
+      .select();
 
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Supplier invoice not found'
-      });
+      return res.status(404).json({ error: 'Supplier invoice not found' });
     }
-
-    console.log(`✅ Supplier invoice ${id} updated`);
 
     res.json({
       success: true,
@@ -233,110 +190,105 @@ router.patch('/supplier-invoices/:id', async (req, res) => {
       data: data[0]
     });
   } catch (err) {
-    console.error('❌ Error updating supplier invoice:', err);
+    console.error('Error updating supplier invoice:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to update supplier invoice' 
     });
   }
 });
 
 /**
- * POST /api/supplier-invoices/:id/send-to-accounting
- * Mark invoice as sent to accounting department
+ * SEND INVOICE TO ACCOUNTING DEPARTMENT
  */
-router.post('/supplier-invoices/:id/send-to-accounting', async (req, res) => {
+router.post('/supplier-invoices/:id/send-to-accounting', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?.id;
+    const sentDate = new Date().toISOString().split('T')[0];
 
     const { data, error } = await supabase
       .from('supplier_invoices')
       .update({
         status: 'sent_to_accounting',
-        sent_to_accounting_date: new Date().toISOString().split('T')[0],
-        sent_to_accounting_by: userId,
-        updated_at: new Date().toISOString()
+        sent_to_accounting_at: sentDate
       })
       .eq('id', id)
-      .select(`
-        *,
-        order:orders(id, title, supplier, amount)
-      `);
+      .eq('created_by', userId)
+      .select();
 
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Supplier invoice not found'
-      });
+      return res.status(404).json({ error: 'Supplier invoice not found' });
     }
 
-    console.log(`✅ Invoice ${id} sent to accounting by user ${userId}`);
+    console.log(`✅ Invoice ${id} sent to accounting by user ${userId} on ${sentDate}`);
 
     res.json({
       success: true,
-      message: 'Invoice sent to Accounting department',
+      message: 'Invoice sent to Accounting department successfully',
       data: data[0]
     });
   } catch (err) {
-    console.error('❌ Error sending invoice to accounting:', err);
+    console.error('Error sending invoice to accounting:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to send invoice to accounting' 
     });
   }
 });
 
 /**
- * DELETE /api/supplier-invoices/:id
- * Delete a supplier invoice
+ * DELETE SUPPLIER INVOICE
  */
-router.delete('/supplier-invoices/:id', async (req, res) => {
+router.delete('/supplier-invoices/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const { error } = await supabase
       .from('supplier_invoices')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('created_by', userId);
 
     if (error) throw error;
-
-    console.log(`✅ Supplier invoice ${id} deleted`);
 
     res.json({
       success: true,
       message: 'Supplier invoice deleted successfully'
     });
   } catch (err) {
-    console.error('❌ Error deleting supplier invoice:', err);
+    console.error('Error deleting supplier invoice:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to delete supplier invoice' 
     });
   }
 });
 
 /**
- * GET /api/supplier-invoices/stats/summary
- * Get supplier invoice statistics
+ * GET SUPPLIER INVOICES STATISTICS SUMMARY
  */
-router.get('/supplier-invoices/stats/summary', async (req, res) => {
+router.get('/supplier-invoices/stats/summary', authenticateToken, async (req, res) => {
   try {
+    const userId = req.user?.id;
+
     const { data, error } = await supabase
       .from('supplier_invoices')
-      .select('status, amount');
+      .select('id, amount, status, created_at')
+      .eq('created_by', userId);
 
     if (error) throw error;
 
     const stats = {
       total_invoices: data?.length || 0,
-      total_amount: data?.reduce((sum, inv) => sum + (inv.amount || 0), 0) || 0,
-      pending: data?.filter(inv => inv.status === 'pending').length || 0,
-      sent_to_accounting: data?.filter(inv => inv.status === 'sent_to_accounting').length || 0,
-      paid: data?.filter(inv => inv.status === 'paid').length || 0
+      pending_count: data?.filter(inv => inv.status === 'pending').length || 0,
+      sent_to_accounting_count: data?.filter(inv => inv.status === 'sent_to_accounting').length || 0,
+      processed_count: data?.filter(inv => inv.status === 'processed').length || 0,
+      rejected_count: data?.filter(inv => inv.status === 'rejected').length || 0,
+      total_amount: data?.reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) || 0,
+      average_amount: data?.length > 0 
+        ? (data.reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) / data.length)
+        : 0
     };
 
     res.json({
@@ -344,9 +296,8 @@ router.get('/supplier-invoices/stats/summary', async (req, res) => {
       data: stats
     });
   } catch (err) {
-    console.error('❌ Error fetching invoice statistics:', err);
+    console.error('Error fetching statistics:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to fetch statistics' 
     });
   }
