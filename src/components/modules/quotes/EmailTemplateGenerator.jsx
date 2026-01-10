@@ -1,14 +1,27 @@
 import React, { useState, useMemo } from 'react';
 import { Mail, Copy, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
+import { getTemplate } from './emailTemplates';
 
 /**
  * EmailTemplateGenerator Component
  * Generates professional email templates with Quote ID for easy tracking
  * Now supports multiple items with full descriptions, part numbers, and SKU/IDs
+ * MULTILINGUAL: Supports English (EN) and Bulgarian (BG) templates
  */
-const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '', showCopyOnly = false, items = [] }) => {
+const EmailTemplateGenerator = ({ 
+  quoteData, 
+  supplierData, 
+  partData, 
+  quoteId = '', 
+  showCopyOnly = false, 
+  items = [],
+  languageCode = 'EN'  // NEW: Language support (EN or BG)
+}) => {
   const [copied, setCopied] = useState(false);
   const [emailFormat, setEmailFormat] = useState('professional');
+
+  // Get language-specific templates
+  const template = useMemo(() => getTemplate(languageCode), [languageCode]);
 
   // Determine if we have multiple items (array) or single item (object)
   const isMultipleItems = Array.isArray(items) && items.length > 0;
@@ -17,18 +30,19 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
   const subject = useMemo(() => {
     if (!supplierData) return '';
     
-    let subjectText = 'Quote Request';
+    let baseSubject;
     
     if (isMultipleItems) {
-      subjectText = `Quote Request: ${items.length} items`;
+      baseSubject = template.subject.items(items.length);
     } else if (partData?.name) {
       const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
-      subjectText = `Quote Request: ${quantity}x ${partData.name}`;
+      baseSubject = template.subject.singleItem(quantity, partData.name);
+    } else {
+      baseSubject = template.subject.quoteRequest;
     }
     
-    const idPart = quoteId ? ` [${quoteId}]` : '';
-    return `${subjectText}${idPart}`;
-  }, [partData, quoteData, supplierData, quoteId, isMultipleItems, items.length]);
+    return quoteId ? template.subject.withId(baseSubject, quoteId) : baseSubject;
+  }, [partData, quoteData, supplierData, quoteId, isMultipleItems, items.length, template]);
 
   // Generate email body based on format - memoized
   const emailBody = useMemo(() => {
@@ -41,22 +55,27 @@ const EmailTemplateGenerator = ({ quoteData, supplierData, partData, quoteId = '
     const requesterEmail = quoteData.requesterEmail || 'noreply@partpulse.eu';
     const requesterPhone = quoteData.requesterPhone || '';
     const companyName = quoteData.companyName || 'PartPulse Industrial';
-    const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const deliveryLocation = '155 Blvd. Lipnik, 7005 Ruse, Bulgaria';
+    const date = new Date().toLocaleDateString(
+      languageCode === 'BG' ? 'bg-BG' : 'en-US', 
+      { year: 'numeric', month: 'long', day: 'numeric' }
+    );
+    const deliveryLocation = languageCode === 'BG' 
+      ? '155 Булвард Липник, 7005 Русе, България'
+      : '155 Blvd. Lipnik, 7005 Ruse, Bulgaria';
 
-    // Quote Details Section
-    const quoteDetailsSection = `------- QUOTE REQUEST DETAILS -------
+    // Quote Details Section - TRANSLATED
+    const quoteDetailsSection = `${template.quoteDetails.header}
 
-Quote ID: ${quoteId || 'N/A'}
-Date: ${date}
-Delivery Date: ${deliveryNeed}
+${template.quoteDetails.quoteId}: ${quoteId || 'N/A'}
+${template.quoteDetails.date}: ${date}
+${template.quoteDetails.deliveryDate}: ${deliveryNeed}
 `;
 
-    // Build items section
+    // Build items section - TRANSLATED
     let itemsSection = '';
     
     if (isMultipleItems) {
-      itemsSection = '\n------- REQUESTED ITEMS -------\n\n';
+      itemsSection = `\n${template.itemsHeader}\n\n`;
       items.forEach((item, index) => {
         const itemName = item.part?.name || item.name || 'Unknown Item';
         const itemSKU = item.part?.barcode || item.sku || item.barcode || 'N/A';
@@ -65,13 +84,13 @@ Delivery Date: ${deliveryNeed}
         const supplierPartNumber = item.supplier_part_number || item.supplierPartNumber || 'N/A';
         const supplierPartInfo = item.supplier_sku || item.supplierSKU || 'N/A';
         
-        itemsSection += `Item ${index + 1}:\n`;
-        itemsSection += `  Part Name: ${itemName}\n`;
-        itemsSection += `  Supplier Part Number: ${supplierPartNumber}\n`;
-        itemsSection += `  Supplier SKU: ${supplierPartInfo}\n`;
-        itemsSection += `  SKU/Internal ID: ${itemSKU}\n`;
-        itemsSection += `\n  Quantity: ${itemQuantity} units\n`;
-        itemsSection += `  Description: ${itemDescription}\n\n`;
+        itemsSection += `${template.itemLabel(index)}\n`;
+        itemsSection += `  ${template.itemFields.partName}: ${itemName}\n`;
+        itemsSection += `  ${template.itemFields.supplierPartNumber}: ${supplierPartNumber}\n`;
+        itemsSection += `  ${template.itemFields.supplierSku}: ${supplierPartInfo}\n`;
+        itemsSection += `  ${template.itemFields.internalId}: ${itemSKU}\n`;
+        itemsSection += `\n  ${template.itemFields.quantity}: ${itemQuantity} ${template.itemFields.units}\n`;
+        itemsSection += `  ${template.itemFields.description}: ${itemDescription}\n\n`;
       });
     } else if (partData) {
       const partName = partData?.name || 'Unknown Part';
@@ -79,123 +98,96 @@ Delivery Date: ${deliveryNeed}
       const quantity = quoteData.quantity_requested || quoteData.quantity || 1;
       const description = partData?.description || partData?.notes || 'No description provided';
       
-      itemsSection = `\n------- REQUESTED ITEM -------\n\n`;
-      itemsSection += `Item 1:\n`;
-      itemsSection += `  Part Name: ${partName}\n`;
-      itemsSection += `  Supplier Part Number: N/A\n`;
-      itemsSection += `  Supplier SKU: N/A\n`;
-      itemsSection += `  SKU/Internal ID: ${partSku}\n`;
-      itemsSection += `\n  Quantity: ${quantity} units\n`;
-      itemsSection += `  Description: ${description}\n`;
+      itemsSection = `\n${template.itemSingle}\n\n`;
+      itemsSection += `${template.itemLabel(0)}\n`;
+      itemsSection += `  ${template.itemFields.partName}: ${partName}\n`;
+      itemsSection += `  ${template.itemFields.supplierPartNumber}: N/A\n`;
+      itemsSection += `  ${template.itemFields.supplierSku}: N/A\n`;
+      itemsSection += `  ${template.itemFields.internalId}: ${partSku}\n`;
+      itemsSection += `\n  ${template.itemFields.quantity}: ${quantity} ${template.itemFields.units}\n`;
+      itemsSection += `  ${template.itemFields.description}: ${description}\n`;
     }
 
-    const baseInfo = `Dear ${supplierData.name || 'Supplier'},
+    const baseInfo = `${template.greeting(supplierData.name || 'Supplier')}
 
-We are reaching out regarding a quote request for the following items:
+${template.intro}
 
 ${quoteDetailsSection}` + itemsSection + `
-Delivery Location: ${deliveryLocation}
+${template.deliveryLocation}: ${deliveryLocation}
 
-Budget & Preferences:
-${budgetExpectation ? `  • Budget Expectation: ${budgetExpectation}\n` : ''}`;
+${template.budgetPreferences}:
+${budgetExpectation ? `  • ${template.budgetExpectation}: ${budgetExpectation}\n` : ''}`;
 
     const specialNotesSection = specialNotes
-      ? `\nSpecial Instructions & Notes:\n  ${specialNotes}\n`
+      ? `\n${template.specialInstructions}:\n  ${specialNotes}\n`
       : '';
 
-    const closingInfo = `\n------- REQUESTOR INFORMATION -------\n
+    const closingInfo = `\n${template.requestorInfo}
+
 ${requesterName}
 ${requesterEmail}
-${requesterPhone ? `Phone: ${requesterPhone}\n` : ''}${companyName}\n\n`;
+${requesterPhone ? `${template.phone}: ${requesterPhone}\n` : ''}${companyName}\n\n`;
 
     if (emailFormat === 'professional') {
+      const instructionsList = template.closeInstructions.items.map(item => `  • ${item}`).join('\n');
       return (
         baseInfo +
         `${specialNotesSection}` +
         closingInfo +
-        `We would appreciate your detailed quotation including:\n` +
-        `  • Unit price and total cost for each item
-  • Availability and lead time
-  • Delivery terms and freight cost (if applicable)
-  • Payment terms
-  • Any volume discounts available
-  • Warranty information
-\nPlease reply with your quotation at your earliest convenience. Reference the Quote ID (${quoteId}) in your response for easy tracking.
-
-Thank you for your prompt attention to this request.
-
-Best regards,
-${requesterName}
-${companyName}
-${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}
-www.partpulse.eu
-
-Quote Generated: ${date}`
+        `${template.closeInstructions.header}\n` +
+        `${instructionsList}\n` +
+        `\n${template.closingRemark(quoteId)}\n\n` +
+        `${template.thankYou}\n\n` +
+        `${template.bestRegards}\n` +
+        `${requesterName}\n` +
+        `${companyName}\n` +
+        `${requesterEmail}\n` +
+        `${requesterPhone ? `${requesterPhone}\n` : ''}` +
+        `${template.website}\n\n` +
+        `${template.generated}: ${date}`
       );
     }
 
     if (emailFormat === 'casual') {
       return (
-        `Hi ${supplierData.name || 'there'},
-
-Hope you're doing well! We're looking for a quote on some parts and thought of you.
-
-${quoteDetailsSection}` +
+        `${languageCode === 'BG' ? 'Привет' : 'Hi'} ${supplierData.name || (languageCode === 'BG' ? 'там' : 'there')},\n\n` +
+        `${template.casualIntro}\n\n` +
+        `${quoteDetailsSection}` +
         itemsSection +
-        `Delivery Location: ${deliveryLocation}
-${specialNotesSection}` +
+        `${template.deliveryLocation}: ${deliveryLocation}\n` +
+        `${specialNotesSection}` +
         closingInfo +
-        `Could you send us your best quote? We're looking for:
-• Your pricing for each item
-• How quickly you can deliver
-• Any bulk discounts
-• Your payment terms
-
-Please reference the Quote ID (${quoteId}) in your reply so we can track everything easily.
-
-Thanks a bunch!
-
-${requesterName}
-${companyName}
-${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}`
+        `${template.casualClosing(quoteId)}\n\n` +
+        `${requesterName}\n` +
+        `${companyName}\n` +
+        `${requesterEmail}\n` +
+        `${requesterPhone ? `${requesterPhone}\n` : ''}`
       );
     }
 
     if (emailFormat === 'technical') {
+      const expectationsList = template.technicalExpectations.map((item, idx) => `  ${idx + 1}. ${item}`).join('\n');
       return (
-        `Dear ${supplierData.name || 'Supplier'},
-
-${quoteDetailsSection}` +
+        `${template.greeting(supplierData.name || 'Supplier')}\n\n` +
+        `${quoteDetailsSection}` +
         itemsSection +
-        `Delivery Location: ${deliveryLocation}
-${specialNotesSection}` +
+        `${template.deliveryLocation}: ${deliveryLocation}\n` +
+        `${specialNotesSection}` +
         closingInfo +
-        `Expected Quotation Elements:
-` +
-        `  1. Unit cost breakdown per item
-  2. Lead time and availability per item
-  3. Shipping terms and cost
-  4. Quality certifications/specs
-  5. Payment terms (Net 30/60/90)
-  6. Warranty/RMA policy
-  7. Technical support availability
-
-Please ensure your quotation includes all technical specifications and compliance documentation if applicable.
-Reference Quote ID (${quoteId}) for tracking.
-
-Regards,
-${requesterName}
-${companyName}
-${requesterEmail}
-${requesterPhone ? `${requesterPhone}\n` : ''}
-
-Generated via PartPulse
-Date: ${date}`
+        `${template.technicalHeader}\n` +
+        `${expectationsList}\n\n` +
+        `${template.technicalNote}\n` +
+        `${languageCode === 'BG' ? 'Справка' : 'Reference'} Quote ID (${quoteId}) ${languageCode === 'BG' ? 'за проследяване.' : 'for tracking.'}\n\n` +
+        `${template.bestRegards}\n` +
+        `${requesterName}\n` +
+        `${companyName}\n` +
+        `${requesterEmail}\n` +
+        `${requesterPhone ? `${requesterPhone}\n` : ''}\n` +
+        `Generated via PartPulse\n` +
+        `${template.generated}: ${date}`
       );
     }
-  }, [emailFormat, quoteData, supplierData, partData, quoteId, isMultipleItems, items]);
+  }, [emailFormat, quoteData, supplierData, partData, quoteId, isMultipleItems, items, template, languageCode]);
 
   const handleCopyToClipboard = () => {
     const fullEmail = `SUBJECT: ${subject}\n\n${emailBody}`;
@@ -236,29 +228,35 @@ Date: ${date}`
       {/* Format Selection */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-          Email Format
+          {languageCode === 'BG' ? 'Формат на имейл' : 'Email Format'}
         </label>
         <select
           value={emailFormat}
           onChange={(e) => setEmailFormat(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="professional">Professional (Formal)</option>
-          <option value="casual">Casual (Friendly)</option>
-          <option value="technical">Technical (Detailed Specs)</option>
+          <option value="professional">
+            {languageCode === 'BG' ? 'Професионален (Формален)' : 'Professional (Formal)'}
+          </option>
+          <option value="casual">
+            {languageCode === 'BG' ? 'Небрежен (Приятелски)' : 'Casual (Friendly)'}
+          </option>
+          <option value="technical">
+            {languageCode === 'BG' ? 'Технически (Детайлни спецификации)' : 'Technical (Detailed Specs)'}
+          </option>
         </select>
       </div>
 
       {/* Email Preview */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-          Email Preview
+          {languageCode === 'BG' ? 'Преглед на имейл' : 'Email Preview'}
         </label>
         <div className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
           {/* Subject Line */}
           <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/50">
             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-              Subject
+              {languageCode === 'BG' ? 'Тема' : 'Subject'}
             </p>
             <p className="text-sm font-mono font-bold text-gray-900 dark:text-gray-100 mt-1 break-all">{subject}</p>
           </div>
@@ -287,12 +285,12 @@ Date: ${date}`
             {copied ? (
               <>
                 <CheckCircle className="w-4 h-4" />
-                Copied to Clipboard
+                {languageCode === 'BG' ? 'Копирано в буфера' : 'Copied to Clipboard'}
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4" />
-                Copy Email Text
+                {languageCode === 'BG' ? 'Копирай текста на имейла' : 'Copy Email Text'}
               </>
             )}
           </button>
@@ -302,10 +300,10 @@ Date: ${date}`
             <button
               onClick={handleOpenInOutlook}
               className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              title="Open in your default email client"
+              title={languageCode === 'BG' ? 'Отворете в стандартния е-мейл клиент' : 'Open in your default email client'}
             >
               <Mail className="w-4 h-4" />
-              Open in Outlook
+              {languageCode === 'BG' ? 'Отворете в Outlook' : 'Open in Outlook'}
             </button>
           )}
 
@@ -316,7 +314,7 @@ Date: ${date}`
               className="flex-1 px-4 py-2.5 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white"
             >
               <ExternalLink className="w-4 h-4" />
-              Send via Gmail
+              {languageCode === 'BG' ? 'Изпрати през Gmail' : 'Send via Gmail'}
             </button>
           )}
         </div>
@@ -335,12 +333,12 @@ Date: ${date}`
           {copied ? (
             <>
               <CheckCircle className="w-4 h-4" />
-              Copied to Clipboard!
+              {languageCode === 'BG' ? 'Копирано в буфера!' : 'Copied to Clipboard!'}
             </>
           ) : (
             <>
               <Copy className="w-4 h-4" />
-              Copy Full Email (Subject + Body)
+              {languageCode === 'BG' ? 'Копирай пълния имейл (Тема + Текст)' : 'Copy Full Email (Subject + Body)'}
             </>
           )}
         </button>
@@ -350,7 +348,9 @@ Date: ${date}`
       {!showCopyOnly && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <p className="text-xs text-blue-700 dark:text-blue-300">
-            <strong>💡 Tip:</strong> Quote request details including Quote ID, Date, and Delivery Date are shown at the top of the email. All item details with part numbers and SKUs follow.
+            <strong>💡 {languageCode === 'BG' ? 'Съвет' : 'Tip'}:</strong> {languageCode === 'BG' 
+              ? 'Детайлите на заявката за оферта, включително ID на оферта, дата и дата на доставка, се показват в началото на имейла.' 
+              : 'Quote request details including Quote ID, Date, and Delivery Date are shown at the top of the email.'}
           </p>
         </div>
       )}
