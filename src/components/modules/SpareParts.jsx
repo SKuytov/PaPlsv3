@@ -1230,7 +1230,7 @@ const SpareParts = () => {
         <PartForm
           open={isFormOpen}
           onOpenChange={setIsFormOpen}
-          part={editingPart}
+          editPart={editingPart}
           onSuccess={handleFormSuccess}
         />
       )}
