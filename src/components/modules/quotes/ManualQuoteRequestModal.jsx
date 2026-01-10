@@ -220,26 +220,14 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
   // Helper function to get language code from supplier
   const getSupplierLanguageCode = () => {
-    // DEBUG: Log what we're working with
-    console.log('🔍 DEBUG: getSupplierLanguageCode()', {
-      selectedSupplier,
-      preferred_language: selectedSupplier?.preferred_language,
-      country: selectedSupplier?.country,
-      all_fields: Object.keys(selectedSupplier || {})
-    });
-
-    // Priority: preferred_language > country > default to EN
+    // Use preferred_language field from suppliers table
+    // Default: EN
     if (selectedSupplier?.preferred_language) {
       const lang = selectedSupplier.preferred_language.toUpperCase();
-      console.log('✅ Using preferred_language:', lang);
+      console.log('✅ Using supplier preferred_language:', lang);
       return lang;
     }
-    if (selectedSupplier?.country) {
-      const lang = selectedSupplier.country.toUpperCase();
-      console.log('✅ Using country:', lang);
-      return lang;
-    }
-    console.log('⚠️ Defaulting to EN');
+    console.log('⚠️ Supplier has no preferred_language, defaulting to EN');
     return 'EN';
   };
 
@@ -509,16 +497,16 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                           <p className="font-semibold text-slate-900 break-all">{selectedSupplier.email}</p>
                         </div>
                         <div>
+                          <p className="text-slate-600">Language</p>
+                          <p className="font-semibold text-slate-900">{selectedSupplier.preferred_language || 'EN'}</p>
+                        </div>
+                        <div>
                           <p className="text-slate-600">Phone</p>
                           <p className="font-semibold text-slate-900">{selectedSupplier.phone || '-'}</p>
                         </div>
                         <div>
                           <p className="text-slate-600">Quality Score</p>
                           <p className="font-semibold text-slate-900">⭐ {selectedSupplier.quality_score || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Delivery Score</p>
-                          <p className="font-semibold text-slate-900">⭐ {selectedSupplier.delivery_score || 'N/A'}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -1009,7 +997,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
                         {sendMethod === 'outlook' && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-900">📬 Open in Outlook</p>
+                        <p className="font-semibold text-slate-900">📧 Open in Outlook</p>
                         <p className="text-sm text-slate-600 mt-1">Review & send from your email client</p>
                       </div>
                     </div>
