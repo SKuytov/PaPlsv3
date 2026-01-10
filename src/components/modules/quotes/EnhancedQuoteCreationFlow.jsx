@@ -206,6 +206,61 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
     }
   };
 
+  // 🆕 CHECK FOR DUPLICATE QUOTE REQUESTS
+  const checkForDuplicateQuotes = async (itemsBySupplier) => {
+    const duplicates = [];
+    const itemsToExclude = [];
+
+    try {
+      // For each supplier group, check if any items already have quote requests
+      for (const [supplierId, group] of Object.entries(itemsBySupplier)) {
+        if (!group.supplier) continue;
+
+        // Get all existing quote requests for this supplier
+        const { data: existingQuotes, error } = await supabase
+          .from('quote_requests')
+          .select('items')
+          .eq('supplier_id', supplierId)
+          .in('status', ['pending', 'sent', 'quoted']); // Active quote statuses
+
+        if (error) {
+          console.error('Error checking quotes:', error);
+          continue;
+        }
+
+        // Flatten all part IDs from existing quotes
+        const quotedPartIds = new Set();
+        existingQuotes?.forEach(quote => {
+          if (quote.items && Array.isArray(quote.items)) {
+            quote.items.forEach(item => {
+              if (item.part_id) {
+                quotedPartIds.add(item.part_id);
+              }
+            });
+          }
+        });
+
+        // Check each item in current selection
+        group.items.forEach((item, idx) => {
+          const partId = item.part?.id || item.part_id;
+          if (partId && quotedPartIds.has(partId)) {
+            duplicates.push({
+              partName: item.isCustom ? item.customPartName : (item.part?.name || item.part_name),
+              supplierName: group.supplier.name,
+              partId
+            });
+            itemsToExclude.push({ supplierId, itemIndex: idx });
+          }
+        });
+      }
+
+      return { duplicates, itemsToExclude };
+    } catch (err) {
+      console.error('Error in duplicate check:', err);
+      return { duplicates: [], itemsToExclude: [] };
+    }
+  };
+
   // Mode Selection Step (Skip in Reorder Mode)
   if (step === 1 && !isReorderMode) {
     return (
@@ -780,15 +835,42 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                   setLoading(true);
                   try {
                     const itemsBySupplier = getItemsBySupplier();
+                    
+                    // 🆕 CHECK FOR DUPLICATES BEFORE CREATING
+                    const { duplicates, itemsToExclude } = await checkForDuplicateQuotes(itemsBySupplier);
+                    
+                    if (duplicates.length > 0) {
+                      toast({
+                        variant: 'destructive',
+                        title: '⚠️ Duplicate Quote Requests Found',
+                        description: `${duplicates.length} item(s) already have active quote request(s). These will be skipped to prevent duplicates.`
+                      });
+                      
+                      console.log('Duplicates found:', duplicates);
+                    }
+
                     const createdQuotesList = [];
 
                     // Create one quote per supplier
                     for (const [supplierId, group] of Object.entries(itemsBySupplier)) {
                       if (!group.supplier) continue;
 
+                      // Filter out items that are duplicates
+                      const itemsToCreate = group.items.filter((item, idx) => {
+                        const isDuplicate = itemsToExclude.some(
+                          ex => ex.supplierId === supplierId && ex.itemIndex === idx
+                        );
+                        return !isDuplicate;
+                      });
+
+                      // Skip if no items to create
+                      if (itemsToCreate.length === 0) {
+                        continue;
+                      }
+
                       const quoteId = generateSimpleQuoteId();
 
-                      const itemsForDB = group.items.map(i => ({
+                      const itemsForDB = itemsToCreate.map(i => ({
                         part_id: i.isCustom ? null : (i.part?.id || i.part_id || null),
                         part_name: i.isCustom ? i.customPartName : (i.part?.name || i.part_name || ''),
                         part_number: i.isCustom ? null : (i.part?.part_number || i.part_number || ''),
@@ -806,7 +888,7 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                           quote_id: quoteId,
                           supplier_id: group.supplier.id,
                           items: itemsForDB,
-                          total_items: group.items.length,
+                          total_items: itemsToCreate.length,
                           estimated_total: 0,
                           status: 'pending',
                           created_by: user?.id || null,
@@ -834,10 +916,23 @@ const EnhancedQuoteCreationFlow = ({ onSuccess, onClose, isReorderMode = false, 
                       setShowDistribution(true);
                       setStep(4);
 
+                      const skippedCount = duplicates.length;
+                      const createdCount = createdQuotesList.length;
+                      const message = skippedCount > 0 
+                        ? `${createdCount} quote(s) created. ${skippedCount} item(s) skipped (duplicates prevented)`
+                        : `${createdCount} quote${createdCount !== 1 ? 's' : ''} created successfully`;
+
                       toast({
                         title: '✅ Quotes Created',
-                        description: `${createdQuotesList.length} quote${createdQuotesList.length !== 1 ? 's' : ''} created successfully`
+                        description: message
                       });
+                    } else {
+                      toast({
+                        variant: 'destructive',
+                        title: 'No Quotes Created',
+                        description: 'All items already have active quote requests (duplicates prevented)'
+                      });
+                      setLoading(false);
                     }
                   } catch (error) {
                     console.error('Error creating quotes:', error);
