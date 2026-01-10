@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, Search, Edit, Star, Truck, Mail, Phone, 
-  MapPin, Trash2, TrendingUp, Package, ArrowRight, Unlink 
+  MapPin, Trash2, TrendingUp, Package, ArrowRight, Unlink, Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { dbService } from '@/lib/supabase';
@@ -43,7 +42,8 @@ const Suppliers = () => {
   // Form State
   const [formData, setFormData] = useState({
     name: '', contact_person: '', email: '', phone: '', address: '',
-    is_oem: false, quality_score: 80, delivery_score: 80, price_stability_score: 80
+    is_oem: false, quality_score: 80, delivery_score: 80, price_stability_score: 80,
+    preferred_language: 'EN'  // NEW: Language preference
   });
 
   useEffect(() => {
@@ -128,12 +128,14 @@ const Suppliers = () => {
         is_oem: supplier.is_oem || false,
         quality_score: supplier.quality_score || 80,
         delivery_score: supplier.delivery_score || 80,
-        price_stability_score: supplier.price_stability_score || 80
+        price_stability_score: supplier.price_stability_score || 80,
+        preferred_language: supplier.preferred_language || 'EN'  // NEW: Load preference
       });
     } else {
       setFormData({
         name: '', contact_person: '', email: '', phone: '', address: '',
-        is_oem: false, quality_score: 80, delivery_score: 80, price_stability_score: 80
+        is_oem: false, quality_score: 80, delivery_score: 80, price_stability_score: 80,
+        preferred_language: 'EN'  // NEW: Default to EN
       });
     }
     setModalOpen(true);
@@ -175,6 +177,10 @@ const Suppliers = () => {
                    <div>
                       <h3 className="font-bold text-lg text-slate-800">{supplier.name}</h3>
                       <p className="text-sm text-slate-500">{supplier.contact_person || 'No Contact'}</p>
+                      <div className="flex items-center gap-1 mt-2 text-xs text-slate-500">
+                        <Globe className="w-3 h-3" />
+                        {supplier.preferred_language === 'BG' ? '🇧🇬 Bulgarian' : '🇬🇧 English'}
+                      </div>
                    </div>
                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" onClick={() => openModal(supplier)}>
@@ -221,7 +227,7 @@ const Suppliers = () => {
                    ) : (
                       <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-200">Alternative</span>
                    )}
-                   <Button variant="link" size="sm" className="text-xs h-auto p-0" onClick={() => handleViewDetails(supplier)}>View Parts &rarr;</Button>
+                   <Button variant="link" size="sm" className="text-xs h-auto p-0" onClick={() => handleViewDetails(supplier)}>View Parts →</Button>
                 </div>
              </div>
           ))}
@@ -281,6 +287,18 @@ const Suppliers = () => {
                           </div>
                        </div>
                     </div>
+
+                    <div className="col-span-2 pt-2 border-t">
+                       <label className="text-sm font-medium">Preferred Communication Language</label>
+                       <select
+                         className="w-full p-2 border rounded bg-white"
+                         value={formData.preferred_language}
+                         onChange={e => setFormData({...formData, preferred_language: e.target.value})}
+                       >
+                         <option value="EN">🇬🇧 English</option>
+                         <option value="BG">🇧🇬 Български (Bulgarian)</option>
+                       </select>
+                    </div>
                  </div>
                  <div className="flex justify-end gap-2 pt-4 border-t">
                     <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
@@ -302,6 +320,7 @@ const Suppliers = () => {
                                   <div className="flex gap-4 mt-2 text-sm text-slate-600">
                                       <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {viewingSupplier.email}</span>
                                       <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {viewingSupplier.phone}</span>
+                                      <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> {viewingSupplier.preferred_language === 'BG' ? '🇧🇬 Bulgarian' : '🇬🇧 English'}</span>
                                   </div>
                               </div>
                               <div className="text-right">
