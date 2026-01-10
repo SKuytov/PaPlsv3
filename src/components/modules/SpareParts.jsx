@@ -172,8 +172,8 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
       } else {
         setPartsWithSuppliers(enrichedParts);
 
-        // FIX #1: Start with EMPTY selection (user chooses what to quote)
-        setSelectedParts([]);
+        // FIX #1: Auto-select all parts by default (removed Select All button)
+        setSelectedParts(enrichedParts.map(p => p.id));
 
         // Expand all supplier groups by default
         const suppliers = {};
@@ -410,14 +410,6 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
     }));
   };
 
-  const toggleSelectAll = () => {
-    if (selectedParts.length === partsWithSuppliers.length) {
-      setSelectedParts([]);
-    } else {
-      setSelectedParts(partsWithSuppliers.map(p => p.id));
-    }
-  };
-
   const groupedParts = groupedBySupplier();
   const reorderParts = getReorderParts();
   const totalEstimatedCost = reorderParts.reduce((sum, p) => {
@@ -466,7 +458,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
+                      <CardTitle className="text-sm text-slate-600">Total Items</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-3xl font-bold text-teal-600">{partsWithSuppliers.length}</p>
@@ -503,23 +495,11 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                   </Card>
                 </div>
 
-                {/* Select All / Deselect All */}
-                <div className="mb-4 flex gap-2">
-                  <Button
-                    onClick={toggleSelectAll}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs"
-                  >
-                    {selectedParts.length === partsWithSuppliers.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
-
                 {/* Suppliers Grouped Items */}
                 <div className="space-y-4 mb-6">
                   {Object.entries(groupedParts).length === 0 ? (
                     <div className="text-center p-8 bg-slate-50 rounded-lg">
-                      <p className="text-slate-600">Select items to build your reorder list</p>
+                      <p className="text-slate-600">No items selected</p>
                     </div>
                   ) : (
                     Object.entries(groupedParts).map(([supplier, supplierParts]) => {
@@ -1002,7 +982,9 @@ const SpareParts = () => {
   };
 
   const handleCreateQuotesClick = async (selectedReorderParts) => {
-    setSelectedPartsForQuotes(allReorderParts);
+    // FIXED: Only pass selected parts, not all reorder parts
+    console.log('handleCreateQuotesClick called with parts:', selectedReorderParts);
+    setSelectedPartsForQuotes(selectedReorderParts);
     setShowQuoteCreator(true);
   };
 
