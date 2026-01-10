@@ -1,79 +1,70 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// ============================================================
-// QUOTE REQUESTS ENDPOINTS - PRODUCTION READY
-// ============================================================
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * GET /api/quote-requests
- * Fetch all quote requests for the authenticated user
- * Query params: status (optional) - Filter by status (pending, approved, rejected)
+ * GET ALL QUOTE REQUESTS
+ * Query params: status, limit, offset
  */
-router.get('/quote-requests', async (req, res) => {
+router.get('/quote-requests', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user?.id || req.query.userId;
-    const { status } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    const userId = req.user?.id;
+    const { status, limit = 100, offset = 0 } = req.query;
 
     let query = supabase
       .from('quote_requests')
-      .select('*, created_by_user:profiles(id, full_name, email)')
-      .eq('created_by', userId)
-      .order('created_at', { ascending: false });
+      .select('*', { count: 'exact' })
+      .eq('created_by', userId);
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+    if (status) query = query.eq('status', status);
 
-    const { data, error } = await query;
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
 
     if (error) throw error;
 
     res.json({
       success: true,
-      count: data?.length || 0,
-      data: data || []
+      data: data || [],
+      total: count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
     });
   } catch (err) {
-    console.error('❌ Error fetching quote requests:', err);
+    console.error('Error fetching quote requests:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to fetch quote requests' 
     });
   }
 });
 
 /**
- * GET /api/quote-requests/:id
- * Fetch a single quote request by ID
+ * GET SINGLE QUOTE REQUEST
  */
-router.get('/quote-requests/:id', async (req, res) => {
+router.get('/quote-requests/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const { data, error } = await supabase
       .from('quote_requests')
-      .select('*, created_by_user:profiles(id, full_name, email)')
+      .select('*')
       .eq('id', id)
+      .eq('created_by', userId)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return res.status(404).json({ 
-          success: false,
-          error: 'Quote request not found' 
-        });
+        return res.status(404).json({ error: 'Quote request not found' });
       }
       throw error;
     }
@@ -83,45 +74,31 @@ router.get('/quote-requests/:id', async (req, res) => {
       data
     });
   } catch (err) {
-    console.error('❌ Error fetching quote request:', err);
+    console.error('Error fetching quote request:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to fetch quote request' 
     });
   }
 });
 
 /**
- * POST /api/quote-requests
- * Create a new quote request
- * Body: { title, description, priority, budget, notes? }
+ * CREATE NEW QUOTE REQUEST
  */
-router.post('/quote-requests', async (req, res) => {
+router.post('/quote-requests', authenticateToken, async (req, res) => {
   try {
-    const { title, description, priority, budget, notes } = req.body;
-    const userId = req.user?.id || req.body.userId;
+    const { title, description, priority = 'normal', budget, required_by_date } = req.body;
+    const userId = req.user?.id;
 
     // Validation
-    if (!title || !description || !priority || !budget) {
+    if (!title?.trim() || !description?.trim() || !budget) {
       return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: title, description, priority, budget'
+        error: 'Missing required fields: title, description, budget'
       });
     }
 
-    const validPriorities = ['low', 'medium', 'high', 'urgent'];
-    if (!validPriorities.includes(priority?.toLowerCase())) {
+    if (isNaN(budget) || parseFloat(budget) <= 0) {
       return res.status(400).json({
-        success: false,
-        error: `Invalid priority. Must be one of: ${validPriorities.join(', ')}`
-      });
-    }
-
-    const budgetValue = parseFloat(budget);
-    if (isNaN(budgetValue) || budgetValue < 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Budget must be a valid positive number'
+        error: 'Budget must be a positive number'
       });
     }
 
@@ -130,18 +107,15 @@ router.post('/quote-requests', async (req, res) => {
       .insert([{
         title: title.trim(),
         description: description.trim(),
-        priority: priority.toLowerCase(),
-        budget: budgetValue,
-        notes: notes?.trim() || null,
-        status: 'pending',
-        created_by: userId,
-        created_at: new Date().toISOString()
+        priority: ['critical', 'high', 'normal', 'low'].includes(priority) ? priority : 'normal',
+        budget: parseFloat(budget),
+        required_by_date: required_by_date || null,
+        status: 'open',
+        created_by: userId
       }])
       .select();
 
     if (error) throw error;
-
-    console.log(`✅ Quote request created: ${data[0]?.id}`);
 
     res.status(201).json({
       success: true,
@@ -149,54 +123,43 @@ router.post('/quote-requests', async (req, res) => {
       data: data[0]
     });
   } catch (err) {
-    console.error('❌ Error creating quote request:', err);
+    console.error('Error creating quote request:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to create quote request' 
     });
   }
 });
 
 /**
- * PATCH /api/quote-requests/:id
- * Update a quote request
- * Body: { status?, notes?, priority? }
+ * UPDATE QUOTE REQUEST
  */
-router.patch('/quote-requests/:id', async (req, res) => {
+router.patch('/quote-requests/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, priority } = req.body;
+    const userId = req.user?.id;
+    const { status, notes, title, description, priority, budget } = req.body;
 
+    // Build update object
     const updateData = {};
     if (status) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
+    if (title) updateData.title = title.trim();
+    if (description) updateData.description = description.trim();
     if (priority) updateData.priority = priority;
-
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No fields to update'
-      });
-    }
-
-    updateData.updated_at = new Date().toISOString();
+    if (budget) updateData.budget = parseFloat(budget);
 
     const { data, error } = await supabase
       .from('quote_requests')
       .update(updateData)
       .eq('id', id)
+      .eq('created_by', userId)
       .select();
 
     if (error) throw error;
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Quote request not found'
-      });
+      return res.status(404).json({ error: 'Quote request not found' });
     }
-
-    console.log(`✅ Quote request ${id} updated`);
 
     res.json({
       success: true,
@@ -204,39 +167,36 @@ router.patch('/quote-requests/:id', async (req, res) => {
       data: data[0]
     });
   } catch (err) {
-    console.error('❌ Error updating quote request:', err);
+    console.error('Error updating quote request:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to update quote request' 
     });
   }
 });
 
 /**
- * DELETE /api/quote-requests/:id
- * Delete a quote request
+ * DELETE QUOTE REQUEST
  */
-router.delete('/quote-requests/:id', async (req, res) => {
+router.delete('/quote-requests/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const { error } = await supabase
       .from('quote_requests')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('created_by', userId);
 
     if (error) throw error;
-
-    console.log(`✅ Quote request ${id} deleted`);
 
     res.json({
       success: true,
       message: 'Quote request deleted successfully'
     });
   } catch (err) {
-    console.error('❌ Error deleting quote request:', err);
+    console.error('Error deleting quote request:', err);
     res.status(500).json({ 
-      success: false,
       error: err.message || 'Failed to delete quote request' 
     });
   }
