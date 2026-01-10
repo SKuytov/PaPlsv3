@@ -20,6 +20,7 @@ import Downtime from '@/components/modules/Downtime';
 import Scanner from '@/components/modules/Scanner';
 import SupplierSavings from '@/components/modules/SupplierSavings';
 import QuotesDashboard from '@/components/modules/quotes/QuotesDashboard';
+import RequestsPage from '@/pages/RequestsPage';
 import WelcomeMessage from '@/components/WelcomeMessage';
 
 // Layout Wrapper Component
@@ -115,6 +116,12 @@ const AppRouter = () => {
       <Route path="/orders" element={
         <PrivateRoute>
           <Orders />
+        </PrivateRoute>
+      } />
+
+      <Route path="/requests" element={
+        <PrivateRoute>
+          <RequestsPage />
         </PrivateRoute>
       } />
 
