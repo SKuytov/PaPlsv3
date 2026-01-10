@@ -220,19 +220,33 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
 
   // Helper function to get language code from supplier
   const getSupplierLanguageCode = () => {
+    // DEBUG: Log what we're working with
+    console.log('🔍 DEBUG: getSupplierLanguageCode()', {
+      selectedSupplier,
+      preferred_language: selectedSupplier?.preferred_language,
+      country: selectedSupplier?.country,
+      all_fields: Object.keys(selectedSupplier || {})
+    });
+
     // Priority: preferred_language > country > default to EN
     if (selectedSupplier?.preferred_language) {
-      return selectedSupplier.preferred_language.toUpperCase();
+      const lang = selectedSupplier.preferred_language.toUpperCase();
+      console.log('✅ Using preferred_language:', lang);
+      return lang;
     }
     if (selectedSupplier?.country) {
-      return selectedSupplier.country.toUpperCase();
+      const lang = selectedSupplier.country.toUpperCase();
+      console.log('✅ Using country:', lang);
+      return lang;
     }
+    console.log('⚠️ Defaulting to EN');
     return 'EN';
   };
 
   // Generate email subject using templates (language-aware)
   const generateEmailSubject = () => {
     const languageCode = getSupplierLanguageCode();
+    console.log('📧 EMAIL SUBJECT - Language Code:', languageCode);
     return generateSubject(languageCode, {
       supplierName: selectedSupplier?.name,
       items: items,
@@ -243,7 +257,9 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
   // Generate professional email body with templates (language-aware)
   const generateEmailBody = () => {
     const languageCode = getSupplierLanguageCode();
+    console.log('📧 EMAIL BODY - Language Code:', languageCode);
     const template = getTemplate(languageCode);
+    console.log('🎨 Template loaded:', { languageCode, template_keys: Object.keys(template) });
     
     const deliveryNeed = formData.deliveryDate 
       ? formatDate(new Date(formData.deliveryDate), languageCode)
@@ -261,12 +277,7 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
       : '155 Blvd. Lipnik, 7005 Ruse, Bulgaria';
 
     // Quote Details Section - TRANSLATED
-    const quoteDetailsSection = `${template.quoteDetails.header}
-
-${template.quoteDetails.quoteId}: ${quoteId || 'N/A'}
-${template.quoteDetails.date}: ${date}
-${template.quoteDetails.deliveryDate}: ${deliveryNeed}
-`;
+    const quoteDetailsSection = `${template.quoteDetails.header}\n\n${template.quoteDetails.quoteId}: ${quoteId || 'N/A'}\n${template.quoteDetails.date}: ${date}\n${template.quoteDetails.deliveryDate}: ${deliveryNeed}\n`;
 
     // Build items section - TRANSLATED
     let itemsSection = '';
