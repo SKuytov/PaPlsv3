@@ -805,16 +805,20 @@ const SpareParts = () => {
   const loadAllReorderParts = async () => {
     try {
       setLoading(true);
-      // Load ALL parts that need reordering (not just filtered/paginated)
+      // Load ALL parts from database that need reordering
+      // Scan the entire database without pagination or filters
       const { data, error } = await supabase
         .from('spare_parts')
         .select('*')
-        .lte('current_quantity', supabase.rpc('reorder_point'));
+        .not('reorder_point', 'is', null)
+        .not('current_quantity', 'is', null);
 
       if (error) throw error;
 
       // Filter parts where current_quantity <= reorder_point
       const allReorderParts = (data || []).filter(p => p.current_quantity <= p.reorder_point);
+      
+      console.log(`Found ${allReorderParts.length} parts needing reorder out of ${data?.length || 0} total parts`);
       
       return allReorderParts;
     } catch (error) {
@@ -909,7 +913,7 @@ const SpareParts = () => {
   };
 
   const handleCreateQuotesClick = async (selectedReorderParts) => {
-    // Load all reorder parts globally (not just visible ones)
+    // Load all reorder parts globally from entire database
     const allReorderParts = await loadAllReorderParts();
     setSelectedPartsForQuotes(allReorderParts);
     setShowQuoteCreator(true);
