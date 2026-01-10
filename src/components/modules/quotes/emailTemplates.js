@@ -113,14 +113,14 @@ export const emailTemplates = {
     greeting: (supplierName) => `Уважаеми ${supplierName || 'Доставчик'},`,
 
     // Intro text (Bulgarian)
-    intro: 'Се обръщаме към вас относно заявка за оферта на следните артикули:',
+    intro: 'Моля за оферта на следните артикули:',
 
     // Quote details section (Bulgarian)
     quoteDetails: {
       header: '------- ДЕТАЙЛИ НА ЗАЯВКАТА ЗА ОФЕРТА -------',
       quoteId: 'ID на оферта',
-      date: 'Дата',
-      deliveryDate: 'Дата на доставка',
+      date: 'Дата на подаване',
+      deliveryDate: 'Желана Дата стоката да при нас',
     },
 
     // Item sections (Bulgarian)
@@ -129,7 +129,7 @@ export const emailTemplates = {
     itemLabel: (index) => `Артикул ${index + 1}:`,
     itemFields: {
       partName: 'Име на артикула',
-      supplierPartNumber: 'Номер на артикула у доставчика',
+      supplierPartNumber: 'Ваш Номер/КОД',
       supplierSku: 'SKU на доставчика',
       internalId: 'SKU/Вътрешен ID',
       quantity: 'Количество',
