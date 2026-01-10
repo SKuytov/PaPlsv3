@@ -3,6 +3,7 @@ import FileUploadManager from './FileUploadManager';
 import SearchablePartSelector from './SearchablePartSelector';
 import SearchableSupplierSelector from './SearchableSupplierSelector';
 import EmailTemplateGenerator from './EmailTemplateGenerator';
+import { getTemplate, generateSubject, formatItems, formatList, formatDate } from './emailTemplates';
 import { useSupplierPartMapping } from '@/lib/hooks/useSupplierPartMapping';
 import { X, Plus, Loader2, AlertCircle, CheckCircle, Search, Upload, File, Trash2, Send, Copy, Minus, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -217,95 +218,104 @@ const ManualQuoteRequestModal = ({ open, onOpenChange, onSuccess }) => {
     }, 0);
   };
 
-  // Generate professional email body with new format
+  // Helper function to get language code from supplier
+  const getSupplierLanguageCode = () => {
+    // Priority: preferred_language > country > default to EN
+    if (selectedSupplier?.preferred_language) {
+      return selectedSupplier.preferred_language.toUpperCase();
+    }
+    if (selectedSupplier?.country) {
+      return selectedSupplier.country.toUpperCase();
+    }
+    return 'EN';
+  };
+
+  // Generate email subject using templates (language-aware)
+  const generateEmailSubject = () => {
+    const languageCode = getSupplierLanguageCode();
+    return generateSubject(languageCode, {
+      supplierName: selectedSupplier?.name,
+      items: items,
+      quoteId: quoteId
+    });
+  };
+
+  // Generate professional email body with templates (language-aware)
   const generateEmailBody = () => {
-    const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const deliveryNeed = formData.deliveryDate ? new Date(formData.deliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' }) : 'As soon as possible';
+    const languageCode = getSupplierLanguageCode();
+    const template = getTemplate(languageCode);
+    
+    const deliveryNeed = formData.deliveryDate 
+      ? formatDate(new Date(formData.deliveryDate), languageCode)
+      : (languageCode === 'BG' ? 'Възможно най-скоро' : 'As soon as possible');
+    
+    const specialNotes = formData.request_notes || '';
+    const budgetExpectation = formData.budgetExpectation || '';
     const requesterName = formData.requesterName || 'Procurement Team';
     const requesterEmail = formData.requesterEmail || user?.email || 'noreply@partpulse.eu';
     const requesterPhone = formData.requesterPhone || '';
+    const companyName = formData.companyName || 'PartPulse Industrial';
+    const date = formatDate(new Date(), languageCode);
+    const deliveryLocation = languageCode === 'BG' 
+      ? '155 Булвард Липник, 7005 Русе, България'
+      : '155 Blvd. Lipnik, 7005 Ruse, Bulgaria';
 
-    let emailBody = `Dear ${selectedSupplier.name || 'Supplier'},
+    // Quote Details Section - TRANSLATED
+    const quoteDetailsSection = `${template.quoteDetails.header}
 
-We are reaching out regarding a quote request for the following items:
-
-------- QUOTE REQUEST DETAILS -------
-
-Quote ID: ${quoteId}
-Date: ${date}
-Delivery Date: ${deliveryNeed}
-
-------- REQUESTED ITEMS -------
-
+${template.quoteDetails.quoteId}: ${quoteId || 'N/A'}
+${template.quoteDetails.date}: ${date}
+${template.quoteDetails.deliveryDate}: ${deliveryNeed}
 `;
 
-    items.forEach((item, index) => {
-      const itemName = item.part?.name || 'Unknown Item';
-      const itemSKU = item.part?.barcode || 'N/A';
-      const itemQuantity = item.quantity || 1;
-      const itemDescription = item.part?.description || 'No description provided';
-      const supplierPartNumber = item.supplierPartNumber || 'N/A';
-      const supplierPartSku = item.supplierSku || 'N/A';
-      
-      emailBody += `Item ${index + 1}:
-`;
-      emailBody += `  Part Name: ${itemName}
-`;
-      emailBody += `  Supplier Part Number: ${supplierPartNumber}
-`;
-      emailBody += `  Supplier SKU: ${supplierPartSku}
-`;
-      emailBody += `  SKU/Internal ID: ${itemSKU}
-`;
-      emailBody += `  
-`;
-      emailBody += `  Quantity: ${itemQuantity} units
-`;
-      emailBody += `  Description: ${itemDescription}
-
-`;
-    });
-
-    emailBody += `Delivery Location: 155 Blvd. Lipnik, 7005 Ruse, Bulgaria
-
-------- REQUESTOR INFORMATION -------
-
-${requesterName}
-${requesterEmail}
-${requesterPhone ? `${requesterPhone}
-` : ''}PartPulse Industrial
-www.partpulse.eu
-
-We would appreciate your detailed quotation including:
-  • Unit price and total cost for each item
-  • Availability and lead time
-  • Delivery terms and freight cost (if applicable)
-  • Payment terms
-  • Any volume discounts available
-  • Warranty information
-
-Please reply with your quotation at your earliest convenience. Reference the Quote ID (${quoteId}) in your response for easy tracking.
-
-Thank you for your prompt attention to this request.
-
-Best regards,
-${requesterName}
-PartPulse Industrial
-${requesterEmail}
-${requesterPhone ? `${requesterPhone}
-` : ''}www.partpulse.eu
-
-Quote Generated: ${date}`;
-
-    return emailBody;
-  };
-
-  const generateEmailSubject = () => {
-    if (items.length === 1) {
-      return `Quote Request: ${items[0].quantity}x ${items[0].part.name} [${quoteId}]`;
-    } else {
-      return `Quote Request: ${items.length} items [${quoteId}]`;
+    // Build items section - TRANSLATED
+    let itemsSection = '';
+    if (items.length > 0) {
+      itemsSection = `\n${template.itemsHeader}\n\n`;
+      items.forEach((item, index) => {
+        const itemName = item.part?.name || 'Unknown Item';
+        const itemSKU = item.part?.barcode || 'N/A';
+        const itemQuantity = item.quantity || 1;
+        const itemDescription = item.part?.description || 'No description provided';
+        const supplierPartNumber = item.supplierPartNumber || 'N/A';
+        const supplierPartSku = item.supplierSku || 'N/A';
+        
+        itemsSection += `${template.itemLabel(index)}\n`;
+        itemsSection += `  ${template.itemFields.partName}: ${itemName}\n`;
+        itemsSection += `  ${template.itemFields.supplierPartNumber}: ${supplierPartNumber}\n`;
+        itemsSection += `  ${template.itemFields.supplierSku}: ${supplierPartSku}\n`;
+        itemsSection += `  ${template.itemFields.internalId}: ${itemSKU}\n`;
+        itemsSection += `\n  ${template.itemFields.quantity}: ${itemQuantity} ${template.itemFields.units}\n`;
+        itemsSection += `  ${template.itemFields.description}: ${itemDescription}\n\n`;
+      });
     }
+
+    const baseInfo = `${template.greeting(selectedSupplier?.name || 'Supplier')}\n\n${template.intro}\n\n${quoteDetailsSection}${itemsSection}\n${template.deliveryLocation}: ${deliveryLocation}\n\n${template.budgetPreferences}:\n${budgetExpectation ? `  • ${template.budgetExpectation}: ${budgetExpectation}\n` : ''}`;
+
+    const specialNotesSection = specialNotes
+      ? `\n${template.specialInstructions}:\n  ${specialNotes}\n`
+      : '';
+
+    const closingInfo = `\n${template.requestorInfo}\n\n${requesterName}\n${requesterEmail}\n${requesterPhone ? `${template.phone}: ${requesterPhone}\n` : ''}${companyName}\n\n`;
+
+    const instructionsList = template.closeInstructions.items.map(item => `  • ${item}`).join('\n');
+    
+    return (
+      baseInfo +
+      `${specialNotesSection}` +
+      closingInfo +
+      `${template.closeInstructions.header}\n` +
+      `${instructionsList}\n` +
+      `\n${template.closingRemark(quoteId)}\n\n` +
+      `${template.thankYou}\n\n` +
+      `${template.bestRegards}\n` +
+      `${requesterName}\n` +
+      `${companyName}\n` +
+      `${requesterEmail}\n` +
+      `${requesterPhone ? `${requesterPhone}\n` : ''}` +
+      `${template.website}\n\n` +
+      `${template.generated}: ${date}`
+    );
   };
 
   const handleOutlookOpen = () => {
@@ -401,18 +411,6 @@ Quote Generated: ${date}`;
 
   const handleClose = () => {
     onOpenChange(false);
-  };
-
-  // Helper function to get language code from supplier
-  const getSupplierLanguageCode = () => {
-    // Priority: preferred_language > country > default to EN
-    if (selectedSupplier?.preferred_language) {
-      return selectedSupplier.preferred_language.toUpperCase();
-    }
-    if (selectedSupplier?.country) {
-      return selectedSupplier.country.toUpperCase();
-    }
-    return 'EN';
   };
 
   return (
