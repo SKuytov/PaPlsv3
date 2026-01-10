@@ -112,17 +112,38 @@ const QuotesDashboard = () => {
     }
   };
 
-  // Filter quotes based on search and date range
+  // 🔍 ENHANCED: Filter quotes based on search (Quote ID, Supplier, Project, AND Part parameters)
   const filteredQuotes = quotes.filter(quote => {
     const searchLower = searchTerm.toLowerCase();
     const supplierName = quote.suppliers?.name || 'Unknown';
     const projectName = quote.project_name || '';
     
-    const matchesSearch =
+    // Check quote-level fields (Quote ID, Supplier, Project)
+    const matchesQuoteFields =
       quote.quote_id.toLowerCase().includes(searchLower) ||
       supplierName.toLowerCase().includes(searchLower) ||
       projectName.toLowerCase().includes(searchLower);
 
+    // Check part-level fields (part_number, name, category, bin_location)
+    let matchesPartFields = false;
+    if (quote.items && Array.isArray(quote.items)) {
+      matchesPartFields = quote.items.some(item => {
+        const partNumber = (item.part_number || '').toLowerCase();
+        const partName = (item.part_name || '').toLowerCase();
+        const category = (item.category || '').toLowerCase();
+        const binLocation = (item.bin_location || '').toLowerCase();
+        
+        return (
+          partNumber.includes(searchLower) ||
+          partName.includes(searchLower) ||
+          category.includes(searchLower) ||
+          binLocation.includes(searchLower)
+        );
+      });
+    }
+
+    // Match if either quote fields OR part fields match
+    const matchesSearch = matchesQuoteFields || matchesPartFields;
     if (!matchesSearch) return false;
 
     // Date range filter
@@ -311,19 +332,22 @@ const QuotesDashboard = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Search */}
+            {/* Search - ENHANCED with part parameters */}
             <div className="lg:col-span-2">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Search Quote ID, Supplier, Project</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                🔎 Search: Quote ID, Supplier, Project, Part #, Category, Location
+              </label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="e.g., QR-ABC123 or Supplier Name"
+                  placeholder="e.g., QR-ABC123, Part #123, Bin A-5, Electronics"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
+              <p className="text-xs text-slate-500 mt-1">💡 Searches across Quote ID, Supplier, Project, Part Number, Part Name, Category, and Bin Location</p>
             </div>
 
             {/* Status Filter */}
@@ -816,6 +840,9 @@ const QuoteDetailsModal = ({ quote, onClose, onUpdate, onRecordResponse }) => {
                       <div key={idx} className="p-3 bg-slate-50 rounded-lg flex items-center justify-between border border-slate-200">
                         <div>
                           <p className="font-semibold text-slate-900">{item.part_name || 'Unknown Part'}</p>
+                          {item.part_number && <p className="text-xs text-blue-600 mt-1">🏷️ Part #: {item.part_number}</p>}
+                          {item.category && <p className="text-xs text-purple-600 mt-0.5">📂 Category: {item.category}</p>}
+                          {item.bin_location && <p className="text-xs text-amber-600 mt-0.5">📍 Location: {item.bin_location}</p>}
                           <p className="text-xs text-slate-600 mt-1">Qty: {quantity}</p>
                         </div>
                         {unitPrice > 0 && (
