@@ -645,7 +645,7 @@ const SpareParts = () => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showQuoteCreator, setShowQuoteCreator] = useState(false);
   const [selectedPartsForQuotes, setSelectedPartsForQuotes] = useState([]);
-  const [allReorderParts, setAllReorderParts] = useState([]); // ← NEW: Store all reorder parts globally
+  const [allReorderParts, setAllReorderParts] = useState([]);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -671,7 +671,7 @@ const SpareParts = () => {
 
   useEffect(() => {
     loadParts();
-    loadAllReorderParts(); // ← Load all reorder parts when component mounts
+    loadAllReorderParts();
   }, [filters, page]);
 
   useEffect(() => {
@@ -807,7 +807,6 @@ const SpareParts = () => {
   const loadAllReorderParts = async () => {
     try {
       // Load ALL parts from database that need reordering
-      // Scan the entire database without pagination or filters
       const { data, error } = await supabase
         .from('spare_parts')
         .select('*')
@@ -821,7 +820,6 @@ const SpareParts = () => {
       
       console.log(`Found ${reorderPartsFiltered.length} parts needing reorder out of ${data?.length || 0} total parts`);
       
-      // Store globally in state
       setAllReorderParts(reorderPartsFiltered);
     } catch (error) {
       console.error('Error loading all reorder parts:', error);
@@ -878,7 +876,7 @@ const SpareParts = () => {
 
   const handleFormSuccess = () => {
     loadParts();
-    loadAllReorderParts(); // ← Refresh reorder parts list on form success
+    loadAllReorderParts();
   };
 
   const resetFilters = () => {
@@ -913,7 +911,6 @@ const SpareParts = () => {
   };
 
   const handleCreateQuotesClick = async (selectedReorderParts) => {
-    // Use the globally stored reorder parts
     setSelectedPartsForQuotes(allReorderParts);
     setShowQuoteCreator(true);
   };
@@ -955,11 +952,6 @@ const SpareParts = () => {
 
   // Count active filters
   const activeFilterCount = getActiveFiltersDisplay.length;
-
-  // Count items needing reorder (from visible parts)
-  const needsReorderCount = parts.filter(p =>
-    p.current_quantity <= p.reorder_point
-  ).length;
 
   return (
     <>
@@ -1188,8 +1180,10 @@ const SpareParts = () => {
               >
                 <ShoppingCart className="h-4 w-4" />
                 Reorder Items
-                {needsReorderCount > 0 && (
-                  <Badge className="bg-red-500">{needsReorderCount}</Badge>
+                {allReorderParts.length > 0 && (
+                  <Badge className="bg-orange-500 text-white font-bold ml-1 px-2 py-0.5 text-xs">
+                    {allReorderParts.length}
+                  </Badge>
                 )}
               </button>
             </div>
@@ -1197,12 +1191,12 @@ const SpareParts = () => {
         )}
 
         {/* Reorder Alert */}
-        {needsReorderCount > 0 && (
+        {allReorderParts.length > 0 && (
           <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-semibold text-amber-900">
-                {needsReorderCount} item{needsReorderCount !== 1 ? 's' : ''} need{needsReorderCount !== 1 ? '' : 's'} reordering
+                {allReorderParts.length} item{allReorderParts.length !== 1 ? 's' : ''} need{allReorderParts.length !== 1 ? '' : 's'} reordering
               </p>
               <p className="text-xs text-amber-700 mt-1">
                 Click the "Reorder Items" button to manage and export your reorder list by supplier
@@ -1312,7 +1306,7 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal - Now passes all reorder parts from global state */}
+      {/* Reorder Modal */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
