@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
-  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp
+  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp, Fileplus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ import PartCard from './spare-parts/PartCard';
 import PartDetailsModal from './spare-parts/PartDetailsModal';
 import PartForm from './spare-parts/PartForm';
 import CategoryManager from './spare-parts/CategoryManager';
+import BulkQuoteRequestCreator from './quotes/BulkQuoteRequestCreator';
 
 // Filter color mapping
 const FILTER_COLORS = {
@@ -53,7 +54,7 @@ const FILTER_LABELS = {
 };
 
 // --- REORDER MODAL COMPONENT (WITH CORRECT SUPPLIERS TABLE SCHEMA) ---
-const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
+const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }) => {
   const [selectedParts, setSelectedParts] = useState([]);
   const [copiedPart, setCopiedPart] = useState(null);
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
@@ -77,13 +78,16 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
       // Query the junction table with supplier details
       // Using exact columns from suppliers table schema
       const { data, error } = await supabase
-        .from('part_supplier_options')
+        .from('supplier_part_mappings')
         .select(`
           id,
           part_id,
-          unit_price,
+          supplier_id,
+          supplier_sku,
+          supplier_part_number,
+          min_order_qty,
           lead_time_days,
-          is_preferred,
+          price_per_unit,
           supplier:suppliers(
             id, 
             name, 
@@ -91,10 +95,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
             email,
             phone,
             address,
-            is_oem,
-            quality_score,
-            delivery_score,
-            price_stability_score
+            is_oem
           )
         `)
         .in('part_id', partIds);
@@ -104,15 +105,18 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
       // Map suppliers to parts
       const supplierMap = {};
       if (data) {
-        data.forEach(option => {
-          if (!supplierMap[option.part_id]) {
-            supplierMap[option.part_id] = [];
+        data.forEach(mapping => {
+          if (!supplierMap[mapping.part_id]) {
+            supplierMap[mapping.part_id] = [];
           }
-          supplierMap[option.part_id].push({
-            ...option.supplier,
-            unit_price: option.unit_price,
-            is_preferred: option.is_preferred,
-            lead_time_days: option.lead_time_days
+          supplierMap[mapping.part_id].push({
+            ...mapping.supplier,
+            supplier_sku: mapping.supplier_sku,
+            supplier_part_number: mapping.supplier_part_number,
+            min_order_qty: mapping.min_order_qty,
+            lead_time_days: mapping.lead_time_days,
+            unit_price: mapping.price_per_unit,
+            is_preferred: false
           });
         });
       }
@@ -565,7 +569,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                 {/* Global Export Options */}
                 {Object.keys(groupedParts).length > 0 && (
                   <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Export All Items</h3>
+                    <h3 className="text-sm font-semibold text-slate-900 mb-3">Export & Quote Options</h3>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => handleCopyToClipboard('list')}
@@ -596,6 +600,13 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick }) => {
                       >
                         <FileText className="h-3.5 w-3.5" />
                         HTML
+                      </button>
+                      <button
+                        onClick={() => onCreateQuotes(reorderParts)}
+                        className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-xs font-medium ml-auto"
+                      >
+                        <Fileplus className="h-3.5 w-3.5" />
+                        Create Quotes
                       </button>
                     </div>
                   </div>
@@ -632,6 +643,8 @@ const SpareParts = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showQuoteCreator, setShowQuoteCreator] = useState(false);
+  const [selectedPartsForQuotes, setSelectedPartsForQuotes] = useState([]);
   const { toast } = useToast();
   const { userRole } = useAuth();
 
@@ -789,6 +802,34 @@ const SpareParts = () => {
     }
   };
 
+  const loadAllReorderParts = async () => {
+    try {
+      setLoading(true);
+      // Load ALL parts that need reordering (not just filtered/paginated)
+      const { data, error } = await supabase
+        .from('spare_parts')
+        .select('*')
+        .lte('current_quantity', supabase.rpc('reorder_point'));
+
+      if (error) throw error;
+
+      // Filter parts where current_quantity <= reorder_point
+      const allReorderParts = (data || []).filter(p => p.current_quantity <= p.reorder_point);
+      
+      return allReorderParts;
+    } catch (error) {
+      console.error('Error loading all reorder parts:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load all parts needing reorder"
+      });
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     if (!isGodAdmin) {
@@ -867,6 +908,13 @@ const SpareParts = () => {
     setViewDetails(part);
   };
 
+  const handleCreateQuotesClick = async (selectedReorderParts) => {
+    // Load all reorder parts globally (not just visible ones)
+    const allReorderParts = await loadAllReorderParts();
+    setSelectedPartsForQuotes(allReorderParts);
+    setShowQuoteCreator(true);
+  };
+
   // Get active filters with their display values
   const getActiveFiltersDisplay = useMemo(() => {
     const active = [];
@@ -905,7 +953,7 @@ const SpareParts = () => {
   // Count active filters
   const activeFilterCount = getActiveFiltersDisplay.length;
 
-  // Count items needing reorder
+  // Count items needing reorder (from visible parts)
   const needsReorderCount = parts.filter(p =>
     p.current_quantity <= p.reorder_point
   ).length;
@@ -1261,13 +1309,27 @@ const SpareParts = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reorder Modal - WITH CORRECT SUPPLIERS TABLE SCHEMA */}
+      {/* Reorder Modal */}
       <ReorderModal
         open={showReorderModal}
         onOpenChange={setShowReorderModal}
         parts={parts.filter(p => p.current_quantity <= p.reorder_point)}
         onPartClick={handleReorderPartClick}
+        onCreateQuotes={handleCreateQuotesClick}
       />
+
+      {/* Bulk Quote Request Creator */}
+      {showQuoteCreator && (
+        <BulkQuoteRequestCreator
+          open={showQuoteCreator}
+          onOpenChange={setShowQuoteCreator}
+          selectedParts={selectedPartsForQuotes}
+          onSuccess={() => {
+            setShowQuoteCreator(false);
+            loadParts();
+          }}
+        />
+      )}
     </>
   );
 };
