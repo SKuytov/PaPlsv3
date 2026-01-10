@@ -84,8 +84,33 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
     const newQuotes = [];
 
     try {
+      // FIX #3: Query existing quote requests to prevent duplicates
+      const partIds = selectedParts.map(p => p.id);
+      const { data: existingQuotes, error: existingError } = await supabase
+        .from('quote_requests')
+        .select('part_id, status')
+        .in('part_id', partIds)
+        .in('status', ['pending', 'sent', 'quoted', 'accepted']); // Active quote statuses
+
+      if (existingError) {
+        console.warn('Warning: Could not check existing quotes:', existingError);
+      }
+
+      // Create a set of parts that already have active quotes
+      const quotedPartIds = new Set(existingQuotes?.map(q => q.part_id) || []);
+      console.log(`Found ${quotedPartIds.size} parts with existing quotes - will skip these`);
+
       // Create quote requests for each part using legacy method
       for (const part of selectedParts) {
+        // FIX #3: Skip if part already has an active quote
+        if (quotedPartIds.has(part.id)) {
+          newErrors.push({
+            part: part.name,
+            error: 'Quote request already exists (skipped to prevent duplicates)'
+          });
+          continue;
+        }
+
         const supplier = part.suppliers?.find(s => s.is_preferred) || part.suppliers?.[0];
         const quantityNeeded = Math.max(0, part.reorder_point - part.current_quantity);
 
@@ -135,7 +160,7 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
 
       toast({
         title: `${newQuotes.length} Quote Request${newQuotes.length !== 1 ? 's' : ''} Created!`,
-        description: `Successfully sent to suppliers. ${newErrors.length > 0 ? `${newErrors.length} failed.` : ''}`
+        description: `Successfully sent to suppliers. ${newErrors.length > 0 ? `${newErrors.length} skipped (duplicates).` : ''}`
       });
 
       if (onSuccess && newQuotes.length > 0) {
@@ -159,12 +184,12 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
       '======================',
       `Created: ${new Date().toLocaleString()}`,
       `Total Created: ${createdQuotes.length}`,
-      `Total Failed: ${errors.length}`,
+      `Total Skipped: ${errors.length}`,
       '',
       'CREATED QUOTE REQUESTS:',
       ...createdQuotes.map(q => `- ID: ${q.id}`),
       '',
-      'FAILED REQUESTS:',
+      'SKIPPED/FAILED REQUESTS:',
       ...errors.map(e => `- ${e.part}: ${e.error}`)
     ].join('\n');
 
@@ -302,7 +327,7 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
                       <li>✓ Quick creation</li>
                       <li>✓ Simple confirmation</li>
                       <li>✓ Instant sending</li>
-                      <li>• No customization</li>
+                      <li>• Automatic duplicate prevention</li>
                     </ul>
                     <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm group-hover:gap-3 transition-all">
                       Start <ArrowRight className="h-4 w-4" />
@@ -321,6 +346,9 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
                     <p className="font-semibold text-blue-900">Direct Quote Request Creation</p>
                     <p className="text-sm text-blue-800 mt-1">
                       {selectedParts.length} quote request{selectedParts.length !== 1 ? 's' : ''} will be created and sent to suppliers immediately.
+                    </p>
+                    <p className="text-xs text-blue-700 mt-2 font-medium">
+                      ✓ Duplicate prevention is active - parts with existing quotes will be skipped
                     </p>
                   </div>
                 </div>
@@ -450,14 +478,14 @@ const BulkQuoteRequestCreator = ({ open, onOpenChange, selectedParts = [], onSuc
                 )}
 
                 {errors.length > 0 && (
-                  <Card className="bg-red-50 border-red-200">
-                    <CardHeader className="bg-red-100 border-b border-red-200">
-                      <CardTitle className="text-lg text-red-900">✗ Failed ({errors.length})</CardTitle>
+                  <Card className="bg-amber-50 border-amber-200">
+                    <CardHeader className="bg-amber-100 border-b border-amber-200">
+                      <CardTitle className="text-lg text-amber-900">ℹ️ Skipped / Failed ({errors.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4">
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {errors.map((error, idx) => (
-                          <div key={idx} className="text-sm text-red-700 border-b pb-2 last:border-0">
+                          <div key={idx} className="text-sm text-amber-700 border-b pb-2 last:border-0">
                             <span className="font-semibold">{error.part}:</span> {error.error}
                           </div>
                         ))}
