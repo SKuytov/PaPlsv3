@@ -60,20 +60,31 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
   const [partsWithSuppliers, setPartsWithSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [error, setError] = useState(null);
   const { toast } = useToast();
 
   // Fetch supplier data for all parts
   useEffect(() => {
-    if (open && parts.length > 0) {
-      loadPartsWithSuppliers();
+    if (open) {
+      console.log(`ReorderModal opened with ${parts.length} parts`);
+      if (parts.length > 0) {
+        loadPartsWithSuppliers();
+      } else {
+        setPartsWithSuppliers([]);
+        setError('No parts available for reordering');
+      }
     }
   }, [open, parts]);
 
   const loadPartsWithSuppliers = async () => {
     setLoadingSuppliers(true);
+    setError(null);
     try {
+      console.log(`Loading suppliers for ${parts.length} parts...`);
+      
       // Get all part IDs
       const partIds = parts.map(p => p.id);
+      console.log('Part IDs:', partIds);
       
       // FIX #2: Query existing quote requests to filter out already-quoted parts
       const { data: quotedData, error: quotedError } = await supabase
@@ -115,7 +126,12 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
         `)
         .in('part_id', partIds);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supplier query error:', error);
+        throw error;
+      }
+
+      console.log(`Retrieved ${data?.length || 0} supplier mappings`);
 
       // Map suppliers to parts
       const supplierMap = {};
@@ -144,20 +160,30 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
           suppliers: supplierMap[part.id] || []
         }));
 
-      setPartsWithSuppliers(enrichedParts);
+      console.log(`After filtering: ${enrichedParts.length} parts remaining`);
 
-      // FIX #1: Start with EMPTY selection (user chooses what to quote)
-      // REMOVED: setSelectedParts(enrichedParts.map(p => p.id));
-      setSelectedParts([]);
-
-      // Expand all supplier groups by default
-      const suppliers = {};
-      enrichedParts.forEach(p => {
-        p.suppliers.forEach(s => {
-          suppliers[s.name] = true;
+      if (enrichedParts.length === 0) {
+        setError('All parts already have quote requests or no suppliers assigned');
+        setPartsWithSuppliers([]);
+        toast({
+          title: "Info",
+          description: "All parts already have quote requests or no suppliers assigned"
         });
-      });
-      setExpandedSuppliers(suppliers);
+      } else {
+        setPartsWithSuppliers(enrichedParts);
+
+        // FIX #1: Start with EMPTY selection (user chooses what to quote)
+        setSelectedParts([]);
+
+        // Expand all supplier groups by default
+        const suppliers = {};
+        enrichedParts.forEach(p => {
+          p.suppliers.forEach(s => {
+            suppliers[s.name] = true;
+          });
+        });
+        setExpandedSuppliers(suppliers);
+      }
 
       if (quotedPartIds.size > 0) {
         toast({
@@ -168,10 +194,12 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
 
     } catch (error) {
       console.error('Error loading suppliers:', error);
+      const errorMsg = error?.message || 'Unknown error occurred';
+      setError(`Failed to load supplier information: ${errorMsg}`);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to load supplier information"
+        description: errorMsg
       });
     } finally {
       setLoadingSuppliers(false);
@@ -382,6 +410,14 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
     }));
   };
 
+  const toggleSelectAll = () => {
+    if (selectedParts.length === partsWithSuppliers.length) {
+      setSelectedParts([]);
+    } else {
+      setSelectedParts(partsWithSuppliers.map(p => p.id));
+    }
+  };
+
   const groupedParts = groupedBySupplier();
   const reorderParts = getReorderParts();
   const totalEstimatedCost = reorderParts.reduce((sum, p) => {
@@ -412,6 +448,18 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
               <div className="flex justify-center py-12">
                 <LoadingSpinner />
               </div>
+            ) : error ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center">
+                <AlertCircle className="h-12 w-12 text-amber-600 mx-auto mb-3" />
+                <p className="text-amber-900 font-semibold">{error}</p>
+                <p className="text-amber-700 text-sm mt-2">Check browser console for more details</p>
+              </div>
+            ) : partsWithSuppliers.length === 0 ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+                <AlertCircle className="h-12 w-12 text-blue-600 mx-auto mb-3" />
+                <p className="text-blue-900 font-semibold">No parts available to reorder</p>
+                <p className="text-blue-700 text-sm mt-2">All parts either have existing quotes or no suppliers assigned</p>
+              </div>
             ) : (
               <>
                 {/* Summary Cards */}
@@ -421,7 +469,16 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                       <CardTitle className="text-sm text-slate-600">Items to Reorder</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-3xl font-bold text-teal-600">{reorderParts.length}</p>
+                      <p className="text-3xl font-bold text-teal-600">{partsWithSuppliers.length}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-slate-600">Selected Items</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-slate-900">{selectedParts.length}</p>
                     </CardContent>
                   </Card>
 
@@ -436,17 +493,6 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-slate-600">Suppliers</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-3xl font-bold text-slate-900">
-                        {Object.keys(groupedParts).length}
-                      </p>
-                    </CardContent>
-                  </Card>
-
                   <Card className="border-2 border-teal-500">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm text-slate-600">Est. Cost</CardTitle>
@@ -457,11 +503,23 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                   </Card>
                 </div>
 
+                {/* Select All / Deselect All */}
+                <div className="mb-4 flex gap-2">
+                  <Button
+                    onClick={toggleSelectAll}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    {selectedParts.length === partsWithSuppliers.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+
                 {/* Suppliers Grouped Items */}
                 <div className="space-y-4 mb-6">
                   {Object.entries(groupedParts).length === 0 ? (
                     <div className="text-center p-8 bg-slate-50 rounded-lg">
-                      <p className="text-slate-600">No items to reorder</p>
+                      <p className="text-slate-600">Select items to build your reorder list</p>
                     </div>
                   ) : (
                     Object.entries(groupedParts).map(([supplier, supplierParts]) => {
@@ -831,6 +889,8 @@ const SpareParts = () => {
 
   const loadAllReorderParts = async () => {
     try {
+      console.log('Loading all reorder parts...');
+      
       // Load ALL parts from database that need reordering
       const { data, error } = await supabase
         .from('spare_parts')
@@ -838,12 +898,18 @@ const SpareParts = () => {
         .not('reorder_point', 'is', null)
         .not('current_quantity', 'is', null);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error querying spare_parts:', error);
+        throw error;
+      }
+
+      console.log(`Total parts in database: ${data?.length || 0}`);
 
       // Filter parts where current_quantity <= reorder_point
       const reorderPartsFiltered = (data || []).filter(p => p.current_quantity <= p.reorder_point);
       
-      console.log(`Found ${reorderPartsFiltered.length} parts needing reorder out of ${data?.length || 0} total parts`);
+      console.log(`Found ${reorderPartsFiltered.length} parts needing reorder (current <= reorder_point)`);
+      console.log('Parts needing reorder:', reorderPartsFiltered.map(p => ({ id: p.id, name: p.name, current: p.current_quantity, reorder: p.reorder_point })));
       
       setAllReorderParts(reorderPartsFiltered);
     } catch (error) {
