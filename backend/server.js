@@ -8,6 +8,11 @@ import { fileURLToPath } from 'url';
 import quoteRoutes from './routes/quoteRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
+import quotesRoutes from './routes/quotesRoutes.js';
+import ordersRoutes from './routes/ordersRoutes.js';
+import invoicesRoutes from './routes/invoicesRoutes.js';
+import paymentsRoutes from './routes/paymentsRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -110,6 +115,11 @@ app.get('/api/health', (req, res) => {
 app.use('/api', quoteRoutes);
 app.use('/api', authRoutes);
 app.use('/api', inventoryRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', quotesRoutes);
+app.use('/api', ordersRoutes);
+app.use('/api', invoicesRoutes);
+app.use('/api', paymentsRoutes);
 
 // ============================================================
 // LEGACY DOCUMENT ENDPOINTS (KEPT FOR COMPATIBILITY)
@@ -286,6 +296,32 @@ if (httpsOptions && protocol === 'https') {
     console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
     console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
     console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
+    console.log(`   GET    /api/dashboards/:userId              - Get user dashboard data`);
+    console.log(`   GET    /api/dashboards/:userId/metrics      - Get dashboard metrics`);
+    console.log(`   GET    /api/dashboards/:userId/preferences  - Get user preferences`);
+    console.log(`   POST   /api/dashboards/:userId/preferences  - Save user preferences`);
+    console.log(`   POST   /api/quotes                          - Create supplier quote`);
+    console.log(`   GET    /api/quotes/:requestId               - Get quotes for request`);
+    console.log(`   PATCH  /api/quotes/:quoteId/select          - Select a quote`);
+    console.log(`   PATCH  /api/quotes/:quoteId                 - Update quote`);
+    console.log(`   DELETE /api/quotes/:quoteId                 - Delete quote`);
+    console.log(`   POST   /api/orders                          - Create purchase order`);
+    console.log(`   GET    /api/orders/:requestId               - Get orders for request`);
+    console.log(`   PATCH  /api/orders/:orderId/tracking        - Update order tracking`);
+    console.log(`   GET    /api/orders/:orderId/tracking        - Get tracking info`);
+    console.log(`   PATCH  /api/orders/:orderId                 - Update order`);
+    console.log(`   DELETE /api/orders/:orderId                 - Delete order`);
+    console.log(`   POST   /api/invoices                        - Create invoice checklist`);
+    console.log(`   GET    /api/invoices/:requestId             - Get invoice checklist`);
+    console.log(`   PATCH  /api/invoices/:invoiceId/checklist   - Update checklist`);
+    console.log(`   GET    /api/invoices/:invoiceId/progress    - Get progress`);
+    console.log(`   PATCH  /api/invoices/:invoiceId/file        - Update invoice file`);
+    console.log(`   POST   /api/payments                        - Create payment record`);
+    console.log(`   GET    /api/payments/:requestId             - Get payments for request`);
+    console.log(`   PATCH  /api/payments/:paymentId/process     - Process payment`);
+    console.log(`   PATCH  /api/payments/:paymentId             - Update payment`);
+    console.log(`   DELETE /api/payments/:paymentId             - Cancel payment`);
+    console.log(`   GET    /api/payments/stats/summary          - Payment statistics`);
     console.log(`${'='.repeat(60)}\n`);
   });
 } else {
@@ -308,6 +344,32 @@ if (httpsOptions && protocol === 'https') {
     console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
     console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
     console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
+    console.log(`   GET    /api/dashboards/:userId              - Get user dashboard data`);
+    console.log(`   GET    /api/dashboards/:userId/metrics      - Get dashboard metrics`);
+    console.log(`   GET    /api/dashboards/:userId/preferences  - Get user preferences`);
+    console.log(`   POST   /api/dashboards/:userId/preferences  - Save user preferences`);
+    console.log(`   POST   /api/quotes                          - Create supplier quote`);
+    console.log(`   GET    /api/quotes/:requestId               - Get quotes for request`);
+    console.log(`   PATCH  /api/quotes/:quoteId/select          - Select a quote`);
+    console.log(`   PATCH  /api/quotes/:quoteId                 - Update quote`);
+    console.log(`   DELETE /api/quotes/:quoteId                 - Delete quote`);
+    console.log(`   POST   /api/orders                          - Create purchase order`);
+    console.log(`   GET    /api/orders/:requestId               - Get orders for request`);
+    console.log(`   PATCH  /api/orders/:orderId/tracking        - Update order tracking`);
+    console.log(`   GET    /api/orders/:orderId/tracking        - Get tracking info`);
+    console.log(`   PATCH  /api/orders/:orderId                 - Update order`);
+    console.log(`   DELETE /api/orders/:orderId                 - Delete order`);
+    console.log(`   POST   /api/invoices                        - Create invoice checklist`);
+    console.log(`   GET    /api/invoices/:requestId             - Get invoice checklist`);
+    console.log(`   PATCH  /api/invoices/:invoiceId/checklist   - Update checklist`);
+    console.log(`   GET    /api/invoices/:invoiceId/progress    - Get progress`);
+    console.log(`   PATCH  /api/invoices/:invoiceId/file        - Update invoice file`);
+    console.log(`   POST   /api/payments                        - Create payment record`);
+    console.log(`   GET    /api/payments/:requestId             - Get payments for request`);
+    console.log(`   PATCH  /api/payments/:paymentId/process     - Process payment`);
+    console.log(`   PATCH  /api/payments/:paymentId             - Update payment`);
+    console.log(`   DELETE /api/payments/:paymentId             - Cancel payment`);
+    console.log(`   GET    /api/payments/stats/summary          - Payment statistics`);
     console.log(`${'='.repeat(60)}\n`);
   });
 }
