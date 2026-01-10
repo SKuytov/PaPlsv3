@@ -75,6 +75,21 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
       // Get all part IDs
       const partIds = parts.map(p => p.id);
       
+      // FIX #2: Query existing quote requests to filter out already-quoted parts
+      const { data: quotedData, error: quotedError } = await supabase
+        .from('quote_requests')
+        .select('part_id, status')
+        .in('part_id', partIds)
+        .in('status', ['pending', 'sent', 'quoted', 'accepted']); // Active quote statuses
+
+      if (quotedError) {
+        console.warn('Warning: Could not check existing quotes:', quotedError);
+      }
+
+      // Create a set of parts that already have active quotes
+      const quotedPartIds = new Set(quotedData?.map(q => q.part_id) || []);
+      console.log(`Filtering out ${quotedPartIds.size} parts with existing quotes`);
+
       // Query the junction table with supplier details
       // Using exact columns from suppliers table schema
       const { data, error } = await supabase
@@ -121,16 +136,19 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
         });
       }
 
-      // Merge supplier data with parts
-      const enrichedParts = parts.map(part => ({
-        ...part,
-        suppliers: supplierMap[part.id] || []
-      }));
+      // FIX #2: Filter out parts that already have active quotes
+      const enrichedParts = parts
+        .filter(part => !quotedPartIds.has(part.id)) // Remove already-quoted parts
+        .map(part => ({
+          ...part,
+          suppliers: supplierMap[part.id] || []
+        }));
 
       setPartsWithSuppliers(enrichedParts);
 
-      // Pre-select all parts
-      setSelectedParts(enrichedParts.map(p => p.id));
+      // FIX #1: Start with EMPTY selection (user chooses what to quote)
+      // REMOVED: setSelectedParts(enrichedParts.map(p => p.id));
+      setSelectedParts([]);
 
       // Expand all supplier groups by default
       const suppliers = {};
@@ -140,6 +158,13 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
         });
       });
       setExpandedSuppliers(suppliers);
+
+      if (quotedPartIds.size > 0) {
+        toast({
+          title: "Info",
+          description: `${quotedPartIds.size} part(s) already have quote requests and were filtered out`
+        });
+      }
 
     } catch (error) {
       console.error('Error loading suppliers:', error);
