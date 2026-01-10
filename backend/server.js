@@ -10,8 +10,10 @@ import authRoutes from './routes/authRoutes.js';
 import inventoryRoutes from './routes/inventory.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import quotesRoutes from './routes/quotesRoutes.js';
+import quoteRequestsRoutes from './routes/quoteRequestsRoutes.js';
 import ordersRoutes from './routes/ordersRoutes.js';
 import invoicesRoutes from './routes/invoicesRoutes.js';
+import supplierInvoicesRoutes from './routes/supplierInvoicesRoutes.js';
 import paymentsRoutes from './routes/paymentsRoutes.js';
 
 const app = express();
@@ -103,7 +105,9 @@ app.get('/api/health', (req, res) => {
       quote_api: 'active',
       auth_api: 'active',
       rfid_auth: 'enabled',
-      inventory_api: 'active'
+      inventory_api: 'active',
+      supplier_invoices: 'active',
+      quote_requests: 'active'
     }
   });
 });
@@ -117,8 +121,10 @@ app.use('/api', authRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api', quotesRoutes);
+app.use('/api', quoteRequestsRoutes);
 app.use('/api', ordersRoutes);
 app.use('/api', invoicesRoutes);
+app.use('/api', supplierInvoicesRoutes);
 app.use('/api', paymentsRoutes);
 
 // ============================================================
@@ -278,99 +284,87 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 // Start server
 if (httpsOptions && protocol === 'https') {
   https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
-    console.log(`\n${'='.repeat(60)}`);
+    console.log(`\n${'='.repeat(70)}`);
     console.log(`✅ Backend server running on HTTPS port ${PORT}`);
     console.log(`🔒 SSL Certificate: Let's Encrypt`);
     console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
     console.log(`🏆 API ready at https://partpulse.eu:${PORT}/api`);
     console.log(`\n📋 Available Endpoints:`);
+    console.log(`   🏥 HEALTH & SYSTEM`);
     console.log(`   GET    /api/health                          - Health check`);
+    console.log(`\n   📋 QUOTE REQUESTS`);
+    console.log(`   POST   /api/quote-requests                  - Create quote request`);
+    console.log(`   GET    /api/quote-requests                  - List quote requests`);
+    console.log(`   GET    /api/quote-requests/:id              - Get quote request`);
+    console.log(`   PATCH  /api/quote-requests/:id              - Update quote request`);
+    console.log(`   DELETE /api/quote-requests/:id              - Delete quote request`);
+    console.log(`\n   💰 SUPPLIER INVOICES`);
+    console.log(`   POST   /api/supplier-invoices               - Log supplier invoice`);
+    console.log(`   GET    /api/supplier-invoices               - List supplier invoices`);
+    console.log(`   GET    /api/supplier-invoices/:id           - Get invoice details`);
+    console.log(`   PATCH  /api/supplier-invoices/:id           - Update invoice`);
+    console.log(`   POST   /api/supplier-invoices/:id/send-to-accounting - Send to accounting`);
+    console.log(`   DELETE /api/supplier-invoices/:id           - Delete invoice`);
+    console.log(`   GET    /api/supplier-invoices/stats/summary - Invoice statistics`);
+    console.log(`\n   📊 EXISTING MODULES`);
     console.log(`   POST   /api/parts                           - Create new part`);
     console.log(`   GET    /api/parts?q=search                  - Search parts`);
     console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
     console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
-    console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
     console.log(`   POST   /api/inventory/restock               - Restock inventory item`);
     console.log(`   GET    /api/inventory/restock-history       - Get restock audit log`);
-    console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
-    console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
-    console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
-    console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
-    console.log(`   GET    /api/dashboards/:userId              - Get user dashboard data`);
-    console.log(`   GET    /api/dashboards/:userId/metrics      - Get dashboard metrics`);
-    console.log(`   GET    /api/dashboards/:userId/preferences  - Get user preferences`);
-    console.log(`   POST   /api/dashboards/:userId/preferences  - Save user preferences`);
     console.log(`   POST   /api/quotes                          - Create supplier quote`);
     console.log(`   GET    /api/quotes/:requestId               - Get quotes for request`);
     console.log(`   PATCH  /api/quotes/:quoteId/select          - Select a quote`);
-    console.log(`   PATCH  /api/quotes/:quoteId                 - Update quote`);
-    console.log(`   DELETE /api/quotes/:quoteId                 - Delete quote`);
     console.log(`   POST   /api/orders                          - Create purchase order`);
     console.log(`   GET    /api/orders/:requestId               - Get orders for request`);
-    console.log(`   PATCH  /api/orders/:orderId/tracking        - Update order tracking`);
-    console.log(`   GET    /api/orders/:orderId/tracking        - Get tracking info`);
-    console.log(`   PATCH  /api/orders/:orderId                 - Update order`);
-    console.log(`   DELETE /api/orders/:orderId                 - Delete order`);
     console.log(`   POST   /api/invoices                        - Create invoice checklist`);
     console.log(`   GET    /api/invoices/:requestId             - Get invoice checklist`);
-    console.log(`   PATCH  /api/invoices/:invoiceId/checklist   - Update checklist`);
-    console.log(`   GET    /api/invoices/:invoiceId/progress    - Get progress`);
-    console.log(`   PATCH  /api/invoices/:invoiceId/file        - Update invoice file`);
     console.log(`   POST   /api/payments                        - Create payment record`);
     console.log(`   GET    /api/payments/:requestId             - Get payments for request`);
-    console.log(`   PATCH  /api/payments/:paymentId/process     - Process payment`);
-    console.log(`   PATCH  /api/payments/:paymentId             - Update payment`);
-    console.log(`   DELETE /api/payments/:paymentId             - Cancel payment`);
-    console.log(`   GET    /api/payments/stats/summary          - Payment statistics`);
-    console.log(`${'='.repeat(60)}\n`);
+    console.log(`${'='.repeat(70)}\n`);
   });
 } else {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n${'='.repeat(60)}`);
+    console.log(`\n${'='.repeat(70)}`);
     console.log(`✅ Backend server running on HTTP port ${PORT}`);
     console.log(`⚠️  WARNING: Running without SSL! Use HTTPS in production!`);
     console.log(`📁 Upload directory: ${UPLOAD_DIR}`);
     console.log(`🏆 API ready at http://partpulse.eu:${PORT}/api`);
     console.log(`\n📋 Available Endpoints:`);
+    console.log(`   🏥 HEALTH & SYSTEM`);
     console.log(`   GET    /api/health                          - Health check`);
+    console.log(`\n   📋 QUOTE REQUESTS`);
+    console.log(`   POST   /api/quote-requests                  - Create quote request`);
+    console.log(`   GET    /api/quote-requests                  - List quote requests`);
+    console.log(`   GET    /api/quote-requests/:id              - Get quote request`);
+    console.log(`   PATCH  /api/quote-requests/:id              - Update quote request`);
+    console.log(`   DELETE /api/quote-requests/:id              - Delete quote request`);
+    console.log(`\n   💰 SUPPLIER INVOICES`);
+    console.log(`   POST   /api/supplier-invoices               - Log supplier invoice`);
+    console.log(`   GET    /api/supplier-invoices               - List supplier invoices`);
+    console.log(`   GET    /api/supplier-invoices/:id           - Get invoice details`);
+    console.log(`   PATCH  /api/supplier-invoices/:id           - Update invoice`);
+    console.log(`   POST   /api/supplier-invoices/:id/send-to-accounting - Send to accounting`);
+    console.log(`   DELETE /api/supplier-invoices/:id           - Delete invoice`);
+    console.log(`   GET    /api/supplier-invoices/stats/summary - Invoice statistics`);
+    console.log(`\n   📊 EXISTING MODULES`);
     console.log(`   POST   /api/parts                           - Create new part`);
     console.log(`   GET    /api/parts?q=search                  - Search parts`);
     console.log(`   POST   /api/auth/rfid-login                 - RFID technician login`);
     console.log(`   POST   /api/auth/rfid-logout                - RFID technician logout`);
-    console.log(`   GET    /api/auth/rfid-cards                 - List RFID cards (admin)`);
     console.log(`   POST   /api/inventory/restock               - Restock inventory item`);
     console.log(`   GET    /api/inventory/restock-history       - Get restock audit log`);
-    console.log(`   POST   /api/quote-requests/:id/attachments  - Upload quote file`);
-    console.log(`   GET    /api/quote-requests/:id/attachments  - Get quote files`);
-    console.log(`   DELETE /api/quote-requests/:id/attachments/:fileId - Delete file`);
-    console.log(`   GET    /api/quote-requests/:id/attachments/:fileId/download - Download file`);
-    console.log(`   GET    /api/dashboards/:userId              - Get user dashboard data`);
-    console.log(`   GET    /api/dashboards/:userId/metrics      - Get dashboard metrics`);
-    console.log(`   GET    /api/dashboards/:userId/preferences  - Get user preferences`);
-    console.log(`   POST   /api/dashboards/:userId/preferences  - Save user preferences`);
     console.log(`   POST   /api/quotes                          - Create supplier quote`);
     console.log(`   GET    /api/quotes/:requestId               - Get quotes for request`);
     console.log(`   PATCH  /api/quotes/:quoteId/select          - Select a quote`);
-    console.log(`   PATCH  /api/quotes/:quoteId                 - Update quote`);
-    console.log(`   DELETE /api/quotes/:quoteId                 - Delete quote`);
     console.log(`   POST   /api/orders                          - Create purchase order`);
     console.log(`   GET    /api/orders/:requestId               - Get orders for request`);
-    console.log(`   PATCH  /api/orders/:orderId/tracking        - Update order tracking`);
-    console.log(`   GET    /api/orders/:orderId/tracking        - Get tracking info`);
-    console.log(`   PATCH  /api/orders/:orderId                 - Update order`);
-    console.log(`   DELETE /api/orders/:orderId                 - Delete order`);
     console.log(`   POST   /api/invoices                        - Create invoice checklist`);
     console.log(`   GET    /api/invoices/:requestId             - Get invoice checklist`);
-    console.log(`   PATCH  /api/invoices/:invoiceId/checklist   - Update checklist`);
-    console.log(`   GET    /api/invoices/:invoiceId/progress    - Get progress`);
-    console.log(`   PATCH  /api/invoices/:invoiceId/file        - Update invoice file`);
     console.log(`   POST   /api/payments                        - Create payment record`);
     console.log(`   GET    /api/payments/:requestId             - Get payments for request`);
-    console.log(`   PATCH  /api/payments/:paymentId/process     - Process payment`);
-    console.log(`   PATCH  /api/payments/:paymentId             - Update payment`);
-    console.log(`   DELETE /api/payments/:paymentId             - Cancel payment`);
-    console.log(`   GET    /api/payments/stats/summary          - Payment statistics`);
-    console.log(`${'='.repeat(60)}\n`);
+    console.log(`${'='.repeat(70)}\n`);
   });
 }
 
