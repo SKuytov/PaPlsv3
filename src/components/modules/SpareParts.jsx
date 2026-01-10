@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Search, Plus, Filter, RefreshCw, MoreHorizontal, Box, RotateCcw, Settings,
-  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp, Fileplus
+  Download, Copy, FileText, AlertCircle, ShoppingCart, X, Eye, ChevronDown, ChevronUp, FilePlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -605,7 +605,7 @@ const ReorderModal = ({ open, onOpenChange, parts, onPartClick, onCreateQuotes }
                         onClick={() => onCreateQuotes(reorderParts)}
                         className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-300 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-xs font-medium ml-auto"
                       >
-                        <Fileplus className="h-3.5 w-3.5" />
+                        <FilePlus className="h-3.5 w-3.5" />
                         Create Quotes
                       </button>
                     </div>
