@@ -205,7 +205,7 @@ const QuoteResponseModal = ({ quote, supplier, onClose, onSuccess }) => {
         url: att.url
       }));
 
-      // Update quote with response data
+      // Update quote with response data - WITHOUT updated_at (Supabase handles this automatically)
       const { error: updateError } = await supabase
         .from('quote_requests')
         .update({
