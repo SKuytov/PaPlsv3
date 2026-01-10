@@ -403,6 +403,18 @@ Quote Generated: ${date}`;
     onOpenChange(false);
   };
 
+  // Helper function to get language code from supplier
+  const getSupplierLanguageCode = () => {
+    // Priority: preferred_language > country > default to EN
+    if (selectedSupplier?.preferred_language) {
+      return selectedSupplier.preferred_language.toUpperCase();
+    }
+    if (selectedSupplier?.country) {
+      return selectedSupplier.country.toUpperCase();
+    }
+    return 'EN';
+  };
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -1157,7 +1169,7 @@ Quote Generated: ${date}`;
                   quoteId={quoteId}
                   showCopyOnly={true}
                   items={items}
-                  languageCode={selectedSupplier?.preferred_language || 'EN'}
+                  languageCode={getSupplierLanguageCode()}
                 />
 
                 <div className="flex gap-2 pt-4 border-t">
