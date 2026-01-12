@@ -11,8 +11,8 @@ echo ""
 BACKEND_DIR="/opt/partpulse-backend"
 FRONTEND_WEB_ROOT="/var/www/html"
 LOG_FILE="/var/log/backend.log"
-BRANCH="feature/blade-lifecycle-tracking" # ✅ FIXED: Use feature branch
-BACKEND_PORT="3000" # ✅ FIXED: Use port 3000, not 5000
+BRANCH="feature/blade-lifecycle-tracking" # ✅ Feature branch
+BACKEND_PORT="5000" # ✅ CORRECT PORT from server.js
 
 # Colors
 GREEN='\033[0;32m'
@@ -61,7 +61,7 @@ if [ ! -f ".env" ]; then
     echo "cat > /opt/partpulse-backend/PaPlsv3/backend/.env << 'EOF'"
     echo "SUPABASE_URL=https://your-project.supabase.co"
     echo "SUPABASE_SERVICE_ROLE_KEY=your-service-role-key"
-    echo "PORT=3000"
+    echo "PORT=5000"
     echo "NODE_ENV=production"
     echo "FRONTEND_URL=https://partpulse.eu"
     echo "EOF"
@@ -160,7 +160,7 @@ echo "════════════════════════�
 echo ""
 
 echo -e "${GREEN}📊 Service Status:${NC}"
-echo " ✅ Backend: Running on port $BACKEND_PORT"
+echo " ✅ Backend: Running on port $BACKEND_PORT (from server.js)"
 echo " ✅ Frontend: $FRONTEND_WEB_ROOT"
 echo " 📄 Logs: $LOG_FILE"
 echo " 🌳 Branch: $BRANCH"
