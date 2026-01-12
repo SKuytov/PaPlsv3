@@ -20,7 +20,7 @@ router.get('/blade-types', async (req, res) => {
       .order('machine_type', { ascending: true });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching blade types:', error);
     res.status(500).json({ error: error.message });
@@ -36,7 +36,12 @@ router.get('/blade-types/:id', async (req, res) => {
       .eq('id', req.params.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Blade type not found' });
+      }
+      throw error;
+    }
     res.json(data);
   } catch (error) {
     console.error('Error fetching blade type:', error);
@@ -49,13 +54,17 @@ router.post('/blade-types', async (req, res) => {
   try {
     const { machine_type, blade_type_code, description, lifecycle_hours, sharpening_interval, max_sharpenings } = req.body;
 
+    if (!machine_type || !blade_type_code) {
+      return res.status(400).json({ error: 'Missing required fields: machine_type, blade_type_code' });
+    }
+
     const { data, error } = await supabase
       .from('blade_types')
       .insert([
         {
           machine_type,
           blade_type_code,
-          description,
+          description: description || '',
           lifecycle_hours: lifecycle_hours || 500,
           sharpening_interval: sharpening_interval || 50,
           max_sharpenings: max_sharpenings || 10,
@@ -73,18 +82,58 @@ router.post('/blade-types', async (req, res) => {
 });
 
 // ============================================================
-// BLADE ENDPOINTS
+// BLADE ENDPOINTS - IMPORTANT: More specific routes first!
 // ============================================================
 
-// GET all blades
+// GET blade by serial number - MUST BE BEFORE /:id route
+router.get('/blades/search/:serial', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('blades')
+      .select(`
+        id,
+        blade_type_id,
+        serial_number,
+        current_machine_id,
+        status,
+        total_usage_hours,
+        total_sharpenings,
+        last_sharpening_date,
+        created_at,
+        updated_at
+      `)
+      .eq('serial_number', req.params.serial)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Blade not found' });
+      }
+      throw error;
+    }
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching blade by serial:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET all blades - NO eager loading on relationships
 router.get('/blades', async (req, res) => {
   try {
     const { status, machine_id, search } = req.query;
 
     let query = supabase.from('blades').select(`
-      *,
-      blade_types:blade_type_id (*),
-      machines:current_machine_id (*)
+      id,
+      blade_type_id,
+      serial_number,
+      current_machine_id,
+      status,
+      total_usage_hours,
+      total_sharpenings,
+      last_sharpening_date,
+      created_at,
+      updated_at
     `);
 
     if (status) {
@@ -100,30 +149,9 @@ router.get('/blades', async (req, res) => {
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching blades:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET blade by serial number
-router.get('/blades/search/:serial', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('blades')
-      .select(`
-        *,
-        blade_types:blade_type_id (*),
-        machines:current_machine_id (*)
-      `)
-      .eq('serial_number', req.params.serial)
-      .single();
-
-    if (error) throw error;
-    res.json(data);
-  } catch (error) {
-    console.error('Error fetching blade:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -134,14 +162,26 @@ router.get('/blades/:id', async (req, res) => {
     const { data, error } = await supabase
       .from('blades')
       .select(`
-        *,
-        blade_types:blade_type_id (*),
-        machines:current_machine_id (*)
+        id,
+        blade_type_id,
+        serial_number,
+        current_machine_id,
+        status,
+        total_usage_hours,
+        total_sharpenings,
+        last_sharpening_date,
+        created_at,
+        updated_at
       `)
       .eq('id', req.params.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Blade not found' });
+      }
+      throw error;
+    }
     res.json(data);
   } catch (error) {
     console.error('Error fetching blade:', error);
@@ -161,6 +201,10 @@ router.post('/blades', async (req, res) => {
       total_sharpenings = 0,
     } = req.body;
 
+    if (!blade_type_id) {
+      return res.status(400).json({ error: 'Missing required field: blade_type_id' });
+    }
+
     // Auto-generate serial if not provided
     let finalSerial = serial_number;
     if (!finalSerial) {
@@ -174,11 +218,12 @@ router.post('/blades', async (req, res) => {
         {
           blade_type_id,
           serial_number: finalSerial,
-          current_machine_id,
+          current_machine_id: current_machine_id || null,
           status,
-          total_usage_hours,
-          total_sharpenings,
+          total_usage_hours: parseFloat(total_usage_hours) || 0,
+          total_sharpenings: parseInt(total_sharpenings) || 0,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
       ])
       .select()
@@ -195,14 +240,24 @@ router.post('/blades', async (req, res) => {
 // UPDATE blade
 router.patch('/blades/:id', async (req, res) => {
   try {
+    const updates = {
+      ...req.body,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from('blades')
-      .update(req.body)
+      .update(updates)
       .eq('id', req.params.id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Blade not found' });
+      }
+      throw error;
+    }
     res.json(data);
   } catch (error) {
     console.error('Error updating blade:', error);
@@ -224,7 +279,7 @@ router.get('/blades/:id/usage-logs', async (req, res) => {
       .order('start_time', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching usage logs:', error);
     res.status(500).json({ error: error.message });
@@ -236,13 +291,17 @@ router.post('/blades/:id/log-usage', async (req, res) => {
   try {
     const { machine_id, operator_id, start_time } = req.body;
 
+    if (!start_time) {
+      return res.status(400).json({ error: 'Missing required field: start_time' });
+    }
+
     const { data, error } = await supabase
       .from('blade_usage_logs')
       .insert([
         {
           blade_id: req.params.id,
-          machine_id,
-          operator_id,
+          machine_id: machine_id || null,
+          operator_id: operator_id || null,
           start_time,
           status: 'active',
         },
@@ -262,6 +321,10 @@ router.post('/blades/:id/log-usage', async (req, res) => {
 router.patch('/blade-usage/:logId/end', async (req, res) => {
   try {
     const { end_time } = req.body;
+
+    if (!end_time) {
+      return res.status(400).json({ error: 'Missing required field: end_time' });
+    }
 
     // Get the log to calculate duration
     const { data: logData, error: fetchError } = await supabase
@@ -297,7 +360,7 @@ router.patch('/blade-usage/:logId/end', async (req, res) => {
       .eq('id', logData.blade_id)
       .single();
 
-    const newTotalHours = (bladeData.total_usage_hours || 0) + duration_hours;
+    const newTotalHours = (bladeData?.total_usage_hours || 0) + duration_hours;
 
     await supabase
       .from('blades')
@@ -325,7 +388,7 @@ router.get('/blades/:id/sharpening-history', async (req, res) => {
       .order('sharpening_date', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching sharpening history:', error);
     res.status(500).json({ error: error.message });
@@ -345,8 +408,8 @@ router.post('/blades/:id/record-sharpening', async (req, res) => {
         {
           blade_id: req.params.id,
           sharpening_date,
-          technician_id,
-          notes,
+          technician_id: technician_id || null,
+          notes: notes || '',
         },
       ])
       .select()
@@ -361,7 +424,7 @@ router.post('/blades/:id/record-sharpening', async (req, res) => {
       .eq('id', req.params.id)
       .single();
 
-    const newSharpeningCount = (bladeData.total_sharpenings || 0) + 1;
+    const newSharpeningCount = (bladeData?.total_sharpenings || 0) + 1;
 
     await supabase
       .from('blades')
@@ -369,6 +432,7 @@ router.post('/blades/:id/record-sharpening', async (req, res) => {
         total_sharpenings: newSharpeningCount,
         last_sharpening_date: sharpening_date,
         status: 'active',
+        updated_at: new Date().toISOString(),
       })
       .eq('id', req.params.id);
 
@@ -388,12 +452,12 @@ router.get('/blade-alerts/active', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('blade_alerts')
-      .select('*, blades:blade_id (*)')
+      .select('*')
       .eq('is_resolved', false)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching active alerts:', error);
     res.status(500).json({ error: error.message });
@@ -410,7 +474,7 @@ router.get('/blades/:id/alerts', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching blade alerts:', error);
     res.status(500).json({ error: error.message });
@@ -426,15 +490,20 @@ router.patch('/blade-alerts/:alertId/resolve', async (req, res) => {
       .from('blade_alerts')
       .update({
         is_resolved: true,
-        resolved_by,
-        resolution_notes,
+        resolved_by: resolved_by || null,
+        resolution_notes: resolution_notes || '',
         resolved_at: new Date().toISOString(),
       })
       .eq('id', req.params.alertId)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Alert not found' });
+      }
+      throw error;
+    }
     res.json(data);
   } catch (error) {
     console.error('Error resolving alert:', error);
@@ -447,6 +516,10 @@ router.post('/blade-alerts', async (req, res) => {
   try {
     const { blade_id, alert_type, severity, message } = req.body;
 
+    if (!blade_id || !alert_type || !severity) {
+      return res.status(400).json({ error: 'Missing required fields: blade_id, alert_type, severity' });
+    }
+
     const { data, error } = await supabase
       .from('blade_alerts')
       .insert([
@@ -454,7 +527,7 @@ router.post('/blade-alerts', async (req, res) => {
           blade_id,
           alert_type,
           severity,
-          message,
+          message: message || '',
           is_resolved: false,
           created_at: new Date().toISOString(),
         },
@@ -484,7 +557,7 @@ router.get('/blades/:id/maintenance', async (req, res) => {
       .order('maintenance_date', { ascending: false });
 
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching maintenance logs:', error);
     res.status(500).json({ error: error.message });
@@ -496,6 +569,10 @@ router.post('/blades/:id/maintenance', async (req, res) => {
   try {
     const { maintenance_type, technician_id, notes } = req.body;
 
+    if (!maintenance_type) {
+      return res.status(400).json({ error: 'Missing required field: maintenance_type' });
+    }
+
     const { data, error } = await supabase
       .from('blade_maintenance_logs')
       .insert([
@@ -503,8 +580,8 @@ router.post('/blades/:id/maintenance', async (req, res) => {
           blade_id: req.params.id,
           maintenance_date: new Date().toISOString(),
           maintenance_type,
-          technician_id,
-          notes,
+          technician_id: technician_id || null,
+          notes: notes || '',
           status: 'completed',
         },
       ])
