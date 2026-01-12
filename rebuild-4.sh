@@ -2,17 +2,17 @@
 
 set -e
 
-echo "════════════════════════════════════════════════════════════"
+echo "\n═══════════════════════════════════════════════════════════════════════════════"
 echo "🚀 COMPLETE REBUILD - Frontend & Backend + Blade Lifecycle Tracking"
-echo "════════════════════════════════════════════════════════════"
+echo "═══════════════════════════════════════════════════════════════════════════════"
 echo ""
 
 # Configuration
 BACKEND_DIR="/opt/partpulse-backend"
 FRONTEND_WEB_ROOT="/var/www/html"
 LOG_FILE="/var/log/backend.log"
-BRANCH="feature/blade-lifecycle-tracking" # ✅ Feature branch
-BACKEND_PORT="5000" # ✅ CORRECT PORT from server.js
+BRANCH="feature/blade-lifecycle-tracking"
+BACKEND_PORT="3000" # ✅ CORRECT PORT from rebuild-1.sh
 
 # Colors
 GREEN='\033[0;32m'
@@ -61,7 +61,7 @@ if [ ! -f ".env" ]; then
     echo "cat > /opt/partpulse-backend/PaPlsv3/backend/.env << 'EOF'"
     echo "SUPABASE_URL=https://your-project.supabase.co"
     echo "SUPABASE_SERVICE_ROLE_KEY=your-service-role-key"
-    echo "PORT=5000"
+    echo "PORT=3000"
     echo "NODE_ENV=production"
     echo "FRONTEND_URL=https://partpulse.eu"
     echo "EOF"
@@ -154,13 +154,13 @@ echo ""
 # ============================================================
 
 echo ""
-echo "════════════════════════════════════════════════════════════"
+echo "═══════════════════════════════════════════════════════════════════════════════"
 echo -e "${GREEN}✅ REBUILD COMPLETE!${NC}"
-echo "════════════════════════════════════════════════════════════"
+echo "═══════════════════════════════════════════════════════════════════════════════"
 echo ""
 
 echo -e "${GREEN}📊 Service Status:${NC}"
-echo " ✅ Backend: Running on port $BACKEND_PORT (from server.js)"
+echo " ✅ Backend: Running on port $BACKEND_PORT (from rebuild-1.sh specification)"
 echo " ✅ Frontend: $FRONTEND_WEB_ROOT"
 echo " 📄 Logs: $LOG_FILE"
 echo " 🌳 Branch: $BRANCH"
