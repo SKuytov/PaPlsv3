@@ -254,16 +254,9 @@ export default defineConfig({
 		},
 	},
 	build: {
-		copybundle: true,
 		outDir: 'dist',
 		copyPublicDir: true,
-		rollupOptions: {
-			external: [
-				'@babel/parser',
-				'@babel/traverse',
-				'@babel/generator',
-				'@babel/types'
-			]
-		}
+		minify: 'terser',
+		sourcemap: false,
 	}
 });
