@@ -35,7 +35,7 @@ const BladeTracking = () => {
       machineType: 'Circular Saw', 
       description: 'Standard circular saw blade',
       totalQuantity: 50,
-      nextSerialNumber: 1 // BT001001
+      nextSerialNumber: 1
     },
     { 
       id: 2, 
@@ -43,7 +43,7 @@ const BladeTracking = () => {
       machineType: 'Band Saw', 
       description: 'Band saw cutting blade',
       totalQuantity: 40,
-      nextSerialNumber: 1 // BT002001
+      nextSerialNumber: 1
     },
     { 
       id: 3, 
@@ -51,16 +51,15 @@ const BladeTracking = () => {
       machineType: 'Circular Saw Type 4', 
       description: 'Industrial circular saw blade',
       totalQuantity: 72,
-      nextSerialNumber: 44 // Starting from 43 + 1
+      nextSerialNumber: 44
     },
   ]);
 
-  // Blade State
+  // Blade State - NOW WITH DEFAULT MACHINE
   const [blades, setBlades] = useState([
-    // Sample data for BT-004
-    { id: 1, typeId: 3, serialNumber: 'B400001', status: 'active', purchaseDate: '2025-12-01', events: [] },
-    { id: 2, typeId: 3, serialNumber: 'B400002', status: 'active', purchaseDate: '2025-12-01', events: [] },
-    { id: 3, typeId: 3, serialNumber: 'B400003', status: 'sharpening', purchaseDate: '2025-12-01', events: [
+    { id: 1, typeId: 3, serialNumber: 'B400001', status: 'active', purchaseDate: '2025-12-01', defaultMachine: 'Machine A', events: [] },
+    { id: 2, typeId: 3, serialNumber: 'B400002', status: 'active', purchaseDate: '2025-12-01', defaultMachine: 'Machine B', events: [] },
+    { id: 3, typeId: 3, serialNumber: 'B400003', status: 'sharpening', purchaseDate: '2025-12-01', defaultMachine: 'Machine A', events: [
       { type: 'mounted', date: '2026-01-01', machine: 'Machine A', notes: 'Production run' },
       { type: 'removed', date: '2026-01-10', machine: 'Machine A', notes: 'Dull, needs sharpening' }
     ] },
@@ -73,13 +72,22 @@ const BladeTracking = () => {
     quantity: ''
   });
 
-  // Event State
+  // Event State - ENHANCED WITH SEARCH
   const [showEventForm, setShowEventForm] = useState(false);
+  const [bladeSearchTerm, setBladeSearchTerm] = useState('');
+  const [selectedBladeForEvent, setSelectedBladeForEvent] = useState(null);
   const [eventForm, setEventForm] = useState({
     bladeId: '',
     eventType: 'mounted',
     machine: '',
     notes: ''
+  });
+
+  // Machine Management State
+  const [showMachineForm, setShowMachineForm] = useState(false);
+  const [machineForm, setMachineForm] = useState({
+    bladeId: '',
+    defaultMachine: ''
   });
 
   const tabs = [
@@ -92,13 +100,20 @@ const BladeTracking = () => {
 
   // ==================== UTILITY FUNCTIONS ====================
   const generateSerialNumber = (type) => {
-    const codeNum = type.code.split('-')[1]; // "001" from "BT-001"
-    const serial = String(type.nextSerialNumber).padStart(5, '0'); // "00001"
-    return `B${codeNum}${serial}`; // "B001000001"
+    const codeNum = type.code.split('-')[1];
+    const serial = String(type.nextSerialNumber).padStart(5, '0');
+    return `B${codeNum}${serial}`;
   };
 
   const getBladeType = (typeId) => bladeTypes.find(t => t.id === typeId);
   const getTypeBlades = (typeId) => blades.filter(b => b.typeId === typeId);
+
+  // ==================== BLADE SEARCH FUNCTION ====================
+  const filteredBlades = bladeSearchTerm.trim() === '' 
+    ? blades 
+    : blades.filter(blade => 
+        blade.serialNumber.toLowerCase().includes(bladeSearchTerm.toLowerCase())
+      );
 
   // ==================== BLADE TYPE HANDLERS ====================
   const handleAddBladeType = (e) => {
@@ -119,7 +134,6 @@ const BladeTracking = () => {
   };
 
   const handleDeleteBladeType = (id) => {
-    // Only allow delete if no blades exist for this type
     const hasBlades = blades.some(b => b.typeId === id);
     if (!hasBlades) {
       setBladeTypes(bladeTypes.filter(t => t.id !== id));
@@ -134,7 +148,6 @@ const BladeTracking = () => {
       const quantity = parseInt(bulkPurchaseForm.quantity);
       const type = getBladeType(typeId);
 
-      // Create new blades with auto-generated serial numbers
       const newBlades = [];
       for (let i = 0; i < quantity; i++) {
         const serialNumber = generateSerialNumber({ ...type, nextSerialNumber: type.nextSerialNumber + i });
@@ -144,11 +157,11 @@ const BladeTracking = () => {
           serialNumber: serialNumber,
           status: 'new',
           purchaseDate: new Date().toISOString().split('T')[0],
+          defaultMachine: type.machineType,
           events: []
         });
       }
 
-      // Update blade type with new next serial number
       setBladeTypes(bladeTypes.map(t => 
         t.id === typeId 
           ? { ...t, nextSerialNumber: t.nextSerialNumber + quantity, totalQuantity: t.totalQuantity + quantity }
@@ -164,10 +177,14 @@ const BladeTracking = () => {
   // ==================== EVENT HANDLERS ====================
   const handleAddEvent = (e) => {
     e.preventDefault();
-    if (eventForm.bladeId && eventForm.eventType) {
+    const bladeToUse = selectedBladeForEvent || eventForm.bladeId;
+    if (bladeToUse && eventForm.eventType) {
       const now = new Date().toISOString().split('T')[0];
+      const blade = blades.find(b => b.id === parseInt(bladeToUse));
+      const machineToUse = eventForm.machine || blade?.defaultMachine || '';
+
       setBlades(blades.map(blade =>
-        blade.id === parseInt(eventForm.bladeId)
+        blade.id === parseInt(bladeToUse)
           ? {
               ...blade,
               events: [
@@ -175,18 +192,36 @@ const BladeTracking = () => {
                 {
                   type: eventForm.eventType,
                   date: now,
-                  machine: eventForm.machine,
+                  machine: machineToUse,
                   notes: eventForm.notes
                 }
               ],
               status: eventForm.eventType === 'mounted' ? 'active' : 
                       eventForm.eventType === 'removed' ? 'inactive' :
-                      eventForm.eventType === 'sharpened' ? 'active' : blade.status
+                      eventForm.eventType === 'sharpened' ? 'active' : blade.status,
+              defaultMachine: machineToUse
             }
           : blade
       ));
+      
       setEventForm({ bladeId: '', eventType: 'mounted', machine: '', notes: '' });
+      setBladeSearchTerm('');
+      setSelectedBladeForEvent(null);
       setShowEventForm(false);
+    }
+  };
+
+  // ==================== MACHINE HANDLER ====================
+  const handleUpdateDefaultMachine = (e) => {
+    e.preventDefault();
+    if (machineForm.bladeId && machineForm.defaultMachine) {
+      setBlades(blades.map(blade =>
+        blade.id === parseInt(machineForm.bladeId)
+          ? { ...blade, defaultMachine: machineForm.defaultMachine }
+          : blade
+      ));
+      setMachineForm({ bladeId: '', defaultMachine: '' });
+      setShowMachineForm(false);
     }
   };
 
@@ -196,12 +231,12 @@ const BladeTracking = () => {
 
   // ==================== TAB RENDERS ====================
 
-  // Render Blades Tab
+  // Render Blades Tab - ENHANCED WITH SEARCH & MACHINE
   const renderBladesTab = () => (
     <div className="space-y-4">
       {/* Add Event Section */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-3">Quick Add Event</h3>
+        <h3 className="font-semibold text-blue-900 mb-3">📋 Quick Add Event with Smart Search</h3>
         {!showEventForm ? (
           <button
             onClick={() => setShowEventForm(true)}
@@ -212,22 +247,84 @@ const BladeTracking = () => {
           </button>
         ) : (
           <form onSubmit={handleAddEvent} className="bg-white rounded-lg p-4 border border-blue-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Blade</label>
-                <select
-                  value={eventForm.bladeId}
-                  onChange={(e) => setEventForm({ ...eventForm, bladeId: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select blade...</option>
-                  {blades.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.serialNumber} ({getBladeType(b.typeId)?.code})
-                    </option>
-                  ))}
-                </select>
+            {/* BLADE SEARCH BAR - NEW FEATURE */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 mb-2">🔍 Search Blade by Serial Number</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Type serial number (e.g., B400001, B400043)"
+                  value={bladeSearchTerm}
+                  onChange={(e) => setBladeSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
+
+              {/* Search Results */}
+              {bladeSearchTerm.trim() !== '' && (
+                <div className="mt-2 bg-slate-50 rounded-lg border border-slate-200 max-h-48 overflow-y-auto">
+                  {filteredBlades.length === 0 ? (
+                    <div className="p-3 text-sm text-slate-500 text-center">
+                      No blades found matching "{bladeSearchTerm}"
+                    </div>
+                  ) : (
+                    filteredBlades.map(blade => {
+                      const type = getBladeType(blade.typeId);
+                      return (
+                        <button
+                          key={blade.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedBladeForEvent(blade.id);
+                            setEventForm({ ...eventForm, machine: blade.defaultMachine });
+                            setBladeSearchTerm('');
+                          }}
+                          className="w-full px-4 py-3 text-left border-b border-slate-200 hover:bg-blue-50 transition-colors flex justify-between items-center last:border-b-0"
+                        >
+                          <div>
+                            <p className="font-semibold text-slate-900">{blade.serialNumber}</p>
+                            <p className="text-xs text-slate-600">{type?.code} • {type?.machineType}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              blade.status === 'active' ? 'bg-green-100 text-green-700' :
+                              blade.status === 'sharpening' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {blade.status}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Blade Display */}
+            {selectedBladeForEvent && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-green-900">✅ Selected: {blades.find(b => b.id === selectedBladeForEvent)?.serialNumber}</p>
+                  <p className="text-sm text-green-700">Machine: {blades.find(b => b.id === selectedBladeForEvent)?.defaultMachine}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBladeForEvent(null);
+                    setBladeSearchTerm('');
+                  }}
+                  className="text-green-600 hover:text-green-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Event Type, Machine, Notes */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Event Type</label>
                 <select
@@ -235,41 +332,102 @@ const BladeTracking = () => {
                   onChange={(e) => setEventForm({ ...eventForm, eventType: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="mounted">Mounted on Machine</option>
-                  <option value="removed">Removed from Machine</option>
-                  <option value="sharpened">Sharpened</option>
-                  <option value="inspected">Inspected</option>
-                  <option value="maintenance">Maintenance</option>
+                  <option value="mounted">🔧 Mounted on Machine</option>
+                  <option value="removed">❌ Removed from Machine</option>
+                  <option value="sharpened">🪨 Sharpened</option>
+                  <option value="inspected">👁️ Inspected</option>
+                  <option value="maintenance">🔨 Maintenance</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Machine</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Machine (Auto-filled)</label>
                 <input
                   type="text"
-                  placeholder="e.g., Machine A"
+                  placeholder="Auto-filled from default"
                   value={eventForm.machine}
                   onChange={(e) => setEventForm({ ...eventForm, machine: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Production run"
+                  value={eventForm.notes}
+                  onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
-              <textarea
-                placeholder="Add details about this event..."
-                value={eventForm.notes}
-                onChange={(e) => setEventForm({ ...eventForm, notes: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                rows="2"
-              />
-            </div>
+
             <div className="flex gap-2">
               <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 Log Event
               </button>
               <button
                 type="button"
-                onClick={() => setShowEventForm(false)}
+                onClick={() => {
+                  setShowEventForm(false);
+                  setSelectedBladeForEvent(null);
+                  setBladeSearchTerm('');
+                }}
+                className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Set Default Machine Section */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <h3 className="font-semibold text-purple-900 mb-3">🏭 Set Default Machine Per Blade</h3>
+        {!showMachineForm ? (
+          <button
+            onClick={() => setShowMachineForm(true)}
+            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            <Home className="w-4 h-4" />
+            Set Default Machine
+          </button>
+        ) : (
+          <form onSubmit={handleUpdateDefaultMachine} className="bg-white rounded-lg p-4 border border-purple-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Select Blade</label>
+                <select
+                  value={machineForm.bladeId}
+                  onChange={(e) => setMachineForm({ ...machineForm, bladeId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Select blade...</option>
+                  {blades.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.serialNumber} (Current: {b.defaultMachine})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Default Machine</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Machine A, Circular Saw #1"
+                  value={machineForm.defaultMachine}
+                  onChange={(e) => setMachineForm({ ...machineForm, defaultMachine: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                Update Machine
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMachineForm(false)}
                 className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 Cancel
@@ -288,14 +446,14 @@ const BladeTracking = () => {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Serial Number</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Type</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Default Machine</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Events</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Purchase Date</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {blades.length === 0 ? (
-                <tr className="hover:bg-slate-50">
+                <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
                     No blades yet. Create blade types and order them first!
                   </td>
@@ -317,12 +475,12 @@ const BladeTracking = () => {
                           {blade.status}
                         </span>
                       </td>
+                      <td className="px-6 py-3 text-sm font-medium text-slate-700">{blade.defaultMachine}</td>
                       <td className="px-6 py-3 text-sm text-slate-700">
                         <span className="bg-slate-100 px-2 py-1 rounded text-xs font-medium">
                           {blade.events.length} events
                         </span>
                       </td>
-                      <td className="px-6 py-3 text-sm text-slate-700">{blade.purchaseDate}</td>
                       <td className="px-6 py-3 text-center">
                         <div className="flex justify-center gap-2">
                           <button 
@@ -360,7 +518,6 @@ const BladeTracking = () => {
         </button>
       </div>
 
-      {/* Create Blade Type Form */}
       {showCreateTypeForm && (
         <form onSubmit={handleAddBladeType} className="bg-white rounded-lg border border-slate-200 p-6">
           <h3 className="text-lg font-semibold mb-4">Create New Blade Type</h3>
@@ -421,7 +578,6 @@ const BladeTracking = () => {
         </form>
       )}
 
-      {/* Blade Types Table */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -466,7 +622,6 @@ const BladeTracking = () => {
   // Render Inventory Tab
   const renderInventoryTab = () => (
     <div className="space-y-4">
-      {/* Order New Blades */}
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
         <h3 className="font-semibold text-purple-900 mb-3">📦 Order New Blade Batch</h3>
         {!showBulkPurchaseForm ? (
@@ -527,7 +682,6 @@ const BladeTracking = () => {
         )}
       </div>
 
-      {/* Inventory Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {bladeTypes.map(type => {
           const typeBlades = getTypeBlades(type.id);
@@ -608,11 +762,11 @@ const BladeTracking = () => {
                 maintenance: 'bg-orange-50 border-orange-200 text-orange-900',
               };
               const eventEmojis = {
-                mounted: '📌',
+                mounted: '🔧',
                 removed: '❌',
                 sharpened: '🪨',
                 inspected: '👁️',
-                maintenance: '🔧',
+                maintenance: '🔨',
               };
 
               return (
@@ -625,7 +779,7 @@ const BladeTracking = () => {
                           {event.serialNumber} ({event.typeCode})
                         </p>
                         <p className="text-sm font-medium capitalize">{event.type}</p>
-                        {event.machine && <p className="text-sm mt-1">🤖 {event.machine}</p>}
+                        {event.machine && <p className="text-sm mt-1">🏭 {event.machine}</p>}
                         {event.notes && <p className="text-sm mt-1 italic">"{event.notes}"</p>}
                       </div>
                     </div>
@@ -695,7 +849,7 @@ const BladeTracking = () => {
         <AlertTriangle className="w-8 h-8 text-teal-600" />
         <div>
           <h1 className="text-3xl font-bold text-slate-900">⚡ Blade Lifecycle Tracking</h1>
-          <p className="text-slate-600">Professional blade management with auto-generated serial numbers and event tracking</p>
+          <p className="text-slate-600">Professional blade management with smart search and default machine assignment</p>
         </div>
       </div>
 
@@ -737,7 +891,6 @@ const BladeTracking = () => {
             </div>
             
             <div className="p-6 space-y-6">
-              {/* Blade Info */}
               <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-200">
                 <div>
                   <p className="text-xs font-semibold text-slate-600 uppercase">Blade Type</p>
@@ -748,8 +901,8 @@ const BladeTracking = () => {
                   <p className="text-lg font-bold capitalize text-slate-900">{selectedBladeDetail.status}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 uppercase">Purchase Date</p>
-                  <p className="text-lg font-bold text-slate-900">{selectedBladeDetail.purchaseDate}</p>
+                  <p className="text-xs font-semibold text-slate-600 uppercase">Default Machine</p>
+                  <p className="text-lg font-bold text-slate-900">{selectedBladeDetail.defaultMachine}</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-slate-600 uppercase">Events</p>
@@ -757,7 +910,6 @@ const BladeTracking = () => {
                 </div>
               </div>
 
-              {/* Events Timeline */}
               <div>
                 <h3 className="font-bold text-slate-900 mb-4">Event History</h3>
                 {selectedBladeDetail.events.length === 0 ? (
@@ -768,7 +920,7 @@ const BladeTracking = () => {
                       <div key={idx} className="border-l-4 border-teal-500 pl-4 py-2">
                         <p className="font-semibold text-slate-900 capitalize">{event.type}</p>
                         <p className="text-xs text-slate-600 mt-1">📅 {event.date}</p>
-                        {event.machine && <p className="text-sm text-slate-700 mt-1">🤖 {event.machine}</p>}
+                        {event.machine && <p className="text-sm text-slate-700 mt-1">🏭 {event.machine}</p>}
                         {event.notes && <p className="text-sm text-slate-700 mt-1 italic">"{event.notes}"</p>}
                       </div>
                     ))}
