@@ -89,19 +89,39 @@ echo "Installing frontend dependencies..."
 npm install --legacy-peer-deps 2>&1 | tail -3
 
 echo "Building React app..."
-npm run build 2>&1 | tail -10
+echo "🔧 Running: npm run build"
+echo "This will show the FULL build output (not just the last 10 lines):"
+echo "---"
 
-# ✅ IMPROVED: Check if dist directory was created
-if [ ! -d "dist" ]; then
-    echo -e "${RED}❌ ERROR: dist directory not created!${NC}"
-    echo -e "${YELLOW}Running full build output to see error:${NC}"
-    npm run build
+# Run build and capture output - SHOW FULL OUTPUT
+BUILD_OUTPUT=$(npm run build 2>&1)
+BUILD_STATUS=$?
+
+echo "$BUILD_OUTPUT"
+echo "---"
+
+# Check if build was successful
+if [ $BUILD_STATUS -ne 0 ] || [ ! -d "dist" ]; then
+    echo ""
+    echo -e "${RED}❌ BUILD FAILED!${NC}"
+    echo "Full build output shown above ^"
+    echo ""
+    echo -e "${YELLOW}Debugging info:${NC}"
+    echo "Build exit code: $BUILD_STATUS"
+    echo "Checking for dist directory:"
+    ls -la | grep dist || echo "  dist/ DOES NOT EXIST"
+    echo ""
+    echo -e "${YELLOW}Common issues:${NC}"
+    echo "  1. Check for import errors in components"
+    echo "  2. Check for missing dependencies"
+    echo "  3. Run: npm install --legacy-peer-deps"
+    echo "  4. Check vite.config.js for config errors"
     exit 1
 fi
 
 echo -e "${GREEN}✅ Frontend built successfully${NC}"
-echo "📁 Dist files:"
-ls -la dist/ | head -15
+echo "📁 Dist directory contents:"
+ls -lah dist/ | head -20
 
 # ============================================================
 # 5. Deploy Frontend
@@ -110,9 +130,8 @@ ls -la dist/ | head -15
 echo ""
 echo -e "${YELLOW}5️⃣ Deploying frontend to $FRONTEND_WEB_ROOT...${NC}"
 
-# ✅ IMPROVED: Double-check dist exists before deleting web root
 if [ ! -d "dist" ]; then
-    echo -e "${RED}❌ ERROR: dist directory does not exist before deployment!${NC}"
+    echo -e "${RED}❌ ERROR: dist directory does not exist!${NC}"
     exit 1
 fi
 
@@ -122,7 +141,7 @@ sudo chown -R www-data:www-data "$FRONTEND_WEB_ROOT"
 sudo chmod -R 755 "$FRONTEND_WEB_ROOT"
 
 echo -e "${GREEN}✅ Frontend deployed${NC}"
-echo "Deployed files count:"
+echo "File count deployed:"
 find "$FRONTEND_WEB_ROOT" -type f | wc -l
 
 # ============================================================
