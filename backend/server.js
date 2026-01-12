@@ -15,6 +15,7 @@ import ordersRoutes from './routes/ordersRoutes.js';
 import invoicesRoutes from './routes/invoicesRoutes.js';
 import supplierInvoicesRoutes from './routes/supplierInvoicesRoutes.js';
 import paymentsRoutes from './routes/paymentsRoutes.js';
+import bladeRoutes from './routes/bladeRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -107,7 +108,8 @@ app.get('/api/health', (req, res) => {
       rfid_auth: 'enabled',
       inventory_api: 'active',
       supplier_invoices: 'active',
-      quote_requests: 'active'
+      quote_requests: 'active',
+      blade_tracking: 'active'
     }
   });
 });
@@ -126,6 +128,7 @@ app.use('/api', ordersRoutes);
 app.use('/api', invoicesRoutes);
 app.use('/api', supplierInvoicesRoutes);
 app.use('/api', paymentsRoutes);
+app.use('/api', bladeRoutes);
 
 // ============================================================
 // LEGACY DOCUMENT ENDPOINTS (KEPT FOR COMPATIBILITY)
@@ -292,6 +295,26 @@ if (httpsOptions && protocol === 'https') {
     console.log(`\n📋 Available Endpoints:`);
     console.log(`   🏥 HEALTH & SYSTEM`);
     console.log(`   GET    /api/health                          - Health check`);
+    console.log(`\n   🔪 BLADE LIFECYCLE TRACKING`);
+    console.log(`   GET    /api/blade-types                     - List blade types`);
+    console.log(`   GET    /api/blade-types/:id                 - Get blade type`);
+    console.log(`   POST   /api/blade-types                     - Create blade type`);
+    console.log(`   GET    /api/blades                          - List all blades`);
+    console.log(`   GET    /api/blades/search/:serial           - Search by serial`);
+    console.log(`   GET    /api/blades/:id                      - Get blade details`);
+    console.log(`   POST   /api/blades                          - Create blade`);
+    console.log(`   PATCH  /api/blades/:id                      - Update blade`);
+    console.log(`   GET    /api/blades/:id/usage-logs           - Blade usage history`);
+    console.log(`   POST   /api/blades/:id/log-usage            - Log usage session`);
+    console.log(`   PATCH  /api/blade-usage/:logId/end          - End usage session`);
+    console.log(`   GET    /api/blades/:id/sharpening-history   - Sharpening history`);
+    console.log(`   POST   /api/blades/:id/record-sharpening    - Record sharpening`);
+    console.log(`   GET    /api/blade-alerts/active             - Active alerts`);
+    console.log(`   GET    /api/blades/:id/alerts               - Blade alerts`);
+    console.log(`   POST   /api/blade-alerts                    - Create alert`);
+    console.log(`   PATCH  /api/blade-alerts/:alertId/resolve   - Resolve alert`);
+    console.log(`   GET    /api/blades/:id/maintenance          - Maintenance logs`);
+    console.log(`   POST   /api/blades/:id/maintenance          - Create maintenance log`);
     console.log(`\n   📋 QUOTE REQUESTS`);
     console.log(`   POST   /api/quote-requests                  - Create quote request`);
     console.log(`   GET    /api/quote-requests                  - List quote requests`);
@@ -334,6 +357,26 @@ if (httpsOptions && protocol === 'https') {
     console.log(`\n📋 Available Endpoints:`);
     console.log(`   🏥 HEALTH & SYSTEM`);
     console.log(`   GET    /api/health                          - Health check`);
+    console.log(`\n   🔪 BLADE LIFECYCLE TRACKING`);
+    console.log(`   GET    /api/blade-types                     - List blade types`);
+    console.log(`   GET    /api/blade-types/:id                 - Get blade type`);
+    console.log(`   POST   /api/blade-types                     - Create blade type`);
+    console.log(`   GET    /api/blades                          - List all blades`);
+    console.log(`   GET    /api/blades/search/:serial           - Search by serial`);
+    console.log(`   GET    /api/blades/:id                      - Get blade details`);
+    console.log(`   POST   /api/blades                          - Create blade`);
+    console.log(`   PATCH  /api/blades/:id                      - Update blade`);
+    console.log(`   GET    /api/blades/:id/usage-logs           - Blade usage history`);
+    console.log(`   POST   /api/blades/:id/log-usage            - Log usage session`);
+    console.log(`   PATCH  /api/blade-usage/:logId/end          - End usage session`);
+    console.log(`   GET    /api/blades/:id/sharpening-history   - Sharpening history`);
+    console.log(`   POST   /api/blades/:id/record-sharpening    - Record sharpening`);
+    console.log(`   GET    /api/blade-alerts/active             - Active alerts`);
+    console.log(`   GET    /api/blades/:id/alerts               - Blade alerts`);
+    console.log(`   POST   /api/blade-alerts                    - Create alert`);
+    console.log(`   PATCH  /api/blade-alerts/:alertId/resolve   - Resolve alert`);
+    console.log(`   GET    /api/blades/:id/maintenance          - Maintenance logs`);
+    console.log(`   POST   /api/blades/:id/maintenance          - Create maintenance log`);
     console.log(`\n   📋 QUOTE REQUESTS`);
     console.log(`   POST   /api/quote-requests                  - Create quote request`);
     console.log(`   GET    /api/quote-requests                  - List quote requests`);
