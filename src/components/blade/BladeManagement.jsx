@@ -1,35 +1,15 @@
 import React, { useState } from 'react';
 import { ZapOff, Plus, Search, Filter, MoreVertical, Edit2, Trash2, Eye } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
 
 const BladeManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedBlade, setSelectedBlade] = useState(null);
+  const [blades, setBlades] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Fetch blades data
-  const { data: blades = [], isLoading, error } = useQuery({
-    queryKey: ['blades'],
-    queryFn: async () => {
-      try {
-        const response = await api.get('/api/blades');
-        return response.data || [];
-      } catch (err) {
-        console.error('Error fetching blades:', err);
-        return [];
-      }
-    },
-  });
-
-  // Filter blades
-  const filteredBlades = blades.filter(blade => {
-    const matchesSearch = blade.blade_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         blade.blade_type?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || blade.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
+  // Get status badge color
   const getStatusBadge = (status) => {
     const statusStyles = {
       'new': 'bg-green-100 text-green-800',
@@ -51,6 +31,14 @@ const BladeManagement = () => {
     };
     return labels[status] || status;
   };
+
+  // Filter blades
+  const filteredBlades = blades.filter(blade => {
+    const matchesSearch = blade.blade_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         blade.blade_type?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || blade.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
