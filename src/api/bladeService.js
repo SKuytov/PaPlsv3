@@ -5,10 +5,25 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Lazy-load Supabase client to ensure env vars are loaded
+let supabase = null;
+
+const getSupabaseClient = () => {
+  if (!supabase) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error(
+        'Supabase environment variables are not configured. ' +
+        'Please check your .env file has VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'
+      );
+    }
+
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+};
 
 // ============================================================================
 // BLADE TYPES API
@@ -20,7 +35,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  */
 export const fetchBladeTypes = async () => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blade_types')
       .select('*')
       .order('code', { ascending: true });
@@ -40,7 +56,8 @@ export const fetchBladeTypes = async () => {
  */
 export const createBladeType = async (typeData) => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blade_types')
       .insert([
         {
@@ -68,8 +85,9 @@ export const createBladeType = async (typeData) => {
  */
 export const deleteBladeType = async (typeId) => {
   try {
+    const client = getSupabaseClient();
     // Check if any blades exist for this type
-    const { count, error: countError } = await supabase
+    const { count, error: countError } = await client
       .from('blades')
       .select('*', { count: 'exact', head: true })
       .eq('type_id', typeId);
@@ -80,7 +98,7 @@ export const deleteBladeType = async (typeId) => {
       throw new Error('Cannot delete blade type with existing blades');
     }
 
-    const { error } = await supabase
+    const { error } = await client
       .from('blade_types')
       .delete()
       .eq('id', typeId);
@@ -102,7 +120,8 @@ export const deleteBladeType = async (typeId) => {
  */
 export const fetchAllBlades = async () => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blades')
       .select(
         `
@@ -134,11 +153,12 @@ export const fetchAllBlades = async () => {
  */
 export const searchBladesBySerial = async (searchTerm) => {
   try {
+    const client = getSupabaseClient();
     if (!searchTerm.trim()) {
       return fetchAllBlades();
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('blades')
       .select(
         `
@@ -170,7 +190,8 @@ export const searchBladesBySerial = async (searchTerm) => {
  */
 export const fetchBladeDetail = async (bladeId) => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blades')
       .select(
         `
@@ -200,13 +221,14 @@ export const fetchBladeDetail = async (bladeId) => {
 /**
  * Create multiple blades (bulk purchase)
  * @param {number} typeId - Blade type ID
-* @param {number} quantity - Number of blades to create
+ * @param {number} quantity - Number of blades to create
  * @returns {Promise<Array>} Created blades
  */
 export const createBladesBulk = async (typeId, quantity) => {
   try {
+    const client = getSupabaseClient();
     // Get the blade type to access next_serial_number
-    const { data: typeData, error: typeError } = await supabase
+    const { data: typeData, error: typeError } = await client
       .from('blade_types')
       .select('*')
       .eq('id', typeId)
@@ -233,7 +255,7 @@ export const createBladesBulk = async (typeId, quantity) => {
     }
 
     // Insert all blades
-    const { data: insertedBlades, error: insertError } = await supabase
+    const { data: insertedBlades, error: insertError } = await client
       .from('blades')
       .insert(newBlades)
       .select();
@@ -241,7 +263,7 @@ export const createBladesBulk = async (typeId, quantity) => {
     if (insertError) throw insertError;
 
     // Update blade type's next_serial_number
-    const { error: updateError } = await supabase
+    const { error: updateError } = await client
       .from('blade_types')
       .update({
         next_serial_number: typeData.next_serial_number + quantity,
@@ -265,7 +287,8 @@ export const createBladesBulk = async (typeId, quantity) => {
  */
 export const deleteBlade = async (bladeId) => {
   try {
-    const { error } = await supabase
+    const client = getSupabaseClient();
+    const { error } = await client
       .from('blades')
       .delete()
       .eq('id', bladeId);
@@ -289,17 +312,18 @@ export const deleteBlade = async (bladeId) => {
  */
 export const logBladeEvent = async (bladeId, eventData) => {
   try {
+    const client = getSupabaseClient();
     const today = new Date().toISOString().split('T')[0];
 
     // Get current user email for audit trail
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await client.auth.getUser();
 
     if (userError) {
       console.warn('Could not get current user:', userError);
     }
 
     // Insert event
-    const { data: eventResult, error: eventError } = await supabase
+    const { data: eventResult, error: eventError } = await client
       .from('blade_events')
       .insert([
         {
@@ -327,7 +351,7 @@ export const logBladeEvent = async (bladeId, eventData) => {
     const newStatus = statusMap[eventData.eventType];
 
     if (newStatus) {
-      const { error: bladeUpdateError } = await supabase
+      const { error: bladeUpdateError } = await client
         .from('blades')
         .update({
           status: newStatus,
@@ -353,7 +377,8 @@ export const logBladeEvent = async (bladeId, eventData) => {
  */
 export const fetchBladeEvents = async (bladeId) => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blade_events')
       .select('*')
       .eq('blade_id', bladeId)
@@ -375,7 +400,8 @@ export const fetchBladeEvents = async (bladeId) => {
  */
 export const updateBladeDefaultMachine = async (bladeId, machine) => {
   try {
-    const { data, error } = await supabase
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('blades')
       .update({
         default_machine: machine,
@@ -402,8 +428,9 @@ export const updateBladeDefaultMachine = async (bladeId, machine) => {
  */
 export const getBladeStatistics = async () => {
   try {
+    const client = getSupabaseClient();
     // Get all blades with status
-    const { data: blades, error: bladesError } = await supabase
+    const { data: blades, error: bladesError } = await client
       .from('blades')
       .select('status, type_id, blade_types:type_id(code)');
 
