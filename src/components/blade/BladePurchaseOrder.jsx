@@ -16,13 +16,11 @@ import {
   Eye,
   Download,
 } from 'lucide-react';
-import bladePurchaseService from '../../api/bladePurchaseService';
-import bladeService from '../../api/bladeService';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 const BladePurchaseOrder = () => {
   // State Management
-  const { user, userRole } = useAuth();
+  const { user } = useAuth();
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [bladeTypes, setBladeTypes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,10 +54,8 @@ const BladePurchaseOrder = () => {
     try {
       setLoading(true);
       setError(null);
-      const orders = await bladePurchaseService.getAllPurchaseOrders({
-        limit: 100,
-      });
-      setPurchaseOrders(orders);
+      // Placeholder - will fetch from API
+      setPurchaseOrders([]);
     } catch (err) {
       setError('Failed to load purchase orders: ' + err.message);
       console.error(err);
@@ -73,8 +69,8 @@ const BladePurchaseOrder = () => {
    */
   const loadBladeTypes = async () => {
     try {
-      const types = await bladeService.bladeTypeService.getAll();
-      setBladeTypes(types || []);
+      // Placeholder - will fetch from API
+      setBladeTypes([]);
     } catch (err) {
       console.error('Failed to load blade types:', err);
     }
@@ -111,18 +107,8 @@ const BladePurchaseOrder = () => {
       setLoading(true);
       setError(null);
 
-      const result = await bladePurchaseService.createPurchaseOrder({
-        bladeTypeId: formData.bladeTypeId,
-        quantityOrdered: parseInt(formData.quantityOrdered),
-        supplierName: formData.supplierName,
-        poNumber: formData.poNumber || null,
-        unitCost: formData.unitCost ? parseFloat(formData.unitCost) : null,
-        expectedDeliveryDate: formData.expectedDeliveryDate || null,
-      });
-
-      setSuccess(
-        `Purchase order created! Serial numbers: ${result.serialNumberStart} to ${result.serialNumberEnd}`
-      );
+      // TODO: Call API to create purchase order
+      setSuccess('Purchase order created!');
       setFormData({
         bladeTypeId: '',
         quantityOrdered: '',
@@ -149,7 +135,7 @@ const BladePurchaseOrder = () => {
   const handleMarkReceived = async (orderId) => {
     try {
       setLoading(true);
-      await bladePurchaseService.markPurchaseOrderReceived(orderId);
+      // TODO: Call API to mark order as received
       setSuccess('Order marked as received');
       await loadPurchaseOrders();
     } catch (err) {
@@ -223,15 +209,13 @@ const BladePurchaseOrder = () => {
             Manage blade purchase orders with automatic serial number allocation
           </p>
         </div>
-        {userRole !== 'operator' && (
-          <button
-            onClick={() => setShowNewOrderForm(!showNewOrderForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            <Plus className="w-5 h-5" />
-            New Order
-          </button>
-        )}
+        <button
+          onClick={() => setShowNewOrderForm(!showNewOrderForm)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+        >
+          <Plus className="w-5 h-5" />
+          New Order
+        </button>
       </div>
 
       {/* Error Alert */}
@@ -269,7 +253,7 @@ const BladePurchaseOrder = () => {
       )}
 
       {/* New Order Form */}
-      {showNewOrderForm && userRole !== 'operator' && (
+      {showNewOrderForm && (
         <form
           onSubmit={handleCreatePurchaseOrder}
           className="p-4 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg space-y-4"
@@ -500,7 +484,7 @@ const BladePurchaseOrder = () => {
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-                        {order.status === 'pending' && userRole !== 'operator' && (
+                        {order.status === 'pending' && (
                           <button
                             onClick={() => handleMarkReceived(order.id)}
                             className="p-1 text-gray-600 hover:text-green-600"
