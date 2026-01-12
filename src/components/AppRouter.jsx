@@ -22,6 +22,8 @@ import SupplierSavings from '@/components/modules/SupplierSavings';
 import QuotesDashboard from '@/components/modules/quotes/QuotesDashboard';
 import RequestsPage from '@/pages/RequestsPage';
 import WelcomeMessage from '@/components/WelcomeMessage';
+import BladeManagement from '@/components/blade/BladeManagement';
+import BladePurchaseOrder from '@/components/blade/BladePurchaseOrder';
 
 // Layout Wrapper Component
 const PrivateRoute = ({ children }) => {
@@ -152,6 +154,19 @@ const AppRouter = () => {
       <Route path="/scanner" element={
         <PrivateRoute>
           <Scanner />
+        </PrivateRoute>
+      } />
+
+      {/* Blade Lifecycle Tracking Routes */}
+      <Route path="/blade-management" element={
+        <PrivateRoute>
+          <BladeManagement />
+        </PrivateRoute>
+      } />
+
+      <Route path="/blade-management/purchase-orders" element={
+        <PrivateRoute>
+          <BladePurchaseOrder />
         </PrivateRoute>
       } />
 
