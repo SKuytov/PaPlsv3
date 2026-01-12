@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Knife,
   Plus,
   Edit2,
   Trash2,
@@ -18,7 +17,7 @@ const BladeTracking = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const tabs = [
-    { id: 'blades', label: 'Blades', icon: Knife },
+    { id: 'blades', label: 'Blades', icon: AlertTriangle }, // Using AlertTriangle as placeholder
     { id: 'types', label: 'Blade Types', icon: Settings },
     { id: 'usage', label: 'Usage Logs', icon: Clock },
     { id: 'sharpening', label: 'Sharpening', icon: AlertTriangle },
@@ -287,9 +286,9 @@ const BladeTracking = () => {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Knife className="w-8 h-8 text-teal-600" />
+        <AlertTriangle className="w-8 h-8 text-teal-600" />
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Blade Lifecycle Tracking</h1>
+          <h1 className="text-3xl font-bold text-slate-900">⚡ Blade Lifecycle Tracking</h1>
           <p className="text-slate-600">Manage blade inventory, usage, and maintenance</p>
         </div>
       </div>
