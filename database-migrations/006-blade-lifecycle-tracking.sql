@@ -1,9 +1,28 @@
--- Blade Lifecycle Tracking System
--- Comprehensive blade management with usage tracking, sharpening, and alerts
--- Fixed: Using UUID (Supabase standard) instead of BIGINT
+-- ============================================================
+-- BLADE LIFECYCLE TRACKING SYSTEM
+-- Complete cleanup + fresh creation
+-- Safe to run multiple times
+-- ============================================================
 
--- Create blade_types table
-CREATE TABLE IF NOT EXISTS blade_types (
+-- ============================================================
+-- CLEANUP: Drop everything blade-related
+-- ============================================================
+
+DROP TRIGGER IF EXISTS update_blade_types_timestamp_trigger ON blade_types CASCADE;
+DROP TRIGGER IF EXISTS update_blade_timestamp_trigger ON blades CASCADE;
+DROP FUNCTION IF EXISTS update_blade_types_timestamp() CASCADE;
+DROP FUNCTION IF EXISTS update_blade_timestamp() CASCADE;
+DROP TABLE IF EXISTS blade_alerts CASCADE;
+DROP TABLE IF EXISTS blade_sharpening CASCADE;
+DROP TABLE IF EXISTS blade_usage_logs CASCADE;
+DROP TABLE IF EXISTS blades CASCADE;
+DROP TABLE IF EXISTS blade_types CASCADE;
+
+-- ============================================================
+-- CREATE: Blade Types Table
+-- ============================================================
+
+CREATE TABLE blade_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   machine_type VARCHAR(100) NOT NULL,
   blade_type_code VARCHAR(50) UNIQUE NOT NULL,
@@ -12,8 +31,14 @@ CREATE TABLE IF NOT EXISTS blade_types (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create blades table
-CREATE TABLE IF NOT EXISTS blades (
+CREATE INDEX idx_blade_types_machine_type ON blade_types(machine_type);
+CREATE INDEX idx_blade_types_blade_type_code ON blade_types(blade_type_code);
+
+-- ============================================================
+-- CREATE: Blades Table
+-- ============================================================
+
+CREATE TABLE blades (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   blade_type_id UUID NOT NULL REFERENCES blade_types(id) ON DELETE CASCADE,
   serial_number VARCHAR(100) UNIQUE NOT NULL,
@@ -28,8 +53,15 @@ CREATE TABLE IF NOT EXISTS blades (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create blade_usage_logs table for tracking blade usage
-CREATE TABLE IF NOT EXISTS blade_usage_logs (
+CREATE INDEX idx_blades_blade_type_id ON blades(blade_type_id);
+CREATE INDEX idx_blades_serial_number ON blades(serial_number);
+CREATE INDEX idx_blades_status ON blades(status);
+
+-- ============================================================
+-- CREATE: Blade Usage Logs Table
+-- ============================================================
+
+CREATE TABLE blade_usage_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   operation VARCHAR(50),
@@ -39,8 +71,14 @@ CREATE TABLE IF NOT EXISTS blade_usage_logs (
   logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create blade_sharpening table for maintenance records
-CREATE TABLE IF NOT EXISTS blade_sharpening (
+CREATE INDEX idx_blade_usage_logs_blade_id ON blade_usage_logs(blade_id);
+CREATE INDEX idx_blade_usage_logs_logged_at ON blade_usage_logs(logged_at);
+
+-- ============================================================
+-- CREATE: Blade Sharpening Table
+-- ============================================================
+
+CREATE TABLE blade_sharpening (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   sharpening_date DATE NOT NULL,
@@ -51,8 +89,14 @@ CREATE TABLE IF NOT EXISTS blade_sharpening (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create blade_alerts table for maintenance alerts
-CREATE TABLE IF NOT EXISTS blade_alerts (
+CREATE INDEX idx_blade_sharpening_blade_id ON blade_sharpening(blade_id);
+CREATE INDEX idx_blade_sharpening_date ON blade_sharpening(sharpening_date);
+
+-- ============================================================
+-- CREATE: Blade Alerts Table
+-- ============================================================
+
+CREATE TABLE blade_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   alert_type VARCHAR(50) NOT NULL,
@@ -62,21 +106,14 @@ CREATE TABLE IF NOT EXISTS blade_alerts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create performance indexes
-CREATE INDEX IF NOT EXISTS idx_blade_types_machine_type ON blade_types(machine_type);
-CREATE INDEX IF NOT EXISTS idx_blade_types_blade_type_code ON blade_types(blade_type_code);
-CREATE INDEX IF NOT EXISTS idx_blades_blade_type_id ON blades(blade_type_id);
-CREATE INDEX IF NOT EXISTS idx_blades_serial_number ON blades(serial_number);
-CREATE INDEX IF NOT EXISTS idx_blades_status ON blades(status);
-CREATE INDEX IF NOT EXISTS idx_blade_usage_logs_blade_id ON blade_usage_logs(blade_id);
-CREATE INDEX IF NOT EXISTS idx_blade_usage_logs_logged_at ON blade_usage_logs(logged_at);
-CREATE INDEX IF NOT EXISTS idx_blade_sharpening_blade_id ON blade_sharpening(blade_id);
-CREATE INDEX IF NOT EXISTS idx_blade_sharpening_date ON blade_sharpening(sharpening_date);
-CREATE INDEX IF NOT EXISTS idx_blade_alerts_blade_id ON blade_alerts(blade_id);
-CREATE INDEX IF NOT EXISTS idx_blade_alerts_resolved ON blade_alerts(is_resolved);
+CREATE INDEX idx_blade_alerts_blade_id ON blade_alerts(blade_id);
+CREATE INDEX idx_blade_alerts_resolved ON blade_alerts(is_resolved);
 
--- Create function to update blade updated_at timestamp
-CREATE OR REPLACE FUNCTION update_blade_timestamp()
+-- ============================================================
+-- CREATE: Timestamp Update Functions
+-- ============================================================
+
+CREATE FUNCTION update_blade_types_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = CURRENT_TIMESTAMP;
@@ -84,25 +121,43 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to automatically update blade updated_at
-DROP TRIGGER IF EXISTS update_blade_timestamp_trigger ON blades;
+CREATE FUNCTION update_blade_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- CREATE: Triggers
+-- ============================================================
+
+CREATE TRIGGER update_blade_types_timestamp_trigger
+BEFORE UPDATE ON blade_types
+FOR EACH ROW
+EXECUTE FUNCTION update_blade_types_timestamp();
+
 CREATE TRIGGER update_blade_timestamp_trigger
 BEFORE UPDATE ON blades
 FOR EACH ROW
 EXECUTE FUNCTION update_blade_timestamp();
 
--- Create function to update blade_types updated_at timestamp
-CREATE OR REPLACE FUNCTION update_blade_types_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger to automatically update blade_types updated_at
-DROP TRIGGER IF EXISTS update_blade_types_timestamp_trigger ON blade_types;
-CREATE TRIGGER update_blade_types_timestamp_trigger
-BEFORE UPDATE ON blade_types
-FOR EACH ROW
-EXECUTE FUNCTION update_blade_types_timestamp();
+-- ============================================================
+-- VERIFICATION
+-- ============================================================
+-- Run these queries to verify everything was created correctly:
+--
+-- SELECT table_name 
+-- FROM information_schema.tables 
+-- WHERE table_schema='public' AND table_name LIKE 'blade%'
+-- ORDER BY table_name;
+--
+-- Should show:
+-- blade_alerts
+-- blade_sharpening
+-- blade_types
+-- blade_usage_logs
+-- blades
+--
+-- ============================================================
