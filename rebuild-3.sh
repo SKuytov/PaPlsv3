@@ -121,7 +121,7 @@ fi
 
 echo -e "${GREEN}✅ Frontend built successfully${NC}"
 echo "📁 Dist directory contents:"
-ls -lah dist/ | head -20
+ls -lah "$BACKEND_DIR/PaPlsv3/dist" | head -30
 
 # ============================================================
 # 5. Deploy Frontend
@@ -130,19 +130,28 @@ ls -lah dist/ | head -20
 echo ""
 echo -e "${YELLOW}5️⃣ Deploying frontend to $FRONTEND_WEB_ROOT...${NC}"
 
-if [ ! -d "dist" ]; then
+if [ ! -d "$BACKEND_DIR/PaPlsv3/dist" ]; then
     echo -e "${RED}❌ ERROR: dist directory does not exist!${NC}"
     exit 1
 fi
 
+echo "Removing old files from $FRONTEND_WEB_ROOT..."
 sudo rm -rf "$FRONTEND_WEB_ROOT"/*
-sudo cp -r dist/* "$FRONTEND_WEB_ROOT/"
+
+echo "Copying dist/* to $FRONTEND_WEB_ROOT..."
+echo "Source: $BACKEND_DIR/PaPlsv3/dist/"
+echo "Destination: $FRONTEND_WEB_ROOT/"
+sudo cp -v dist/* "$FRONTEND_WEB_ROOT/" 2>&1 | head -20
+
+echo ""
+echo "Verifying files were copied:"
+sudo ls -lah "$FRONTEND_WEB_ROOT" | head -20
+
+echo ""
 sudo chown -R www-data:www-data "$FRONTEND_WEB_ROOT"
 sudo chmod -R 755 "$FRONTEND_WEB_ROOT"
 
 echo -e "${GREEN}✅ Frontend deployed${NC}"
-echo "File count deployed:"
-find "$FRONTEND_WEB_ROOT" -type f | wc -l
 
 # ============================================================
 # 6. Start Backend
