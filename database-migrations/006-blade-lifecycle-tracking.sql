@@ -1,9 +1,10 @@
 -- Blade Lifecycle Tracking System
 -- Comprehensive blade management with usage tracking, sharpening, and alerts
+-- Fixed: Using UUID (Supabase standard) instead of BIGINT
 
 -- Create blade_types table
 CREATE TABLE IF NOT EXISTS blade_types (
-  id BIGSERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   machine_type VARCHAR(100) NOT NULL,
   blade_type_code VARCHAR(50) UNIQUE NOT NULL,
   description TEXT,
@@ -13,8 +14,8 @@ CREATE TABLE IF NOT EXISTS blade_types (
 
 -- Create blades table
 CREATE TABLE IF NOT EXISTS blades (
-  id BIGSERIAL PRIMARY KEY,
-  blade_type_id BIGINT NOT NULL REFERENCES blade_types(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blade_type_id UUID NOT NULL REFERENCES blade_types(id) ON DELETE CASCADE,
   serial_number VARCHAR(100) UNIQUE NOT NULL,
   status VARCHAR(50) DEFAULT 'new',
   purchase_date DATE,
@@ -29,19 +30,19 @@ CREATE TABLE IF NOT EXISTS blades (
 
 -- Create blade_usage_logs table for tracking blade usage
 CREATE TABLE IF NOT EXISTS blade_usage_logs (
-  id BIGSERIAL PRIMARY KEY,
-  blade_id BIGINT NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   operation VARCHAR(50),
   hours_used DECIMAL(10,2),
   notes TEXT,
-  logged_by_user_id BIGINT,
+  logged_by_user_id UUID,
   logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create blade_sharpening table for maintenance records
 CREATE TABLE IF NOT EXISTS blade_sharpening (
-  id BIGSERIAL PRIMARY KEY,
-  blade_id BIGINT NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   sharpening_date DATE NOT NULL,
   sharpening_method VARCHAR(100),
   cost DECIMAL(10,2),
@@ -52,8 +53,8 @@ CREATE TABLE IF NOT EXISTS blade_sharpening (
 
 -- Create blade_alerts table for maintenance alerts
 CREATE TABLE IF NOT EXISTS blade_alerts (
-  id BIGSERIAL PRIMARY KEY,
-  blade_id BIGINT NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blade_id UUID NOT NULL REFERENCES blades(id) ON DELETE CASCADE,
   alert_type VARCHAR(50) NOT NULL,
   alert_message TEXT,
   is_resolved BOOLEAN DEFAULT FALSE,
