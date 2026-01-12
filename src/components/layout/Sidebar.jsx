@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, Box, Wrench, Users, FileText, 
   BarChart3, BookOpen, X, QrCode, Timer,
-  TrendingUp, LogOut, ShoppingCart, Package
+  TrendingUp, LogOut, ShoppingCart, Package, Zap
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +22,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     { to: "/quotes/dashboard", icon: ShoppingCart, label: "📊 Quotes Dashboard" },
     { to: "/orders", icon: FileText, label: "Orders" },
     { to: "/downtime", icon: Timer, label: "Downtime" },
+    { to: "/blade-management", icon: Zap, label: "Blade Management" },
     { to: "/reports", icon: BarChart3, label: "Reports" },
     { to: "/docs", icon: BookOpen, label: "Documentation" },
   ];
