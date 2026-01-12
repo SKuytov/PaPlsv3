@@ -263,7 +263,7 @@ app.use((req, res) => {
 // START SERVER (WITH HTTPS SUPPORT)
 // ============================================================
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 const protocol = process.env.USE_HTTPS === 'true' ? 'https' : 'http';
 
 // Try to load SSL certificates
